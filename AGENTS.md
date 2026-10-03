@@ -152,10 +152,9 @@ npm run downport && npm run lint:702     # rewrites src/ - run on a copy, never 
 npm run unit                             # ABAP Unit on the transpiled runtime - README, "Development"
 ```
 
-All must be green before a push. Until abap2UI5 releases the monitor hook,
-`abaplint.jsonc`, `ABAP_UNIT.yaml` and `.github/scripts/unit.mjs` resolve
-abap2UI5 from the branch `claude/abap2ui5-project-brainstorm-nt7ifs` and
-`abap_702.jsonc` excludes `src/02`; revert them when the release is out
-(README, "Development").
+All must be green before a push. Until abap2UI5's generated `702` branch
+carries the monitor hook, `abap_702.jsonc` excludes `src/02`; and until the
+linter releases its list with it, `abap2ui5lint.jsonc` waives
+`non-released-api` for the monitor class (README, "Development").
 Local runs can pre-fill `.abaplint-deps/` (git-ignored) - abaplint uses a
 dependency folder that exists instead of cloning.

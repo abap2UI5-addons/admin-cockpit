@@ -44,10 +44,7 @@ const CONFIG = {
   // checkouts under WORK; the first one is the abap2UI5 tree everything is
   // built in
   repos: [
-    // TEMPORARY branch, like abaplint.jsonc: src/02 needs
-    // z2ui5_if_ui5_monitor, which is not on abap2UI5 main yet - switch to
-    // main once it is released (README, "Development")
-    { name: "abap2UI5", url: "https://github.com/abap2UI5/abap2UI5", ref: "claude/abap2ui5-project-brainstorm-nt7ifs" },
+    { name: "abap2UI5", url: "https://github.com/abap2UI5/abap2UI5", ref: "main" },
   ],
   // copied into <abap2UI5>/src/<into>/: entries relative to <from>/src
   packages: [

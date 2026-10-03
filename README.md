@@ -332,13 +332,11 @@ copied in as one more package, `npm run downport && npm run auto_transpile`,
 then the generated tests - each one printed, exit code 1 on any failure or
 when none ran. The first run takes a few minutes.
 
-**Temporary state:** the monitor interface is not on abap2UI5's `main` yet. Until
-it is merged, `abaplint.jsonc` resolves abap2UI5 from the branch
-`claude/abap2ui5-project-brainstorm-nt7ifs` (abaplint's CLI supports `branch`
-on a dependency) - and so do `ABAP_UNIT.yaml` and `.github/scripts/unit.mjs`
-for the unit tests - and the 7.02 check excludes `src/02`, because abap2UI5's
-generated `702` branch carries the interface only after the release. Switch
-all of them back to `main` / no exclude once the core change is released.
+**Temporary state:** the monitor interface is on abap2UI5's `main`
+(abap2UI5#2837). Until abap2UI5's generated `702` branch carries it too, the
+7.02 check excludes `src/02` - drop that exclude in `abap_702.jsonc` then. Until
+`@abap2ui5/linter` releases its list with the interface (abap2UI5/linter#140,
+merged), `abap2ui5lint.jsonc` waives `non-released-api` for the monitor class.
 
 See [AGENTS.md](AGENTS.md) for the conventions of this repository.
 

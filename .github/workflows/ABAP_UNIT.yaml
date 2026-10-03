@@ -26,12 +26,10 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
-    # TEMPORARY branch: src/02 needs z2ui5_if_ui5_monitor, which is not on
-    # abap2UI5 main yet - README, "Development" (and CONFIG in unit.mjs)
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: abap2UI5/abap2UI5
-        ref: claude/abap2ui5-project-brainstorm-nt7ifs
+        ref: main
         path: .unit/abap2UI5
         persist-credentials: false
     - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
