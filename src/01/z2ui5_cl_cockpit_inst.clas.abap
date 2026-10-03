@@ -69,6 +69,24 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_t_check.
 
+    "! The configuration checks of the traffic light for a given page and
+    "! roundtrip configuration - what get_checks( ) shows, without reading
+    "! the framework.
+    CLASS-METHODS evaluate_config
+      IMPORTING
+        is_get        TYPE z2ui5_if_ui5_exit=>ty_s_http_config
+        is_post       TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post
+      RETURNING
+        VALUE(result) TYPE ty_t_check.
+
+    "! The traffic-light check of the agent endpoint (agent addon) for the
+    "! given figures - empty when the addon is not installed.
+    CLASS-METHODS evaluate_agent
+      IMPORTING
+        is_agent      TYPE z2ui5_cl_cockpit_agent=>ty_s_setup
+      RETURNING
+        VALUE(result) TYPE ty_t_check.
+
     "! The known addons of abap2UI5-addons and whether they are installed,
     "! detected by the existence of a marker class.
     CLASS-METHODS get_addons
@@ -154,13 +172,16 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
-    CLASS-METHODS checks_config
-      CHANGING
-        checks TYPE ty_t_check.
 
     CLASS-METHODS checks_cockpit
       CHANGING
         checks TYPE ty_t_check.
+
+    CLASS-METHODS check_icon
+      IMPORTING
+        status        TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
 
 ENDCLASS.
 
@@ -196,37 +217,113 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_checks.
 
-    checks_config( CHANGING checks = result ).
-    checks_cockpit( CHANGING checks = result ).
-
-    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
-      <check>-icon = SWITCH #( <check>-status
-                               WHEN cs_status-ok    THEN `sap-icon://status-positive`
-                               WHEN cs_status-warn  THEN `sap-icon://status-critical`
-                               WHEN cs_status-error THEN `sap-icon://status-negative`
-                               ELSE `sap-icon://hint` ).
-    ENDLOOP.
-
-  ENDMETHOD.
-
-  METHOD checks_config.
-
-    DATA lv_missing TYPE string.
     DATA ls_get TYPE z2ui5_if_ui5_exit=>ty_s_http_config.
     TRY.
         ls_get = get_config_get( ).
+        result = evaluate_config( is_get  = ls_get
+                                  is_post = get_config_post( ) ).
       CATCH cx_root INTO DATA(lx).
         add_check( EXPORTING id     = `CONFIG`
                              status = cs_status-error
                              title  = `Framework configuration readable`
                              value  = lx->get_text( )
                              text   = `The cockpit could not call the framework's exit instance. ` &&
-                                      `The checks below need it.`
+                                      `The configuration checks need it.`
                              fix    = `Update the admin cockpit to a version matching your abap2UI5 release.`
-                   CHANGING  checks = checks ).
-        RETURN.
+                   CHANGING  checks = result ).
     ENDTRY.
-    DATA(ls_post) = get_config_post( ).
+    checks_cockpit( CHANGING checks = result ).
+    DATA(lt_agent) = evaluate_agent( z2ui5_cl_cockpit_agent=>get_setup( ) ).
+    APPEND LINES OF lt_agent TO result.
+
+    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
+      <check>-icon = check_icon( <check>-status ).
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD check_icon.
+
+    result = SWITCH #( status
+                       WHEN cs_status-ok    THEN `sap-icon://status-positive`
+                       WHEN cs_status-warn  THEN `sap-icon://status-critical`
+                       WHEN cs_status-error THEN `sap-icon://status-negative`
+                       ELSE `sap-icon://hint` ).
+
+  ENDMETHOD.
+
+  METHOD evaluate_agent.
+
+    IF is_agent-installed = abap_false.
+      RETURN.
+    ENDIF.
+
+    IF is_agent-readable = abap_false.
+      add_check( EXPORTING id     = `AGENT`
+                           status = cs_status-warn
+                           title  = `Agent endpoint (agent addon)`
+                           value  = `settings not readable`
+                           text   = `The agent addon is installed, but its settings could not be read - ` &&
+                                    `the cockpit cannot tell whether AI agents can operate apps.`
+                           fix    = `Check the agent addon's settings app z2ui5_cl_agent_app_admin.`
+                 CHANGING  checks = result ).
+    ELSEIF is_agent-enabled = abap_false.
+      add_check( EXPORTING id     = `AGENT`
+                           status = cs_status-ok
+                           title  = `Agent endpoint (agent addon)`
+                           value  = `disabled`
+                           text   = `AI agents cannot operate apps - the endpoint refuses every tool call.`
+                 CHANGING  checks = result ).
+    ELSEIF is_agent-admins = 0.
+      add_check( EXPORTING id     = `AGENT`
+                           status = cs_status-error
+                           title  = `Agent endpoint (agent addon)`
+                           value  = `enabled, no administrator`
+                           text   = `AI agents can operate the opted-in apps as the calling user, but nobody may ` &&
+                                    `change the agent settings or review the audit log of all users.`
+                           fix    = `Run z2ui5_cl_agent_settings=>admin_add( ) for a responsible user, ` &&
+                                    `or switch the endpoint off.`
+                 CHANGING  checks = result ).
+    ELSEIF is_agent-allow_all = abap_true.
+      add_check( EXPORTING id     = `AGENT`
+                           status = cs_status-warn
+                           title  = `Agent endpoint (agent addon)`
+                           value  = `enabled for every app`
+                           text   = `An APP rule allows the pattern * - agents can start every app class, ` &&
+                                    `not only the ones that opted in by implementing z2ui5_if_agent_app.`
+                           fix    = `Agent settings app: replace the * rule by the apps agents really need.`
+                 CHANGING  checks = result ).
+    ELSEIF is_agent-app_rules = 0 AND is_agent-opted_in = 0.
+      add_check( EXPORTING id     = `AGENT`
+                           status = cs_status-warn
+                           title  = `Agent endpoint (agent addon)`
+                           value  = `enabled, no app reachable`
+                           text   = `The endpoint answers tool calls, but no app opted in and no APP rule exists - ` &&
+                                    `switched on without a purpose.`
+                           fix    = `Switch the endpoint off until an app is meant to be operated by agents.`
+                 CHANGING  checks = result ).
+    ELSE.
+      add_check( EXPORTING id     = `AGENT`
+                           status = cs_status-info
+                           title  = `Agent endpoint (agent addon)`
+                           value  = |enabled - { is_agent-opted_in } opted-in app(s), { is_agent-app_rules } app rule(s), | &&
+                                    |{ is_agent-admins } administrator(s)|
+                           text   = `AI agents can operate the reachable apps as the calling user; every call is ` &&
+                                    `audited (Agents tab).`
+                 CHANGING  checks = result ).
+    ENDIF.
+
+    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
+      <check>-icon = check_icon( <check>-status ).
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD evaluate_config.
+
+    DATA lv_missing TYPE string.
+    DATA(ls_get) = is_get.
+    DATA(ls_post) = is_post.
 
     add_check( EXPORTING id     = `CSRF`
                          status = COND #( WHEN ls_post-check_csrf_active = abap_true
@@ -237,7 +334,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                   `with 403. On by default; an exit can switch it off for cross-origin callers.`
                          fix    = `Remove cs_config-check_csrf_active = abap_false from set_config_http_post ` &&
                                   `of your user exit, unless a cross-origin caller really needs it.`
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
 
     add_check( EXPORTING id     = `FORWARDED_HOST`
                          status = COND #( WHEN ls_post-check_trust_forwarded_host = abap_true
@@ -248,7 +345,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                   `Without such a proxy the header is client-suppliable.`
                          fix    = `Not behind a proxy: set cs_config-check_trust_forwarded_host = abap_false ` &&
                                   `in set_config_http_post of your user exit.`
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
 
     add_check( EXPORTING id     = `ERROR_DETAILS`
                          status = COND #( WHEN ls_post-check_hide_error_details = abap_true
@@ -259,7 +356,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                   `class names, texts and positions reach the browser.`
                          fix    = `Production: set cs_config-check_hide_error_details = abap_true ` &&
                                   `in set_config_http_post of your user exit.`
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
 
     DATA(lv_csp) = ls_get-content_security_policy.
     DATA(lv_csp_header) = header_value( headers = ls_get-t_security_header
@@ -272,7 +369,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                            text   = `The page carries no CSP - any injected script would run.`
                            fix    = `Do not clear cs_config-content_security_policy in your user exit; ` &&
                                     `extend the default instead.`
-                 CHANGING  checks = checks ).
+                 CHANGING  checks = result ).
     ELSE.
       DATA(lv_all) = to_lower( |{ lv_csp } { lv_csp_header }| ).
       DATA(lv_script) = csp_directive( csp       = lv_all
@@ -290,7 +387,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                     `unloaded binding types need it ('wasm-unsafe-eval' is fine).`
                            fix    = `Remove 'unsafe-eval' from script-src in set_config_http_get of your user exit, ` &&
                                     `or upgrade UI5 to 1.84+.`
-                 CHANGING  checks = checks ).
+                 CHANGING  checks = result ).
 
       add_check( EXPORTING id     = `CSP_INLINE`
                            status = COND #( WHEN lv_script CS `'unsafe-inline'` THEN cs_status-error ELSE cs_status-ok )
@@ -300,7 +397,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                     `the framework then also stops adding the hash of its own inline script.`
                            fix    = `Remove 'unsafe-inline' from script-src in your user exit ` &&
                                     `(style-src may keep it - UI5 needs it there).`
-                 CHANGING  checks = checks ).
+                 CHANGING  checks = result ).
 
       DATA(lv_wild) = xsdbool( lv_script CS ` * ` OR lv_script CS ` https: ` OR lv_script CS ` http: `
                                OR lv_script CS `cdn.jsdelivr.net` OR lv_script CS `cdnjs.cloudflare.com` ).
@@ -311,7 +408,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                            text   = `Every allowed script host is a host whose compromise is script execution ` &&
                                     `in an authenticated SAP session.`
                            fix    = `Allow only the UI5 hosts (or your own) in script-src.`
-                 CHANGING  checks = checks ).
+                 CHANGING  checks = result ).
     ENDIF.
 
     DATA(lt_expected) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `x-content-type-options` )
@@ -331,7 +428,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          text   = `nosniff, frame protection, referrer and permissions policy are set by the ` &&
                                   `framework's defaults; an exit that replaces t_security_header can lose them.`
                          fix    = `APPEND to cs_config-t_security_header in your user exit instead of replacing it.`
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
 
     DATA(lv_hsts) = header_value( headers = ls_get-t_security_header
                                   name    = `strict-transport-security` ).
@@ -343,7 +440,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                   `Served over HTTPS, it belongs to the TLS terminator or the exit.`
                          fix    = `HTTPS only: APPEND VALUE #( n = 'Strict-Transport-Security' v = 'max-age=31536000' ) ` &&
                                   `TO cs_config-t_security_header.`
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
 
     DATA(lv_src) = to_lower( ls_get-src ).
     DATA(lv_cdn) = xsdbool( lv_src CS `openui5.org` OR lv_src CS `ui5.sap.com` OR lv_src CS `hana.ondemand.com` ).
@@ -358,7 +455,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          fix    = COND #( WHEN lv_cdn = abap_true
                                           THEN `Optional: serve UI5 from your system (/sap/public/bc/ui5_ui5/) and set ` &&
                                                `cs_config-src in set_config_http_get.` )
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
 
     add_check( EXPORTING id     = `EXPIRY`
                          status = COND #( WHEN ls_post-draft_exp_time_in_hours > 24
@@ -368,7 +465,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          text   = `Drafts hold the serialized app state of every user. A long expiry keeps ` &&
                                   `business data in the draft table and lets it grow.`
                          fix    = `Set cs_config-draft_exp_time_in_hours in set_config_http_post (default 4).`
-               CHANGING  checks = checks ).
+               CHANGING  checks = result ).
+
+    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
+      <check>-icon = check_icon( <check>-status ).
+    ENDLOOP.
 
   ENDMETHOD.
 
@@ -390,13 +491,14 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
     DATA(lv_auth_mode) = z2ui5_cl_cockpit_auth=>get_mode( ).
     add_check( EXPORTING id     = `COCKPIT_AUTH`
-                         status = COND #( WHEN lv_auth_mode = z2ui5_cl_cockpit_auth=>cs_mode-open
+                         status = COND #( WHEN lv_auth_mode = z2ui5_cl_cockpit_auth=>cs_mode-claim
                                           THEN cs_status-error ELSE cs_status-ok )
                          title  = `Admin cockpit restricted`
                          value  = z2ui5_cl_cockpit_auth=>get_mode_text( )
-                         text   = `The cockpit shows usage and configuration of the whole system.`
-                         fix    = `Settings tab: add the administrators (or "Restrict to me"), ` &&
-                                  `or implement z2ui5_if_cockpit_auth with your own authorization check.`
+                         text   = `The cockpit shows usage and configuration of the whole system. Without an ` &&
+                                  `administrator it shows only the claim screen - to whoever opens it first.`
+                         fix    = `Claim the administrator role right after the installation and maintain the ` &&
+                                  `administrators on the Settings tab, or implement z2ui5_if_cockpit_auth.`
                CHANGING  checks = checks ).
 
     DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
@@ -428,6 +530,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       ( name = `open-source-libs`         marker = `Z2UI5_CL_OSL_VALIDATOR`         kind = `library` )
       ( name = `launchpad-kpi`            marker = `Z2UI5_CL_LP_KPI_HELLO_WORLD`    kind = `library` )
       ( name = `headless-frontend`        marker = `Z2UI5_CL_FRONTEND_SIMULATOR`    kind = `test tool` )
+      ( name = `agent`                    marker = `Z2UI5_CL_AGENT_SETTINGS`        kind = `agent endpoint` )
       ( name = `http-connector`           marker = `Z2UI5_CL_HTTP_CON_HANDLER`      kind = `connector` )
       ( name = `rfc-connector`            marker = `Z2UI5_CL_RFC_CONNECTOR_HANDLER` kind = `connector` )
       ( name = `sql-console`              marker = `Z2UI5_SQL_CL_APP_01`            kind = `developer tool` )
@@ -445,9 +548,14 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
         <addon>-status = `installed`.
         <addon>-state = COND #( WHEN <addon>-kind = `developer tool`
                                 THEN cs_status-error ELSE cs_status-ok ).
-        IF <addon>-kind = `developer tool`.
-          <addon>-note = `Reachable for every user of the ICF node unless restricted.`.
-        ENDIF.
+        CASE <addon>-kind.
+          WHEN `developer tool`.
+            <addon>-note = `Reachable for every user of the ICF node unless restricted.`.
+          WHEN `agent endpoint`.
+            <addon>-note = `MCP endpoint for AI agents - see the Agents tab and the traffic light.`.
+          WHEN `test tool`.
+            <addon>-note = `Enables Reproduce on the Errors tab.`.
+        ENDCASE.
       ELSE.
         <addon>-status = `not installed`.
         <addon>-state = `None`.

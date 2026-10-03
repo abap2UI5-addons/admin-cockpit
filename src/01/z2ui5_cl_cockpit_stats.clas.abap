@@ -111,12 +111,15 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     TYPES:
       BEGIN OF ty_s_occurrence,
-        id       TYPE string,
-        time     TYPE string,
-        user     TYPE string,
-        draft_id TYPE string,
-        ms_total TYPE i,
-        start    TYPE string,
+        id            TYPE string,
+        time          TYPE string,
+        user          TYPE string,
+        draft_id      TYPE string,
+        draft_id_prev TYPE string,
+        event         TYPE string,
+        check_sticky  TYPE abap_bool,
+        ms_total      TYPE i,
+        start         TYPE string,
       END OF ty_s_occurrence.
     TYPES ty_t_occurrence TYPE STANDARD TABLE OF ty_s_occurrence WITH EMPTY KEY.
 
@@ -221,6 +224,16 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! Whose draft a logged roundtrip worked on, as far as the log can tell -
+    "! z2ui5_cl_cockpit_repro=&gt;cs_owner. Known from the user name (user
+    "! tracking NAME) or from today's pseudonym (HASH, same UTC day only - the
+    "! salt of an earlier day is gone, which is the point of it).
+    CLASS-METHODS get_occurrence_owner
+      IMPORTING
+        id            TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
+
     CLASS-METHODS get_slowest
       IMPORTING
         days          TYPE i
@@ -285,14 +298,14 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         cnt       TYPE i,
         cnt_start TYPE i,
         cnt_err   TYPE i,
-        ms_sum    TYPE i,
+        ms_sum    TYPE ty_p,
         ms_max    TYPE i,
-        ms_load   TYPE i,
-        ms_main   TYPE i,
-        ms_render TYPE i,
-        ms_client TYPE i,
+        ms_load   TYPE ty_p,
+        ms_main   TYPE ty_p,
+        ms_render TYPE ty_p,
+        ms_client TYPE ty_p,
         cnt_client TYPE i,
-        kb_res    TYPE i,
+        kb_res    TYPE ty_p,
         res_max   TYPE i,
         mod_max   TYPE i,
         h01       TYPE i,
@@ -306,6 +319,54 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         h09       TYPE i,
       END OF ty_s_db_sum.
     TYPES ty_t_db_sum TYPE STANDARD TABLE OF ty_s_db_sum WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_err_log,
+        timestampl  TYPE timestampl,
+        app         TYPE c LENGTH 30,
+        event       TYPE c LENGTH 40,
+        error_class TYPE c LENGTH 30,
+        error_head  TYPE c LENGTH 200,
+      END OF ty_s_err_log.
+    TYPES ty_t_err_log TYPE STANDARD TABLE OF ty_s_err_log WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_last,
+        app TYPE c LENGTH 30,
+        day TYPE c LENGTH 8,
+      END OF ty_s_last.
+    TYPES ty_t_last TYPE SORTED TABLE OF ty_s_last WITH UNIQUE KEY app.
+
+    TYPES ty_t_sum_app TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
+
+    "! Error log rows (newest first) grouped by app, event, exception class
+    "! and first line - the group key is G1, G2, ... in order of the newest
+    "! occurrence, the result sorted by count.
+    CLASS-METHODS group_errors
+      IMPORTING
+        it_log        TYPE ty_t_err_log
+      RETURNING
+        VALUE(result) TYPE ty_t_error.
+
+    "! The app classes without a recorded day on or after from_day.
+    CLASS-METHODS unused_of
+      IMPORTING
+        it_impl       TYPE z2ui5_cl_cockpit_setup=>ty_t_names
+        it_last       TYPE ty_t_last
+        from_day      TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_t_unused.
+
+    "! The runtime hint rules over the sums per app of the newer and the
+    "! older half of the period, and the draft table figures.
+    CLASS-METHODS hints_of
+      IMPORTING
+        it_new        TYPE ty_t_sum_app
+        it_old        TYPE ty_t_sum_app
+        is_set        TYPE z2ui5_cl_cockpit_setup=>ty_s_settings
+        is_draft      TYPE z2ui5_cl_cockpit_draft=>ty_s_info
+      RETURNING
+        VALUE(result) TYPE ty_t_hint.
 
     "! Sums per day and app (event empty), or per day and event of one app.
     CLASS-METHODS select_sums
@@ -619,12 +680,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_unused.
 
-    TYPES:
-      BEGIN OF ty_s_last,
-        app TYPE c LENGTH 30,
-        day TYPE c LENGTH 8,
-      END OF ty_s_last.
-    DATA lt_last TYPE SORTED TABLE OF ty_s_last WITH UNIQUE KEY app.
+    DATA lt_last TYPE ty_t_last.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( z2ui5_cl_cockpit_setup=>get( )-unused_days ).
 
@@ -632,13 +688,21 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       GROUP BY app
       INTO CORRESPONDING FIELDS OF TABLE @lt_last.      "#EC CI_NOWHERE
 
-    LOOP AT z2ui5_cl_cockpit_inst=>get_implementers( `Z2UI5_IF_APP` ) INTO DATA(lv_app).
-      DATA(lv_key) = CONV ty_s_last-app( lv_app ).
-      READ TABLE lt_last INTO DATA(ls_last) WITH TABLE KEY app = lv_key.
+    result = unused_of( it_impl   = z2ui5_cl_cockpit_inst=>get_implementers( `Z2UI5_IF_APP` )
+                        it_last   = lt_last
+                        from_day  = lv_from ).
+
+  ENDMETHOD.
+
+  METHOD unused_of.
+
+    LOOP AT it_impl INTO DATA(lv_app).
+      DATA(lv_key) = CONV ty_s_last-app( to_upper( lv_app ) ).
+      READ TABLE it_last INTO DATA(ls_last) WITH TABLE KEY app = lv_key.
       IF sy-subrc <> 0.
         APPEND VALUE #( app       = lv_app
                         last_used = `never recorded` ) TO result.
-      ELSEIF ls_last-day < lv_from.
+      ELSEIF ls_last-day < from_day.
         APPEND VALUE #( app       = lv_app
                         last_used = day_text( ls_last-day ) ) TO result.
       ENDIF.
@@ -648,28 +712,27 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_errors.
 
-    TYPES:
-      BEGIN OF ty_s_log,
-        timestampl  TYPE timestampl,
-        app         TYPE c LENGTH 30,
-        event       TYPE c LENGTH 40,
-        error_class TYPE c LENGTH 30,
-        error_head  TYPE c LENGTH 200,
-      END OF ty_s_log.
-    DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
-    DATA lt_first TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
-    DATA lt_last TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
+    DATA lt_log TYPE ty_t_err_log.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
     SELECT timestampl, app, event, error_class, error_head FROM z2ui5_t_ck_log
-      INTO CORRESPONDING FIELDS OF TABLE @lt_log
-      UP TO 5000 ROWS
       WHERE day >= @lv_from
         AND check_error = @abap_true
-      ORDER BY timestampl DESCENDING.
+      ORDER BY timestampl DESCENDING
+      INTO CORRESPONDING FIELDS OF TABLE @lt_log
+      UP TO 5000 ROWS.
 
-    LOOP AT lt_log INTO DATA(ls_log).
+    result = group_errors( lt_log ).
+
+  ENDMETHOD.
+
+  METHOD group_errors.
+
+    DATA lt_first TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
+    DATA lt_last TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
+
+    LOOP AT it_log INTO DATA(ls_log).
       READ TABLE result ASSIGNING FIELD-SYMBOL(<error>)
            WITH KEY app         = ls_log-app
                     event       = ls_log-event
@@ -698,7 +761,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       <error>-last_seen  = z2ui5_cl_cockpit_setup=>ts_text( lt_last[ lv_index ] ).
     ENDLOOP.
 
-    SORT result BY count DESCENDING.
+    SORT result STABLE BY count DESCENDING.
 
   ENDMETHOD.
 
@@ -706,13 +769,16 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     TYPES:
       BEGIN OF ty_s_log,
-        id          TYPE c LENGTH 32,
-        timestampl  TYPE timestampl,
-        uname       TYPE c LENGTH 12,
-        user_key    TYPE c LENGTH 64,
-        draft_id    TYPE c LENGTH 32,
-        ms_total    TYPE i,
-        check_start TYPE abap_bool,
+        id            TYPE c LENGTH 32,
+        timestampl    TYPE timestampl,
+        event         TYPE c LENGTH 40,
+        uname         TYPE c LENGTH 12,
+        user_key      TYPE c LENGTH 64,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        check_sticky  TYPE abap_bool,
+        ms_total      TYPE i,
+        check_start   TYPE abap_bool,
       END OF ty_s_log.
     DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
 
@@ -722,25 +788,29 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA(lv_class) = is_error-error_class.
     DATA(lv_head)  = is_error-error_head.
 
-    SELECT id, timestampl, uname, user_key, draft_id, ms_total, check_start FROM z2ui5_t_ck_log
-      INTO CORRESPONDING FIELDS OF TABLE @lt_log
-      UP TO 200 ROWS
+    SELECT id, timestampl, event, uname, user_key, draft_id, draft_id_prev, check_sticky, ms_total, check_start
+      FROM z2ui5_t_ck_log
       WHERE day >= @lv_from
         AND check_error = @abap_true
         AND app = @lv_app
         AND event = @lv_event
         AND error_class = @lv_class
         AND error_head = @lv_head
-      ORDER BY timestampl DESCENDING.
+      ORDER BY timestampl DESCENDING
+      INTO CORRESPONDING FIELDS OF TABLE @lt_log
+      UP TO 200 ROWS.
 
     DATA(lv_privacy) = z2ui5_cl_cockpit_setup=>check_privacy( ).
     LOOP AT lt_log INTO DATA(ls_log).
-      DATA(ls_occ) = VALUE ty_s_occurrence( id       = ls_log-id
-                                            time     = z2ui5_cl_cockpit_setup=>ts_text( ls_log-timestampl )
-                                            draft_id = ls_log-draft_id
-                                            ms_total = ls_log-ms_total
-                                            start    = COND #( WHEN ls_log-check_start = abap_true
-                                                               THEN `app start` ) ).
+      DATA(ls_occ) = VALUE ty_s_occurrence( id            = ls_log-id
+                                            time          = z2ui5_cl_cockpit_setup=>ts_text( ls_log-timestampl )
+                                            draft_id      = ls_log-draft_id
+                                            draft_id_prev = ls_log-draft_id_prev
+                                            event         = ls_log-event
+                                            check_sticky  = ls_log-check_sticky
+                                            ms_total      = ls_log-ms_total
+                                            start         = COND #( WHEN ls_log-check_start = abap_true
+                                                                    THEN `app start` ) ).
       IF lv_privacy = abap_false AND ls_log-uname IS NOT INITIAL.
         ls_occ-user = ls_log-uname.
       ELSEIF ls_log-user_key IS NOT INITIAL.
@@ -765,6 +835,39 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD get_occurrence_owner.
+
+    DATA lv_uname TYPE z2ui5_t_ck_log-uname.
+    DATA lv_user_key TYPE z2ui5_t_ck_log-user_key.
+    DATA lv_day TYPE z2ui5_t_ck_log-day.
+
+    result = z2ui5_cl_cockpit_repro=>cs_owner-unknown.
+    DATA(lv_id) = CONV z2ui5_t_ck_log-id( id ).
+    SELECT SINGLE uname, user_key, day FROM z2ui5_t_ck_log
+      WHERE id = @lv_id
+      INTO (@lv_uname, @lv_user_key, @lv_day).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+
+    IF lv_uname IS NOT INITIAL.
+      result = COND #( WHEN lv_uname = sy-uname THEN z2ui5_cl_cockpit_repro=>cs_owner-you
+                       ELSE z2ui5_cl_cockpit_repro=>cs_owner-other ).
+      RETURN.
+    ENDIF.
+
+    DATA(lv_today) = z2ui5_cl_cockpit_setup=>day_minus( 0 ).
+    IF lv_user_key IS INITIAL OR lv_day <> lv_today
+        OR z2ui5_cl_cockpit_setup=>get( )-user_tracking <> z2ui5_cl_cockpit_setup=>cs_users-hash.
+      RETURN.
+    ENDIF.
+    result = COND #( WHEN z2ui5_cl_cockpit_setup=>user_key( uname = sy-uname
+                                                            day   = lv_today ) = lv_user_key
+                     THEN z2ui5_cl_cockpit_repro=>cs_owner-you
+                     ELSE z2ui5_cl_cockpit_repro=>cs_owner-other ).
+
+  ENDMETHOD.
+
   METHOD get_slowest.
 
     DATA lt_log TYPE STANDARD TABLE OF z2ui5_t_ck_log WITH EMPTY KEY.
@@ -774,11 +877,11 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     SELECT id, timestampl, app, event, ms_total, ms_load, ms_main, ms_render, ms_client_prev,
            bytes_response, bytes_model, check_error
       FROM z2ui5_t_ck_log
-      INTO CORRESPONDING FIELDS OF TABLE @lt_log
-      UP TO @max_rows ROWS
       WHERE day >= @lv_from
         AND check_slow = @abap_true
-      ORDER BY ms_total DESCENDING.
+      ORDER BY ms_total DESCENDING
+      INTO CORRESPONDING FIELDS OF TABLE @lt_log
+      UP TO @max_rows ROWS.
 
     LOOP AT lt_log INTO DATA(ls_log).
       DATA(ls_slow) = VALUE ty_s_slow( id        = ls_log-id
@@ -810,13 +913,11 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_hints.
 
-    DATA lt_all TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    DATA lt_new TYPE ty_t_sum_app.
+    DATA lt_old TYPE ty_t_sum_app.
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     " growth: the model maximum of the newer half against the older half
     DATA(lv_half) = z2ui5_cl_cockpit_setup=>day_minus( days DIV 2 ).
-    DATA lt_new TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
-    DATA lt_old TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
 
     LOOP AT select_sums( lv_from ) INTO DATA(ls_row).
       IF ls_row-day > lv_half.
@@ -834,10 +935,20 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                CHANGING  cs_sum = <sum> ).
     ENDLOOP.
 
+    result = hints_of( it_new   = lt_new
+                       it_old   = lt_old
+                       is_set   = z2ui5_cl_cockpit_setup=>get( )
+                       is_draft = z2ui5_cl_cockpit_draft=>get_info( ) ).
+
+  ENDMETHOD.
+
+  METHOD hints_of.
+
+    DATA lt_all TYPE ty_t_sum_app.
     " the whole period per app = newer + older half
-    lt_all = lt_new.
-    LOOP AT lt_old INTO DATA(ls_old).
-      READ TABLE lt_all WITH TABLE KEY app = ls_old-app ASSIGNING <sum>.
+    lt_all = it_new.
+    LOOP AT it_old INTO DATA(ls_old).
+      READ TABLE lt_all WITH TABLE KEY app = ls_old-app ASSIGNING FIELD-SYMBOL(<sum>).
       IF sy-subrc <> 0.
         INSERT ls_old INTO TABLE lt_all.
         CONTINUE.
@@ -873,7 +984,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     LOOP AT lt_all INTO DATA(ls_sum).
       DATA(lv_app) = CONV string( ls_sum-app ).
 
-      IF ls_sum-mod_max > ls_set-model_warn_kb * 1024.
+      IF ls_sum-mod_max > is_set-model_warn_kb * 1024.
         APPEND VALUE #( state = `Warning`
                         app   = lv_app
                         hint  = `Large model`
@@ -882,7 +993,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                                 `bound data public, page large tables.` ) TO result.
       ENDIF.
 
-      IF ls_sum-res_max > ls_set-response_warn_kb * 1024.
+      IF ls_sum-res_max > is_set-response_warn_kb * 1024.
         APPEND VALUE #( state = `Warning`
                         app   = lv_app
                         hint  = `Large response`
@@ -892,7 +1003,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       ENDIF.
 
       DATA(lv_p95) = p95( ls_sum ).
-      IF ls_sum-cnt >= 20 AND lv_p95 >= ls_set-slow_ms.
+      IF ls_sum-cnt >= 20 AND lv_p95 >= is_set-slow_ms.
         APPEND VALUE #( state = `Warning`
                         app   = lv_app
                         hint  = `Slow p95`
@@ -939,9 +1050,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
         ENDIF.
       ENDIF.
 
-      READ TABLE lt_old INTO ls_old WITH TABLE KEY app = ls_sum-app.
+      READ TABLE it_old INTO ls_old WITH TABLE KEY app = ls_sum-app.
       IF sy-subrc = 0.
-        READ TABLE lt_new INTO DATA(ls_new) WITH TABLE KEY app = ls_sum-app.
+        READ TABLE it_new INTO DATA(ls_new) WITH TABLE KEY app = ls_sum-app.
         IF sy-subrc = 0 AND ls_new-mod_max > 102400 AND ls_new-mod_max * 2 > ls_old-mod_max * 3.
           APPEND VALUE #( state = `Warning`
                           app   = lv_app
@@ -953,7 +1064,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-    DATA(ls_draft) = z2ui5_cl_cockpit_draft=>get_info( ).
+    DATA(ls_draft) = is_draft.
     IF ls_draft-check_backlog = abap_true.
       APPEND VALUE #( state = `Warning`
                       app   = `(draft table)`

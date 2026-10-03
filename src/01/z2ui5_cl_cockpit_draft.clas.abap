@@ -211,10 +211,10 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     DO.
       CLEAR lt_rows.
       SELECT id, data FROM (lv_tab)
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-        UP TO 200 ROWS
         WHERE id > @lv_last
-        ORDER BY id.
+        ORDER BY id
+        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+        UP TO 200 ROWS.
       IF lt_rows IS INITIAL.
         EXIT.
       ENDIF.

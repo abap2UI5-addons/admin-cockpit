@@ -105,6 +105,13 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! Forget the buffered settings (after a save, and in tests).
     CLASS-METHODS reset_buffer.
 
+    "! Run this roll area with the given settings instead of the stored
+    "! ones, until reset_buffer( ) - for unit tests, and for a forwarding
+    "! monitor that wants other settings than the cockpit's.
+    CLASS-METHODS set_buffer
+      IMPORTING
+        settings TYPE ty_s_settings.
+
     "! The p95 approximation works on these bucket bounds (milliseconds):
     "! H01 counts roundtrips below the first bound, H09 everything above the
     "! last one.
@@ -471,6 +478,13 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
     CLEAR gs_settings.
     CLEAR gv_loaded.
+
+  ENDMETHOD.
+
+  METHOD set_buffer.
+
+    gs_settings = settings.
+    gv_loaded   = abap_true.
 
   ENDMETHOD.
 

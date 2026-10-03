@@ -4,7 +4,7 @@
 "! retention. The cockpit's Drafts tab calls the same methods; a background
 "! job calls run( ):
 "! - Standard ABAP: a two-line report (REPORT z2ui5_cockpit_job.
-"!   z2ui5_cl_cockpit_job=>run( ).) scheduled in SM36
+"!   z2ui5_cl_cockpit_job=&gt;run( ).) scheduled in SM36
 "! - ABAP Cloud: an application job class of your own whose
 "!   if_apj_rt_exec_object~execute calls run( )
 "! The monitor also purges its own tables once per day on the first recorded
@@ -21,6 +21,7 @@ CLASS z2ui5_cl_cockpit_job DEFINITION PUBLIC FINAL CREATE PUBLIC.
         agg_deleted    TYPE i,
         usr_deleted    TYPE i,
         act_deleted    TYPE i,
+        aud_deleted    TYPE i,
         message        TYPE string,
       END OF ty_s_result.
 
@@ -78,6 +79,10 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     result-agg_deleted = sy-dbcnt.
     DELETE FROM z2ui5_t_ck_act WHERE last_seen < @lv_act_ts.
     result-act_deleted = sy-dbcnt.
+    " the change log follows the long retention of the aggregates
+    DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-agg_retention_days * 86400 ).
+    DELETE FROM z2ui5_t_ck_aud WHERE timestampl < @lv_aud_ts.
+    result-aud_deleted = sy-dbcnt.
 
   ENDMETHOD.
 

@@ -12,12 +12,13 @@ app, installed with abapGit next to abap2UI5.
 |---|---|---|
 | **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size - and the last 30 days, one row per day | monitor |
 | **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
-| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) | monitor |
+| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
 | **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
 | **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
 | **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
-| **Settings** | Monitor mode, slow threshold, retention, privacy mode, administrators | - |
+| **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/agent)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
+| **Settings** | Monitor mode, slow threshold, retention, privacy mode, administrators, and the change log (claims, administrators, settings, deletions, reproductions) | - |
 
 The tabs marked *-* work **without any logging** - install, open, read the
 traffic light. That is the quick win.
@@ -40,8 +41,10 @@ tabs follow with the first release.*
    | has `z2ui5_if_ui5_monitor` (the release after 1.146.0) | `main` | everything |
    | 1.146.0 or later without the monitor hook | `standalone` | Installation & Security, Drafts & Housekeeping, Settings - the monitor tabs say what they need |
 
-3. Start `z2ui5_cl_cockpit_app` and press **Restrict to me** on the Settings
-   tab (see [Security of the cockpit itself](#security-of-the-cockpit-itself)).
+3. Start `z2ui5_cl_cockpit_app` right away: a cockpit without an
+   administrator shows nothing but a **Claim the administrator role** screen -
+   the first user who presses its button becomes the administrator (see
+   [Security of the cockpit itself](#security-of-the-cockpit-itself)).
 
 Once your abap2UI5 has the monitor hook, switch the abapGit repository from
 `standalone` to `main` and pull - nothing else changes.
@@ -79,12 +82,27 @@ which decides by the settings what is persisted:
 
 | Table | Written | Content |
 |---|---|---|
-| `Z2UI5_T_CK_AGG` | every recorded roundtrip, updated in place | per UTC day, hour, app and event: count, app starts, errors, slow ones, sum and max of the total and of each phase, request/response KB, largest response and model, browser time, and a latency histogram of nine buckets (the p95 is interpolated from it) |
+| `Z2UI5_T_CK_AGG` | every recorded roundtrip, updated in place, lock-free | per UTC day, hour, app and event: count, app starts, errors, slow ones, sum and max of the total and of each phase, request/response KB, largest response and model, browser time, and a latency histogram of nine buckets (the p95 is interpolated from it) |
 | `Z2UI5_T_CK_USR` | once per user, day and app | the user key (see privacy) - distinct users per day |
 | `Z2UI5_T_CK_ACT` | every recorded roundtrip | user key and app with the last-seen time - the Live tab |
 | `Z2UI5_T_CK_LOG` | errors and slow roundtrips only | one raw row: timings per phase, sizes, draft ids, exception class, first line and full chain |
 | `Z2UI5_T_CK_SET` | settings | name/value |
 | `Z2UI5_T_CK_ADM` | administrators | user names |
+| `Z2UI5_T_CK_AUD` | every change made in the cockpit | change log: time, user, action, details - kept as long as the aggregates |
+
+**Lock-free and overflow-safe.** A roundtrip is added to the row of its hour
+with one `UPDATE ... SET cnt = cnt + 1, ms_sum = ms_sum + n, ...` - atomic on
+every database, so two work processes never lose each other's counts and
+nobody waits for a row lock (no `SELECT ... FOR UPDATE`, the same statement on
+ABAP Cloud). No row yet: `INSERT`; lost the race for it: the `UPDATE` once
+more. The maxima are conditional `UPDATE`s (`... WHERE ms_max < n`). The sum
+columns (milliseconds, KB) are `DEC 15` - an `INT4` overflows at 2.1 billion,
+which a busy hour of one app can reach in milliseconds; `INT8` does not exist
+below 7.50, `DEC 15` exists on every release and on ABAP Cloud. The increments
+are saturated at the largest `DEC 15` before they are written, the counts stay
+`INT4` per hour row, the read side adds days up in packed numbers and shows
+them saturated at the largest `INT4` - and whatever a database still refuses,
+`record( )` catches: the monitor never dumps.
 
 **It never breaks an app.** Everything is caught; the core swallows anything a
 monitor raises anyway. **Commit semantics** follow the interface: for an app
@@ -102,8 +120,9 @@ ABAP only.
 
 **What it costs:** a handful of single-row statements per roundtrip
 (settings and the daily salt are read once per roll area). Mode `SAMPLE`
-records errors fully and only a share of the rest, weighted so counts stay
-estimates of the totals; `ERRORS` records failed roundtrips only; `OFF` stops
+records errors fully and only a share of the rest - decided on the
+milliseconds of the start time - weighted so counts stay estimates of the
+totals; `ERRORS` records failed roundtrips only; `OFF` stops
 recording without uninstalling. The own tables purge themselves once per day
 on the first recorded roundtrip.
 
@@ -176,19 +195,86 @@ top of `main( )`:
    ```
 
    `action` is `DISPLAY` (open the cockpit) or `CHANGE` (delete drafts, purge
-   logs, change settings and administrators). A class that cannot be created
-   denies.
+   logs, change settings and administrators, reproduce errors). A class that
+   cannot be created denies.
 2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_CK_ADM`).
-3. **As long as that list is empty the cockpit is open** - and says so in red
-   on every tab and in the traffic light. Press **Restrict to me** right after
-   the installation. Keep at least one administrator maintained even with a
-   class of your own: it is the fallback should the class lookup ever fail.
+   Only the users on it get in; everybody else sees "No authorization".
+3. **As long as that list is empty, the cockpit shows only the claim
+   screen** - one button, *Claim the administrator role for <you>*, and nothing
+   of the system. The first user who presses it becomes the administrator; the
+   claim is a row with a fixed key, so of two users claiming at the same moment
+   exactly one wins. The claim is written to the change log (Settings tab).
+   Claim it right after the installation; the traffic light shows the
+   unclaimed cockpit in red. The last administrator cannot be removed on the
+   Settings tab.
+
+**The administrator has left?** Reset the list with one class method - in a
+two-line report, an ABAP Cloud console class (`if_oo_adt_classrun`) or the
+test environment of SE24/ADT:
+
+```abap
+" hand the cockpit to a named user ...
+z2ui5_cl_cockpit_auth=>reset_admins( 'NEW_ADMIN' ).
+" ... or empty the list, so the next user who opens the cockpit can claim it
+z2ui5_cl_cockpit_auth=>reset_admins( ).
+```
+
+Both commit and both are written to the change log.
 
 The cockpit reads framework internals - the draft table `Z2UI5_T_01`, the user
 exit instance, the draft store, the class lookup - only by name, with dynamic
 SQL and dynamic calls, and read-only except for the draft cleanup. A later
 abap2UI5 release that renames one of them costs the cockpit that number, never
 its activation.
+
+## Reproduce an error
+
+The detail of an error group offers **Reproduce...** for the selected
+occurrence when the [headless frontend](https://github.com/abap2UI5-addons/headless-frontend)
+(`z2ui5_cl_frontend_simulator`) is installed. It resumes the draft the failed
+request came with (`draft_id_prev` of the log entry) and fires the same event
+again, through the simulator - the app runs exactly as it ran for the user,
+and the cockpit shows the exception chain, the messages the app showed and the
+view XML the roundtrip displayed.
+
+**It re-runs the app logic for real.** Whatever the event writes, posts or
+sends happens again - as the administrator, with the administrator's
+authorizations, and committed if the app commits. The cockpit therefore asks
+first, offers it to administrators only (`CHANGE`) and writes every replay to
+the change log before it starts. Limits, all shown in the dialog:
+
+- **draft-based apps only** - a sticky (stateful) app keeps no draft;
+- **only drafts that still exist** - drafts expire (4 hours by default);
+- **only your own drafts** - abap2UI5 binds a draft to its owner. The cockpit
+  knows the owner from the user name (user tracking `NAME`) or from today's
+  pseudonym (`HASH`, same UTC day only); otherwise it tries, and the simulator
+  says "no draft" when the draft is somebody else's;
+- **the event, not the values** - what the user typed in that roundtrip and
+  the event's arguments are not recorded, so they are not replayed.
+
+The simulator is called dynamically and named only in literals: the cockpit
+activates without it and simply does not offer the button.
+
+## Agents
+
+When the [agent addon](https://github.com/abap2UI5-addons/agent) is installed
+(detected by its class `z2ui5_cl_agent_settings` or its audit table
+`Z2UI5_T_AG_LOG`), the Agents tab reads its audit log and settings - with
+dynamic SQL inside `TRY`, so there is no dependency either way:
+
+- endpoint enabled yes/no, with the opted-in apps (implementers of
+  `z2ui5_if_agent_app`), the APP rules and the agent administrators;
+- calls per day, per app and per MCP client (name and version from
+  `initialize`), each split into refused by **policy** (endpoint disabled, app
+  not enabled for agents, event forbidden or reserved for a human) and refused
+  or failed otherwise (**validation** - wrong field or value, unknown or
+  expired session, the app raised);
+- the last calls with operation, event, outcome and text; the user only with
+  user tracking `NAME`.
+
+The traffic light gets an agent line: disabled is green; enabled without an
+agent administrator is red; enabled with an `APP *` allow rule (every app
+class, not only the opted-in ones) or with no reachable app at all is yellow.
 
 ## Housekeeping and background jobs
 
@@ -225,6 +311,20 @@ npm run lint:702        # after npm run downport (rewrites src/ - CI only)
 npm run check:abap2ui5  # the abap2UI5 linter: views, bindings, chain layout
 ```
 
+**Unit tests.** The pure logic has ABAP Unit tests (`*.clas.testclasses.abap`):
+p95 from the histogram, the runtime hint rules, error grouping, unused apps,
+the privacy modes and the daily salt rotation, the recorder's aggregation,
+the security traffic light and the agent check from given structures, the
+access decision, the Agents figures and when an error can be reproduced. The
+classes that touch the database (`ltcl_salt`, `ltcl_rec`) are `RISK LEVEL
+DANGEROUS`: they write rows of the test app `ZZ_COCKPIT_UNIT_TEST` on days in
+2099, never commit, and delete and roll back in `teardown`. Without a system
+they run on abap2UI5's transpiled runtime: copy `src/01` and `src/02` into a
+package folder of a clone of abap2UI5 (the branch with
+`z2ui5_if_ui5_monitor`), `npm ci && npm run downport && npm run
+auto_transpile`, and run the generated `node/output` tests of
+`Z2UI5_CL_COCKPIT*`.
+
 **Temporary state:** the monitor interface is not on abap2UI5's `main` yet. Until
 it is merged, `abaplint.jsonc` resolves abap2UI5 from the branch
 `claude/abap2ui5-project-brainstorm-nt7ifs` (abaplint's CLI supports `branch`
@@ -238,9 +338,9 @@ See [AGENTS.md](AGENTS.md) for the conventions of this repository.
 
 - **Export** of the aggregates to OpenTelemetry / SAP Cloud ALM, so abap2UI5
   shows up next to the rest of the landscape.
-- **Reproduce an error** - "time travel" from an error occurrence: replay the
-  roundtrip against its draft with the
-  [headless frontend](https://github.com/abap2UI5/headless-frontend).
+- **Reproduce with the user's input** - record the model delta and the event
+  arguments of a failed roundtrip (opt-in, privacy!) so the replay sends them
+  too.
 - Alert thresholds (error rate, p95) with a notification.
 - Per-app authorization overview: which roles may start which app classes.
 

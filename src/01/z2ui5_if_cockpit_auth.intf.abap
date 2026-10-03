@@ -8,8 +8,10 @@
 "!
 "! Without such a class the cockpit allows the users maintained on its
 "! Settings tab (table Z2UI5_T_CK_ADM). As long as that list is empty, the
-"! cockpit is open to everybody who can reach the abap2UI5 ICF node and says
-"! so in red on every tab - restrict it right after the installation.
+"! cockpit shows nothing but a "claim the administrator role" screen: the
+"! first user who presses its button becomes the administrator (logged in
+"! the cockpit's change log), everybody after that needs to be on the list.
+"! z2ui5_cl_cockpit_auth=&gt;reset_admins( ) starts over.
 INTERFACE z2ui5_if_cockpit_auth
   PUBLIC.
 

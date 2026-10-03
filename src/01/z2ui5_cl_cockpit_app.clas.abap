@@ -1,14 +1,16 @@
 "! <p class="shorttext synchronized">admin cockpit - the app</p>
 "!
 "! The admin cockpit as an abap2UI5 app: start it with
-"! ?app_start=z2ui5_cl_cockpit_app. Seven tabs answer what an IT lead asks
+"! ?app_start=z2ui5_cl_cockpit_app. Its tabs answer what an IT lead asks
 "! before abap2UI5 goes to production - is it used, is it fast, is it safely
-"! configured. Installation & Security and Drafts & Housekeeping work on
+"! configured. Installation &amp; Security and Drafts &amp; Housekeeping work on
 "! every abap2UI5 release; Overview, Apps, Errors, Performance and Live show
-"! what the roundtrip monitor (package 02) recorded.
+"! what the roundtrip monitor (package 02) recorded; Agents what the agent
+"! addon's endpoint did, when it is installed.
 "!
 "! Access is decided by z2ui5_cl_cockpit_auth at the top of main( ) - see
-"! z2ui5_if_cockpit_auth.
+"! z2ui5_if_cockpit_auth. Without any administrator the app shows nothing
+"! but the claim screen.
 CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -20,7 +22,6 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
         platform   TYPE string,
         user       TYPE string,
         auth_text  TYPE string,
-        auth_open  TYPE abap_bool,
         can_change TYPE abap_bool,
       END OF ty_s_head.
 
@@ -58,16 +59,31 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA s_error       TYPE z2ui5_cl_cockpit_stats=>ty_s_error.
     DATA t_occurrences TYPE z2ui5_cl_cockpit_stats=>ty_t_occurrence.
     DATA error_text    TYPE string.
+    DATA repro_enabled TYPE abap_bool.
+    DATA repro_hint    TYPE string.
+    DATA s_repro       TYPE z2ui5_cl_cockpit_repro=>ty_s_result.
+    DATA s_agent       TYPE z2ui5_cl_cockpit_agent=>ty_s_info.
+    DATA t_log         TYPE z2ui5_cl_cockpit_auth=>ty_t_log.
 
   PROTECTED SECTION.
     DATA client     TYPE REF TO z2ui5_if_client.
     DATA detail_app TYPE string.
+    DATA s_occ      TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
 
     METHODS view_display.
     METHODS view_no_auth.
+    METHODS view_claim
+      IMPORTING
+        message TYPE string OPTIONAL.
+    METHODS on_claim.
     METHODS popup_app.
     METHODS popup_error.
     METHODS popup_confirm_delete.
+    METHODS popup_confirm_reproduce.
+    METHODS popup_reproduce.
+    METHODS occurrence_select
+      IMPORTING
+        id TYPE clike.
     METHODS on_event.
     METHODS load_head.
     METHODS load_tab.
@@ -89,6 +105,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   METHOD z2ui5_if_app~main.
 
     me->client = client.
+
+    " a fresh installation: no administrator, no customer class - nothing
+    " but the claim screen, for everybody, until the first user claims
+    IF z2ui5_cl_cockpit_auth=>get_mode( ) = z2ui5_cl_cockpit_auth=>cs_mode-claim.
+      on_claim( ).
+      RETURN.
+    ENDIF.
 
     IF z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-display ) = abap_false.
       view_no_auth( ).
@@ -126,7 +149,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     header->ele( `SegmentedButton`
         )->a( n = `selectedKey`     v = client->_bind( days )
         )->a( n = `selectionChange` v = client->_event( `PERIOD` )
-        )->a( n = `tooltip`         v = `Period of Apps, Errors and Performance`
+        )->a( n = `tooltip`         v = `Period of Apps, Errors, Performance and Agents`
 
         )->ele( `items`
 
@@ -146,14 +169,6 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `press`   v = client->_event( `REFRESH` ) ).
 
     DATA(content) = page->ele( `content` ).
-
-    content->tag( `MessageStrip`
-        )->a( n = `text`     v = `The admin cockpit is open to everybody who can reach the abap2UI5 ICF node - ` &&
-                                 `add administrators on the Settings tab or use "Restrict to me".`
-        )->a( n = `type`     v = `Error`
-        )->a( n = `showIcon` v = `true`
-        )->a( n = `visible`  v = client->_bind( s_head-auth_open )
-        )->a( n = `class`    v = `sapUiTinyMargin` ).
 
     DATA(bar) = content->ele( `IconTabBar`
         )->a( n = `selectedKey`         v = client->_bind( tab )
@@ -966,6 +981,269 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `icon`  v = `sap-icon://locked`
             )->a( n = `press` v = client->_event( `LOCKS` ) ).
 
+    " --- Agents ---------------------------------------------------------
+    DATA(agents) = bar->ele( `IconTabFilter`
+        )->a( n = `key`  v = `AGENTS`
+        )->a( n = `text` v = `Agents`
+        )->a( n = `icon` v = `sap-icon://chain-link` ).
+
+    agents->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( s_agent-text )
+        )->a( n = `type`     v = client->_bind( s_agent-strip_type )
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
+
+    agents->ele( `FlexBox`
+        )->a( n = `wrap`    v = `Wrap`
+        )->a( n = `visible` v = client->_bind( s_agent-readable )
+
+        )->ele( `GenericTile`
+            )->a( n = `header`    v = `Agent calls`
+            )->a( n = `subheader` v = `selected period`
+            )->a( n = `class`     v = `sapUiTinyMarginEnd sapUiTinyMarginBottom`
+
+            )->ele( `tileContent`
+                )->ele( `TileContent`
+                    )->a( n = `footer` v = `tool calls in the audit log`
+
+                    )->ele( `content`
+
+                        )->tag( `NumericContent`
+                            )->a( n = `value`      v = client->_bind( s_agent-calls )
+                            )->a( n = `icon`       v = `sap-icon://chain-link`
+                            )->a( n = `withMargin` v = `false`
+
+                    )->end(
+                )->end(
+            )->end(
+        )->end(
+
+        )->ele( `GenericTile`
+            )->a( n = `header`    v = `Refused by policy`
+            )->a( n = `subheader` v = `selected period`
+            )->a( n = `class`     v = `sapUiTinyMarginEnd sapUiTinyMarginBottom`
+
+            )->ele( `tileContent`
+                )->ele( `TileContent`
+                    )->a( n = `footer` v = `disabled, not enabled, forbidden, needs a human`
+
+                    )->ele( `content`
+
+                        )->tag( `NumericContent`
+                            )->a( n = `value`      v = client->_bind( s_agent-policy )
+                            )->a( n = `valueColor` v = `Critical`
+                            )->a( n = `withMargin` v = `false`
+
+                    )->end(
+                )->end(
+            )->end(
+        )->end(
+
+        )->ele( `GenericTile`
+            )->a( n = `header`    v = `Refused or failed`
+            )->a( n = `subheader` v = `selected period`
+            )->a( n = `class`     v = `sapUiTinyMarginEnd sapUiTinyMarginBottom`
+
+            )->ele( `tileContent`
+                )->ele( `TileContent`
+                    )->a( n = `footer` v = `validation, session, app errors`
+
+                    )->ele( `content`
+
+                        )->tag( `NumericContent`
+                            )->a( n = `value`      v = client->_bind( s_agent-validation )
+                            )->a( n = `valueColor` v = `Error`
+                            )->a( n = `withMargin` v = `false`
+
+                    )->end(
+                )->end(
+            )->end(
+        )->end(
+
+        )->ele( `GenericTile`
+            )->a( n = `header`    v = `Users`
+            )->a( n = `subheader` v = `selected period`
+            )->a( n = `class`     v = `sapUiTinyMarginEnd sapUiTinyMarginBottom`
+
+            )->ele( `tileContent`
+                )->ele( `TileContent`
+                    )->a( n = `footer` v = `distinct SAP users behind the calls`
+
+                    )->ele( `content`
+
+                        )->tag( `NumericContent`
+                            )->a( n = `value`      v = client->_bind( s_agent-users )
+                            )->a( n = `icon`       v = `sap-icon://group`
+                            )->a( n = `withMargin` v = `false` ).
+
+    agents->ele( n = `SimpleForm` ns = `form`
+        )->a( n = `layout`   v = `ResponsiveGridLayout`
+        )->a( n = `editable` v = `false`
+        )->a( n = `visible`  v = client->_bind( s_agent-installed )
+
+        )->ele( n = `content` ns = `form`
+
+            )->tag( `Label`
+                )->a( n = `text` v = `Endpoint enabled`
+            )->tag( `Text`
+                )->a( n = `text` v = client->_bind( s_agent-enabled_text ) ).
+
+    agents->ele( `Table`
+        )->a( n = `headerText` v = `Agent calls per day (UTC)`
+        )->a( n = `items`      v = client->_bind( s_agent-t_day )
+        )->a( n = `visible`    v = client->_bind( s_agent-readable )
+        )->a( n = `class`      v = `sapUiSmallMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Day`
+            )->tag( `Column`
+                )->a( n = `header` v = `Calls`
+                )->a( n = `width`  v = `30%`
+            )->tag( `Column`
+                )->a( n = `header` v = `Refused by policy`
+            )->tag( `Column`
+                )->a( n = `header` v = `Refused or failed`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{DAY}`
+                    )->tag( `ProgressIndicator`
+                        )->a( n = `percentValue` v = `{BAR}`
+                        )->a( n = `displayValue` v = `{CALLS}`
+                        )->a( n = `state`        v = `{STATE}`
+                        )->a( n = `showValue`    v = `true`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{POLICY}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALIDATION}` ).
+
+    agents->ele( `Table`
+        )->a( n = `headerText` v = `Agent calls per app`
+        )->a( n = `items`      v = client->_bind( s_agent-t_app )
+        )->a( n = `visible`    v = client->_bind( s_agent-readable )
+        )->a( n = `class`      v = `sapUiMediumMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Calls`
+            )->tag( `Column`
+                )->a( n = `header` v = `Refused by policy`
+            )->tag( `Column`
+                )->a( n = `header` v = `Refused or failed`
+            )->tag( `Column`
+                )->a( n = `header` v = `Last call (UTC)`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{NAME}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{CALLS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{POLICY}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALIDATION}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LAST}` ).
+
+    agents->ele( `Table`
+        )->a( n = `headerText` v = `Agent calls per MCP client`
+        )->a( n = `items`      v = client->_bind( s_agent-t_client )
+        )->a( n = `visible`    v = client->_bind( s_agent-readable )
+        )->a( n = `class`      v = `sapUiMediumMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Client (name and version from initialize)`
+            )->tag( `Column`
+                )->a( n = `header` v = `Calls`
+            )->tag( `Column`
+                )->a( n = `header` v = `Refused by policy`
+            )->tag( `Column`
+                )->a( n = `header` v = `Refused or failed`
+            )->tag( `Column`
+                )->a( n = `header` v = `Last call (UTC)`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{NAME}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{CALLS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{POLICY}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALIDATION}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LAST}` ).
+
+    agents->ele( `Table`
+        )->a( n = `headerText`       v = `Last agent calls (user hidden unless user tracking is NAME)`
+        )->a( n = `items`            v = client->_bind( s_agent-t_last )
+        )->a( n = `visible`          v = client->_bind( s_agent-readable )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `20`
+        )->a( n = `class`            v = `sapUiMediumMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Time (UTC)`
+            )->tag( `Column`
+                )->a( n = `header` v = `User`
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Operation`
+            )->tag( `Column`
+                )->a( n = `header` v = `Event`
+            )->tag( `Column`
+                )->a( n = `header` v = `Outcome`
+            )->tag( `Column`
+                )->a( n = `header` v = `Text`
+                )->a( n = `width`  v = `30%`
+            )->tag( `Column`
+                )->a( n = `header` v = `Client`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TIME}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{USER}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{APP}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{OPERATION}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{EVENT}`
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{KIND}`
+                        )->a( n = `state` v = `{STATE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TEXT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{CLIENT}` ).
+
     " --- Settings -------------------------------------------------------
     DATA(settings) = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `SETTINGS`
@@ -1085,7 +1363,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     settings->ele( `Table`
         )->a( n = `headerText` v = client->_bind( s_head-auth_text )
         )->a( n = `items`      v = client->_bind( t_admins )
-        )->a( n = `noDataText` v = `No administrator - the cockpit is open to everybody.`
+        )->a( n = `noDataText` v = `No administrator.`
 
         )->ele( `headerToolbar`
             )->ele( `OverflowToolbar`
@@ -1103,11 +1381,6 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->a( n = `icon`    v = `sap-icon://add`
                     )->a( n = `enabled` v = client->_bind( s_head-can_change )
                     )->a( n = `press`   v = client->_event( `ADMIN_ADD` )
-                )->tag( `Button`
-                    )->a( n = `text`    v = `Restrict to me`
-                    )->a( n = `icon`    v = `sap-icon://locked`
-                    )->a( n = `enabled` v = client->_bind( s_head-can_change )
-                    )->a( n = `press`   v = client->_event( `CLAIM` )
 
             )->end(
         )->end(
@@ -1134,6 +1407,39 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `enabled` v = client->_bind( s_head-can_change )
                         )->a( n = `press`   v = client->_event( val = `ADMIN_REMOVE` arg = `${UNAME}` ) ).
 
+    settings->ele( `Table`
+        )->a( n = `headerText`       v = `Change log - claims, administrators, settings, deletions, reproductions`
+        )->a( n = `items`            v = client->_bind( t_log )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `20`
+        )->a( n = `class`            v = `sapUiMediumMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Time (UTC)`
+            )->tag( `Column`
+                )->a( n = `header` v = `User`
+            )->tag( `Column`
+                )->a( n = `header` v = `Action`
+            )->tag( `Column`
+                )->a( n = `header` v = `Details`
+                )->a( n = `width`  v = `50%`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TIME}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{USER}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{ACTION}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TEXT}` ).
+
     client->view_display( view->stringify( ) ).
 
   ENDMETHOD.
@@ -1153,6 +1459,74 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `text`        v = `No authorization`
             )->a( n = `description` v = `Ask an administrator of the cockpit to add your user.`
             )->a( n = `icon`        v = `sap-icon://locked` ).
+
+    client->view_display( view->stringify( ) ).
+
+  ENDMETHOD.
+
+  METHOD on_claim.
+
+    IF client->check_on_event( `CLAIM_ROLE` ).
+      IF z2ui5_cl_cockpit_auth=>claim( ) = abap_true.
+        model_init( ).
+        view_display( ).
+        client->message_box_display( text = |{ sy-uname } is the administrator of the admin cockpit now. Add further | &&
+                                            |administrators on the Settings tab - the claim is in its change log.|
+                                     type = `success` ).
+      ELSE.
+        view_claim( `Somebody else claimed the administrator role a moment ago - ask that user to add you.` ).
+      ENDIF.
+      RETURN.
+    ENDIF.
+
+    view_claim( ).
+
+  ENDMETHOD.
+
+  METHOD view_claim.
+
+    DATA(view) = z2ui5_cl_ui5_view_builder=>factory(
+        )->ele( n = `View` ns = `mvc`
+            )->a( n = `xmlns`        v = `sap.m`
+            )->a( n = `xmlns:mvc`    v = `sap.ui.core.mvc`
+            )->a( n = `displayBlock` v = `true`
+            )->a( n = `height`       v = `100%` ).
+
+    DATA(content) = view->ele( `Shell`
+        )->ele( `Page`
+            )->a( n = `title` v = `abap2UI5 Admin Cockpit - claim the administrator role`
+
+            )->ele( `content` ).
+
+    content->tag( `MessageStrip`
+        )->a( n = `text`     t = message
+        )->a( n = `type`     v = `Error`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  b = xsdbool( message IS NOT INITIAL )
+        )->a( n = `class`    v = `sapUiSmallMargin` ).
+
+    content->ele( `VBox`
+        )->a( n = `class` v = `sapUiMediumMargin`
+
+        )->tag( `Title`
+            )->a( n = `text`  v = `This admin cockpit has no administrator yet`
+            )->a( n = `level` v = `H2`
+        )->tag( `Text`
+            )->a( n = `text`  v = `The cockpit shows usage and configuration of the whole system and can delete ` &&
+                                  `drafts, so it shows nothing until it has an administrator. The first user who ` &&
+                                  `claims the role becomes that administrator and adds everybody else on the ` &&
+                                  `Settings tab. The claim is written to the cockpit's change log.`
+            )->a( n = `class` v = `sapUiSmallMarginTop`
+        )->tag( `Text`
+            )->a( n = `text`  t = |You are logged on as { sy-uname }. If you are not the person who should administer | &&
+                                  |abap2UI5 on this system, close this page and tell that person.|
+            )->a( n = `class` v = `sapUiSmallMarginTop`
+        )->tag( `Button`
+            )->a( n = `text`  t = |Claim the administrator role for { sy-uname }|
+            )->a( n = `icon`  v = `sap-icon://locked`
+            )->a( n = `type`  v = `Emphasized`
+            )->a( n = `press` v = client->_event( `CLAIM_ROLE` )
+            )->a( n = `class` v = `sapUiMediumMarginTop` ).
 
     client->view_display( view->stringify( ) ).
 
@@ -1306,6 +1680,18 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `rows`     v = `12`
         )->a( n = `width`    v = `100%` ).
 
+    content->ele( `OverflowToolbar`
+
+        )->tag( `Text`
+            )->a( n = `text` v = client->_bind( repro_hint )
+        )->tag( `ToolbarSpacer`
+        )->tag( `Button`
+            )->a( n = `text`    v = `Reproduce...`
+            )->a( n = `icon`    v = `sap-icon://redo`
+            )->a( n = `enabled` v = client->_bind( repro_enabled )
+            )->a( n = `tooltip` v = `Re-runs the app logic of the selected occurrence - asks first`
+            )->a( n = `press`   v = client->_event( `REPRODUCE` ) ).
+
     dialog->ele( `endButton`
         )->tag( `Button`
             )->a( n = `text`  v = `Close`
@@ -1349,6 +1735,156 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD popup_confirm_reproduce.
+
+    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+        )->ele( n = `FragmentDefinition` ns = `core`
+            )->a( n = `xmlns`      v = `sap.m`
+            )->a( n = `xmlns:core` v = `sap.ui.core` ).
+
+    DATA(dialog) = popup->ele( `Dialog`
+        )->a( n = `title`        v = `Reproduce - this runs the app logic again`
+        )->a( n = `type`         v = `Message`
+        )->a( n = `state`        v = `Warning`
+        )->a( n = `contentWidth` v = `40rem` ).
+
+    dialog->ele( `content`
+        )->tag( `Text`
+            )->a( n = `text` t = |{ s_error-app } is resumed from draft { s_occ-draft_id_prev } and event | &&
+                                 |{ s_occ-event } is fired again through the headless frontend. This RE-RUNS the | &&
+                                 |app logic for real, as you ({ sy-uname }) and with your authorizations: whatever | &&
+                                 |the app writes, posts or sends happens again, and is committed if the app commits. | &&
+                                 |It works only for draft-based (not sticky) apps, for your own drafts, and as long | &&
+                                 |as the draft has not expired. Values typed in that roundtrip and event arguments | &&
+                                 |are not recorded and not replayed. The replay is written to the change log. | &&
+                                 |Run it now?| ).
+
+    dialog->ele( `beginButton`
+        )->tag( `Button`
+            )->a( n = `text`  v = `Re-run the app logic`
+            )->a( n = `type`  v = `Reject`
+            )->a( n = `press` v = client->_event( `REPRODUCE_OK` ) ).
+
+    dialog->ele( `endButton`
+        )->tag( `Button`
+            )->a( n = `text`  v = `Cancel`
+            )->a( n = `press` v = client->_event( `REPRODUCE_BACK` ) ).
+
+    client->popup_display( popup->stringify( ) ).
+
+  ENDMETHOD.
+
+  METHOD popup_reproduce.
+
+    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+        )->ele( n = `FragmentDefinition` ns = `core`
+            )->a( n = `xmlns`      v = `sap.m`
+            )->a( n = `xmlns:core` v = `sap.ui.core` ).
+
+    DATA(dialog) = popup->ele( `Dialog`
+        )->a( n = `title`        v = `Reproduce - result of the replay`
+        )->a( n = `contentWidth` v = `85%`
+        )->a( n = `resizable`    v = `true` ).
+
+    DATA(content) = dialog->ele( `content` ).
+
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( s_repro-summary )
+        )->a( n = `type`     v = client->_bind( s_repro-strip_type )
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `class`    v = `sapUiSmallMargin` ).
+
+    content->tag( `TextArea`
+        )->a( n = `value`       v = client->_bind( s_repro-error_text )
+        )->a( n = `editable`    v = `false`
+        )->a( n = `rows`        v = `8`
+        )->a( n = `width`       v = `100%`
+        )->a( n = `placeholder` v = `no exception`
+        )->a( n = `class`       v = `sapUiSmallMarginBottom` ).
+
+    content->ele( `Table`
+        )->a( n = `headerText` v = `Messages the app showed in the replay`
+        )->a( n = `items`      v = client->_bind( s_repro-t_message )
+        )->a( n = `noDataText` v = `No message.`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Type`
+                )->a( n = `width`  v = `8rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Text`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TYPE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TEXT}` ).
+
+    content->tag( `Label`
+        )->a( n = `text`  v = `View XML after the replay (every open layer)`
+        )->a( n = `class` v = `sapUiSmallMarginTop` ).
+
+    content->tag( `TextArea`
+        )->a( n = `value`       v = client->_bind( s_repro-view_xml )
+        )->a( n = `editable`    v = `false`
+        )->a( n = `rows`        v = `12`
+        )->a( n = `width`       v = `100%`
+        )->a( n = `placeholder` v = `no view - the replayed roundtrip displayed none (the view before it is not recorded)` ).
+
+    dialog->ele( `beginButton`
+        )->tag( `Button`
+            )->a( n = `text`  v = `Back to the error`
+            )->a( n = `press` v = client->_event( `REPRODUCE_BACK` ) ).
+
+    dialog->ele( `endButton`
+        )->tag( `Button`
+            )->a( n = `text`  v = `Close`
+            )->a( n = `press` v = client->follow_up_action( z2ui5_if_client=>cs_event-popup_close ) ).
+
+    client->popup_display( popup->stringify( ) ).
+
+  ENDMETHOD.
+
+  METHOD occurrence_select.
+
+    DATA lv_owner TYPE string.
+
+    s_occ = VALUE #( t_occurrences[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
+    error_text = z2ui5_cl_cockpit_stats=>get_error_text( s_occ-id ).
+    CLEAR repro_enabled.
+
+    IF z2ui5_cl_cockpit_repro=>check_available( ) = abap_false.
+      repro_hint = `Reproduce needs the headless frontend (github.com/abap2UI5-addons/headless-frontend).`.
+      RETURN.
+    ENDIF.
+    IF s_head-can_change = abap_false.
+      repro_hint = `Reproduce re-runs app logic - administrators only.`.
+      RETURN.
+    ENDIF.
+    IF s_occ IS INITIAL.
+      repro_hint = `Select an occurrence.`.
+      RETURN.
+    ENDIF.
+
+    lv_owner = z2ui5_cl_cockpit_stats=>get_occurrence_owner( s_occ-id ).
+    repro_hint = z2ui5_cl_cockpit_repro=>check_possible( draft_id_prev = s_occ-draft_id_prev
+                                                        event         = s_occ-event
+                                                        check_sticky  = s_occ-check_sticky
+                                                        owner         = lv_owner ).
+    IF repro_hint IS INITIAL.
+      repro_enabled = abap_true.
+      repro_hint = |Occurrence of { s_occ-time }: draft { s_occ-draft_id_prev }, event { s_occ-event }| &&
+                   |{ COND #( WHEN lv_owner = z2ui5_cl_cockpit_repro=>cs_owner-unknown
+                              THEN ` - works only if the draft is yours and not expired` ) }|.
+    ENDIF.
+
+  ENDMETHOD.
+
   METHOD on_event.
 
     TRY.
@@ -1368,11 +1904,31 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             s_error = VALUE #( t_errors[ key = lv_key ] OPTIONAL ). "#EC CI_SORTSEQ
             t_occurrences = z2ui5_cl_cockpit_stats=>get_error_occurrences( is_error = s_error
                                                                           days     = get_days( ) ).
-            error_text = z2ui5_cl_cockpit_stats=>get_error_text( VALUE #( t_occurrences[ 1 ]-id OPTIONAL ) ).
+            occurrence_select( VALUE #( t_occurrences[ 1 ]-id OPTIONAL ) ).
             popup_error( ).
 
           WHEN `ERROR_OCC`.
-            error_text = z2ui5_cl_cockpit_stats=>get_error_text( client->get_event_arg( ) ).
+            occurrence_select( client->get_event_arg( ) ).
+
+          WHEN `REPRODUCE`.
+            IF check_change( ) = abap_true AND repro_enabled = abap_true.
+              popup_confirm_reproduce( ).
+            ENDIF.
+
+          WHEN `REPRODUCE_OK`.
+            IF check_change( ) = abap_true AND repro_enabled = abap_true.
+              " the change log first, committed: the replayed app may roll back
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-repro
+                                          text   = |{ s_error-app } event { s_occ-event } from draft | &&
+                                                   |{ s_occ-draft_id_prev } (log entry { s_occ-id })| ).
+              COMMIT WORK.
+              s_repro = z2ui5_cl_cockpit_repro=>run( draft_id_prev = s_occ-draft_id_prev
+                                                    event         = s_occ-event ).
+              popup_reproduce( ).
+            ENDIF.
+
+          WHEN `REPRODUCE_BACK`.
+            popup_error( ).
 
           WHEN `DRAFTS_DELETE`.
             IF check_change( ) = abap_true.
@@ -1383,6 +1939,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `DRAFTS_DELETE_OK`.
             client->popup_destroy( ).
             IF check_change( ) = abap_true.
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-drafts
+                                          text   = |expired drafts deleted, cutoff { s_drafts-cutoff } UTC| ).
               DATA(lv_deleted) = z2ui5_cl_cockpit_draft=>delete_expired( ).
               client->message_toast_display( |{ lv_deleted } expired drafts deleted| ).
               load_tab( ).
@@ -1397,6 +1955,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `LOG_PURGE`.
             IF check_change( ) = abap_true.
               DATA(ls_purge) = z2ui5_cl_cockpit_job=>purge_own( ).
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-purge
+                                          text   = |{ ls_purge-log_deleted } log, { ls_purge-agg_deleted } aggregate, | &&
+                                                   |{ ls_purge-usr_deleted } user, { ls_purge-act_deleted } activity rows| ).
               COMMIT WORK.
               client->message_toast_display( |{ ls_purge-log_deleted } log, { ls_purge-agg_deleted } aggregate, | &&
                                              |{ ls_purge-usr_deleted } user, { ls_purge-act_deleted } activity rows deleted| ).
@@ -1404,6 +1965,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
           WHEN `JOB_RUN`.
             IF check_change( ) = abap_true.
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-job
+                                          text   = `full housekeeping run from the cockpit` ).
               client->message_box_display( z2ui5_cl_cockpit_job=>run( )-message ).
               load_tab( ).
             ENDIF.
@@ -1411,17 +1974,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `SETTINGS_SAVE`.
             IF check_change( ) = abap_true.
               z2ui5_cl_cockpit_setup=>save( s_set ).
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-settings
+                                          text   = |mode { s_set-mode }, user tracking { s_set-user_tracking }, | &&
+                                                   |slow { s_set-slow_ms } ms, retention { s_set-retention_days }/| &&
+                                                   |{ s_set-agg_retention_days } days| ).
               COMMIT WORK.
               client->message_toast_display( `Settings saved` ).
-              load_head( ).
-              load_tab( ).
-            ENDIF.
-
-          WHEN `CLAIM`.
-            IF check_change( ) = abap_true.
-              z2ui5_cl_cockpit_setup=>add_admin( sy-uname ).
-              COMMIT WORK.
-              client->message_toast_display( |{ sy-uname } added as administrator| ).
               load_head( ).
               load_tab( ).
             ENDIF.
@@ -1429,6 +1987,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `ADMIN_ADD`.
             IF check_change( ) = abap_true AND new_admin IS NOT INITIAL.
               z2ui5_cl_cockpit_setup=>add_admin( new_admin ).
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-add
+                                          text   = |{ to_upper( new_admin ) } added| ).
               COMMIT WORK.
               CLEAR new_admin.
               load_head( ).
@@ -1438,12 +1998,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `ADMIN_REMOVE`.
             IF check_change( ) = abap_true.
               IF lines( t_admins ) <= 1.
-                client->message_box_display( text = `The last administrator cannot be removed - ` &&
-                                                    `that would open the cockpit to everybody.`
+                client->message_box_display( text = `The last administrator cannot be removed - the next ` &&
+                                                    `user to open the cockpit could claim it.`
                                              type = `warning` ).
                 RETURN.
               ENDIF.
-              z2ui5_cl_cockpit_setup=>remove_admin( client->get_event_arg( ) ).
+              DATA(lv_removed) = client->get_event_arg( ).
+              z2ui5_cl_cockpit_setup=>remove_admin( lv_removed ).
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-remove
+                                          text   = |{ lv_removed } removed| ).
               COMMIT WORK.
               load_head( ).
               load_tab( ).
@@ -1467,7 +2030,6 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                 THEN `ABAP Cloud` ELSE `Standard ABAP` ).
     s_head-user       = sy-uname.
     s_head-auth_text  = |Administrators - access: { z2ui5_cl_cockpit_auth=>get_mode_text( ) }|.
-    s_head-auth_open  = xsdbool( z2ui5_cl_cockpit_auth=>get_mode( ) = z2ui5_cl_cockpit_auth=>cs_mode-open ).
     s_head-can_change = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
     s_monitor         = z2ui5_cl_cockpit_stats=>get_monitor( ).
 
@@ -1500,12 +2062,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         t_addons  = z2ui5_cl_cockpit_inst=>get_addons( ).
       WHEN `LIVE`.
         s_live = z2ui5_cl_cockpit_stats=>get_live( ).
+      WHEN `AGENTS`.
+        s_agent = z2ui5_cl_cockpit_agent=>get_info( lv_days ).
       WHEN `SETTINGS`.
         s_set = z2ui5_cl_cockpit_setup=>get( ).
         CLEAR t_admins.
         LOOP AT z2ui5_cl_cockpit_setup=>get_admins( ) INTO DATA(lv_admin).
           APPEND VALUE #( uname = lv_admin ) TO t_admins.
         ENDLOOP.
+        t_log = z2ui5_cl_cockpit_auth=>get_log( ).
     ENDCASE.
 
   ENDMETHOD.

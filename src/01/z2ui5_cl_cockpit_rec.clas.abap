@@ -9,7 +9,8 @@
 "!
 "! What is written per roundtrip:
 "! - Z2UI5_T_CK_AGG - one row per UTC day, hour, app and event, updated
-"!   in place: counts, sums, maxima and a latency histogram (p95)
+"!   in place and lock-free (UPDATE ... SET col = col + n): counts, sums
+"!   (DEC 15, saturated), maxima and a latency histogram (p95)
 "! - Z2UI5_T_CK_USR - the user key per day and app, inserted once
 "! - Z2UI5_T_CK_ACT - the user key per app with the last-seen timestamp
 "!   (the Live tab)
@@ -19,11 +20,11 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
 
-    "! The roundtrip as the core reports it (Contract A of
-    "! z2ui5_if_ui5_monitor=>ty_s_roundtrip, field by field). The monitor
-    "! fills it with MOVE-CORRESPONDING, so a field the core renames arrives
-    "! empty here instead of breaking the activation.
     TYPES:
+      "! The roundtrip as the core reports it (Contract A of
+      "! z2ui5_if_ui5_monitor=&gt;ty_s_roundtrip, field by field). The monitor
+      "! fills it with MOVE-CORRESPONDING, so a field the core renames arrives
+      "! empty here instead of breaking the activation.
       BEGIN OF ty_s_roundtrip,
         app            TYPE string,
         event          TYPE string,
@@ -65,7 +66,9 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
-    CONSTANTS c_int_max TYPE i VALUE 2147483647.
+    " a sum column: DEC 15, no decimals (INT4 overflows on a busy system)
+    TYPES ty_sum TYPE p LENGTH 8 DECIMALS 0.
+    CONSTANTS c_dec_max TYPE ty_sum VALUE 999999999999999.
     " entries of sticky roundtrips waiting for a roundtrip that may commit
     CONSTANTS c_buffer_max TYPE i VALUE 500.
 
@@ -77,8 +80,7 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
         day    TYPE clike
         hour   TYPE clike
         weight TYPE i
-        slow   TYPE abap_bool
-        retry  TYPE abap_bool DEFAULT abap_false.
+        slow   TYPE abap_bool.
 
     CLASS-METHODS write_user
       IMPORTING
@@ -99,12 +101,14 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING
         day TYPE clike.
 
-    CLASS-METHODS add
+    "! The increment of a sum column: val times weight, saturated at the
+    "! largest DEC 15 - never an overflow dump, whatever the core reports.
+    CLASS-METHODS sum_inc
       IMPORTING
         val           TYPE i
-        plus          TYPE numeric
+        weight        TYPE i
       RETURNING
-        VALUE(result) TYPE i.
+        VALUE(result) TYPE ty_sum.
 
     CLASS-METHODS first_line
       IMPORTING
@@ -179,13 +183,15 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
           RETURN.
         ENDIF.
       WHEN z2ui5_cl_cockpit_setup=>cs_mode-sample.
-        " errors are always recorded; of the rest every n-th, decided on
-        " the microseconds of the start time - cheap and evenly spread.
-        " Each recorded roundtrip then counts for 100 / pct, so counts and
-        " sums stay estimates of the real totals
+        " errors are always recorded; of the rest a share, decided on the
+        " milliseconds of the start time - cheap, evenly spread, and every
+        " platform's clock has them (not every one has the microseconds,
+        " where the decision would always say yes). Each recorded roundtrip
+        " then counts for 100 / pct, so counts and sums stay estimates of
+        " the real totals
         IF ls_rt-check_error = abap_false.
-          DATA(lv_micro) = CONV i( frac( ls_rt-timestampl ) * 1000000 ).
-          IF lv_micro MOD 100 >= ls_set-sample_pct.
+          DATA(lv_ms) = CONV i( trunc( frac( ls_rt-timestampl ) * 1000 ) ).
+          IF lv_ms MOD 100 >= ls_set-sample_pct.
             RETURN.
           ENDIF.
           lv_weight = 100 DIV ls_set-sample_pct.
@@ -222,8 +228,13 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
   METHOD write_agg.
 
+    " Lock-free: one UPDATE adds this roundtrip to the row of its hour
+    " (SET col = col + n is atomic on every database), an INSERT creates the
+    " row when there is none, and the UPDATE runs once more when another work
+    " process created it in between. No SELECT ... FOR UPDATE - nothing waits
+    " for a row lock, and the statement is the same on ABAP Cloud.
     DATA ls_agg TYPE z2ui5_t_ck_agg.
-    DATA(lv_found) = abap_false.
+    DATA lt_h TYPE STANDARD TABLE OF i WITH EMPTY KEY.
 
     " host variables named like no column - after the 7.02 downport drops
     " the @ escapes, a parameter called DAY would compare the column to itself
@@ -232,111 +243,126 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     DATA(lv_event) = CONV z2ui5_t_ck_agg-event( is_rt-event ).
     DATA(lv_app) = CONV z2ui5_t_ck_agg-app( is_rt-app ).
 
-    " FOR UPDATE: two work processes adding to the same hour must not lose
-    " one another's counts; the row lock lasts until the commit in record( )
-    SELECT SINGLE FOR UPDATE * FROM z2ui5_t_ck_agg
-      WHERE day   = @lv_day
-        AND hour  = @lv_hour
-        AND app   = @lv_app
-        AND event = @lv_event
-      INTO @ls_agg.
-    IF sy-subrc = 0.
-      lv_found = abap_true.
-    ELSE.
-      ls_agg-day   = lv_day.
-      ls_agg-hour  = lv_hour.
-      ls_agg-app   = lv_app.
-      ls_agg-event = lv_event.
-    ENDIF.
+    " the increments - counts in INT4, sums in DEC 15, each saturated
+    DATA(lv_cnt) = weight.
+    DATA(lv_start) = COND i( WHEN is_rt-check_start = abap_true THEN weight ).
+    DATA(lv_err) = COND i( WHEN is_rt-check_error = abap_true THEN 1 ).
+    DATA(lv_slow) = COND i( WHEN slow = abap_true THEN weight ).
+    DATA(lv_ms_sum) = sum_inc( val    = is_rt-ms_total
+                               weight = weight ).
+    DATA(lv_ms_load) = sum_inc( val    = is_rt-ms_load
+                                weight = weight ).
+    DATA(lv_ms_main) = sum_inc( val    = is_rt-ms_main
+                                weight = weight ).
+    DATA(lv_ms_render) = sum_inc( val    = is_rt-ms_render
+                                  weight = weight ).
+    DATA(lv_ms_client) = sum_inc( val    = is_rt-ms_client_prev
+                                  weight = weight ).
+    DATA(lv_cnt_client) = COND i( WHEN is_rt-ms_client_prev > 0 THEN weight ).
+    DATA(lv_kb_req) = sum_inc( val    = is_rt-bytes_request DIV 1024
+                               weight = weight ).
+    DATA(lv_kb_res) = sum_inc( val    = is_rt-bytes_response DIV 1024
+                               weight = weight ).
+    DO 9 TIMES.
+      APPEND 0 TO lt_h.
+    ENDDO.
+    lt_h[ z2ui5_cl_cockpit_setup=>bucket_index( is_rt-ms_total ) ] = weight.
+    DATA(lv_h01) = lt_h[ 1 ].
+    DATA(lv_h02) = lt_h[ 2 ].
+    DATA(lv_h03) = lt_h[ 3 ].
+    DATA(lv_h04) = lt_h[ 4 ].
+    DATA(lv_h05) = lt_h[ 5 ].
+    DATA(lv_h06) = lt_h[ 6 ].
+    DATA(lv_h07) = lt_h[ 7 ].
+    DATA(lv_h08) = lt_h[ 8 ].
+    DATA(lv_h09) = lt_h[ 9 ].
 
-    ls_agg-cnt = add( val  = ls_agg-cnt
-                      plus = weight ).
-    IF is_rt-check_start = abap_true.
-      ls_agg-cnt_start = add( val  = ls_agg-cnt_start
-                              plus = weight ).
-    ENDIF.
-    IF is_rt-check_error = abap_true.
-      ls_agg-cnt_err = add( val  = ls_agg-cnt_err
-                            plus = 1 ).
-    ENDIF.
-    IF slow = abap_true.
-      ls_agg-cnt_slow = add( val  = ls_agg-cnt_slow
-                             plus = weight ).
-    ENDIF.
-
-    ls_agg-ms_sum = add( val  = ls_agg-ms_sum
-                         plus = is_rt-ms_total * weight ).
-    ls_agg-ms_load = add( val  = ls_agg-ms_load
-                          plus = is_rt-ms_load * weight ).
-    ls_agg-ms_main = add( val  = ls_agg-ms_main
-                          plus = is_rt-ms_main * weight ).
-    ls_agg-ms_render = add( val  = ls_agg-ms_render
-                            plus = is_rt-ms_render * weight ).
-    IF is_rt-ms_client_prev > 0.
-      ls_agg-ms_client = add( val  = ls_agg-ms_client
-                              plus = is_rt-ms_client_prev * weight ).
-      ls_agg-cnt_client = add( val  = ls_agg-cnt_client
-                               plus = weight ).
-    ENDIF.
-    ls_agg-kb_req = add( val  = ls_agg-kb_req
-                         plus = ( is_rt-bytes_request DIV 1024 ) * weight ).
-    ls_agg-kb_res = add( val  = ls_agg-kb_res
-                         plus = ( is_rt-bytes_response DIV 1024 ) * weight ).
-
-    IF is_rt-ms_total > ls_agg-ms_max.
-      ls_agg-ms_max = is_rt-ms_total.
-    ENDIF.
-    IF is_rt-bytes_response > ls_agg-bytes_res_max.
-      ls_agg-bytes_res_max = is_rt-bytes_response.
-    ENDIF.
-    IF is_rt-bytes_model > ls_agg-bytes_mod_max.
-      ls_agg-bytes_mod_max = is_rt-bytes_model.
-    ENDIF.
-
-    CASE z2ui5_cl_cockpit_setup=>bucket_index( is_rt-ms_total ).
-      WHEN 1.
-        ls_agg-h01 = add( val  = ls_agg-h01
-                          plus = weight ).
-      WHEN 2.
-        ls_agg-h02 = add( val  = ls_agg-h02
-                          plus = weight ).
-      WHEN 3.
-        ls_agg-h03 = add( val  = ls_agg-h03
-                          plus = weight ).
-      WHEN 4.
-        ls_agg-h04 = add( val  = ls_agg-h04
-                          plus = weight ).
-      WHEN 5.
-        ls_agg-h05 = add( val  = ls_agg-h05
-                          plus = weight ).
-      WHEN 6.
-        ls_agg-h06 = add( val  = ls_agg-h06
-                          plus = weight ).
-      WHEN 7.
-        ls_agg-h07 = add( val  = ls_agg-h07
-                          plus = weight ).
-      WHEN 8.
-        ls_agg-h08 = add( val  = ls_agg-h08
-                          plus = weight ).
-      WHEN OTHERS.
-        ls_agg-h09 = add( val  = ls_agg-h09
-                          plus = weight ).
-    ENDCASE.
-
-    IF lv_found = abap_true.
-      UPDATE z2ui5_t_ck_agg FROM @ls_agg.
-    ELSE.
-      INSERT z2ui5_t_ck_agg FROM @ls_agg.
-      IF sy-subrc <> 0 AND retry = abap_false.
-        " lost the race for the first row of this hour: the other process
-        " committed its row, so add this roundtrip on top of it
-        write_agg( is_rt  = is_rt
-                   day    = day
-                   hour   = hour
-                   weight = weight
-                   slow   = slow
-                   retry  = abap_true ).
+    DO 2 TIMES.
+      UPDATE z2ui5_t_ck_agg
+        SET cnt        = cnt + @lv_cnt,
+            cnt_start  = cnt_start + @lv_start,
+            cnt_err    = cnt_err + @lv_err,
+            cnt_slow   = cnt_slow + @lv_slow,
+            ms_sum     = ms_sum + @lv_ms_sum,
+            ms_load    = ms_load + @lv_ms_load,
+            ms_main    = ms_main + @lv_ms_main,
+            ms_render  = ms_render + @lv_ms_render,
+            ms_client  = ms_client + @lv_ms_client,
+            cnt_client = cnt_client + @lv_cnt_client,
+            kb_req     = kb_req + @lv_kb_req,
+            kb_res     = kb_res + @lv_kb_res,
+            h01        = h01 + @lv_h01,
+            h02        = h02 + @lv_h02,
+            h03        = h03 + @lv_h03,
+            h04        = h04 + @lv_h04,
+            h05        = h05 + @lv_h05,
+            h06        = h06 + @lv_h06,
+            h07        = h07 + @lv_h07,
+            h08        = h08 + @lv_h08,
+            h09        = h09 + @lv_h09
+        WHERE day   = @lv_day
+          AND hour  = @lv_hour
+          AND app   = @lv_app
+          AND event = @lv_event.
+      IF sy-dbcnt > 0.
+        EXIT.
       ENDIF.
+
+      ls_agg = VALUE #( day           = lv_day
+                        hour          = lv_hour
+                        app           = lv_app
+                        event         = lv_event
+                        cnt           = lv_cnt
+                        cnt_start     = lv_start
+                        cnt_err       = lv_err
+                        cnt_slow      = lv_slow
+                        ms_sum        = lv_ms_sum
+                        ms_max        = is_rt-ms_total
+                        ms_load       = lv_ms_load
+                        ms_main       = lv_ms_main
+                        ms_render     = lv_ms_render
+                        ms_client     = lv_ms_client
+                        cnt_client    = lv_cnt_client
+                        kb_req        = lv_kb_req
+                        kb_res        = lv_kb_res
+                        bytes_res_max = is_rt-bytes_response
+                        bytes_mod_max = is_rt-bytes_model
+                        h01           = lv_h01
+                        h02           = lv_h02
+                        h03           = lv_h03
+                        h04           = lv_h04
+                        h05           = lv_h05
+                        h06           = lv_h06
+                        h07           = lv_h07
+                        h08           = lv_h08
+                        h09           = lv_h09 ).
+      INSERT z2ui5_t_ck_agg FROM @ls_agg.
+      IF sy-subrc = 0.
+        " the maxima are in the new row already
+        RETURN.
+      ENDIF.
+      " lost the race for the first row of this hour - the next pass adds
+      " this roundtrip to the row the other process created
+    ENDDO.
+
+    " the maxima: a conditional UPDATE each, atomic as well
+    DATA(lv_ms_max) = is_rt-ms_total.
+    DATA(lv_res_max) = is_rt-bytes_response.
+    DATA(lv_mod_max) = is_rt-bytes_model.
+    IF lv_ms_max > 0.
+      UPDATE z2ui5_t_ck_agg SET ms_max = @lv_ms_max
+        WHERE day = @lv_day AND hour = @lv_hour AND app = @lv_app AND event = @lv_event
+          AND ms_max < @lv_ms_max.
+    ENDIF.
+    IF lv_res_max > 0.
+      UPDATE z2ui5_t_ck_agg SET bytes_res_max = @lv_res_max
+        WHERE day = @lv_day AND hour = @lv_hour AND app = @lv_app AND event = @lv_event
+          AND bytes_res_max < @lv_res_max.
+    ENDIF.
+    IF lv_mod_max > 0.
+      UPDATE z2ui5_t_ck_agg SET bytes_mod_max = @lv_mod_max
+        WHERE day = @lv_day AND hour = @lv_hour AND app = @lv_app AND event = @lv_event
+          AND bytes_mod_max < @lv_mod_max.
     ENDIF.
 
   ENDMETHOD.
@@ -411,14 +437,16 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD add.
+  METHOD sum_inc.
 
     DATA lv_sum TYPE p LENGTH 16 DECIMALS 0.
-    lv_sum = val + plus.
-    IF lv_sum > c_int_max.
-      result = c_int_max.
-    ELSEIF lv_sum < 0.
-      result = 0.
+    IF val <= 0 OR weight <= 0.
+      RETURN.
+    ENDIF.
+    lv_sum = val.
+    lv_sum = lv_sum * weight.
+    IF lv_sum > c_dec_max.
+      result = c_dec_max.
     ELSE.
       result = lv_sum.
     ENDIF.

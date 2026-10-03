@@ -19,7 +19,7 @@ README.md is the user documentation; keep it in step with every change.
 
 | Path | |
 |---|---|
-| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`) |
+| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
 | `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `check-abap2UI5`, `publish-standalone` |
@@ -57,6 +57,14 @@ roundtrip. Rules the recorder keeps - do not loosen them:
   deleted. Any new place that stores or shows a user must respect
   `z2ui5_cl_cockpit_setup=>check_privacy( )`.
 - Keep it cheap: single-row statements, settings buffered per roll area.
+- **Lock-free aggregation**: `UPDATE ... SET col = col + n` on the hour row,
+  `INSERT` when there is none, the `UPDATE` once more when the `INSERT` lost
+  the race; maxima as `UPDATE ... SET m = n WHERE ... AND m < n`. Never
+  `SELECT ... FOR UPDATE` (row locks held until the commit, and its spelling is
+  the shakiest one across 7.02, 7.50 strict and ABAP Cloud).
+- **Overflow-safe**: sum columns are `DEC 15` (`INT8` does not exist below
+  7.50), increments are saturated before they are written (`sum_inc`), the
+  read side adds up in `p LENGTH 16` and saturates to `INT4` for display.
 
 ## Framework internals only by name
 
@@ -70,6 +78,43 @@ fallback. The abap2UI5 linter's `non-released-api` rule enforces the static
 part. Reading the exit config is read-only (`set_config_http_*` on a local
 copy, exactly like the core).
 
+## Access - secure by default
+
+No customer class (`z2ui5_if_cockpit_auth`) and no administrator means
+nobody gets in: `main( )` shows only the claim screen, and
+`z2ui5_cl_cockpit_auth=>claim( )` makes the first user who presses its button
+the administrator (an `INSERT` of a fixed-key row in `Z2UI5_T_CK_SET`, so a
+race has exactly one winner). `reset_admins( )` starts over. The decision
+itself is `z2ui5_cl_cockpit_auth=>decide( )`, pure and unit-tested - change
+it there. Every change made through the cockpit (claim, administrators,
+settings, deletions, purges, reproductions) is written with
+`z2ui5_cl_cockpit_auth=>log( )` to `Z2UI5_T_CK_AUD` before or with the commit
+of the change.
+
+## Optional addons only by name
+
+The agent addon (`Z2UI5_T_AG_LOG`, `Z2UI5_T_AG_SET`,
+`z2ui5_cl_agent_settings`, `z2ui5_if_agent_app`) and the headless frontend
+(`z2ui5_cl_frontend_simulator`) are optional - named in literals only, read
+with dynamic SQL / called with `CALL METHOD (class)=>(method)` inside `TRY`,
+their types created by name and their components read by name. The
+simulator's public API used is `resume`, `click`, `get_messages`,
+`get_layers`, `get_app`, `get_id` - nothing else (it is developed in
+parallel). Reproduce runs app logic for real: admins only, confirmation
+popup, change log first.
+
+## Tests
+
+ABAP Unit, `FOR TESTING` local classes per global class. The pure logic is
+reached through `LOCAL FRIENDS` (declare `CLASS ltcl_x DEFINITION DEFERRED.`
+and `CLASS <global> DEFINITION LOCAL FRIENDS ltcl_x.` first). Settings go into
+the roll-area buffer with `z2ui5_cl_cockpit_setup=>set_buffer( )`, never into
+the table. Classes that touch the database are `RISK LEVEL DANGEROUS`, use the
+app `ZZ_COCKPIT_UNIT_TEST` and days in 2099, never commit (`write( )`, not
+`record( )`), and `teardown` deletes their rows and rolls back. They run on
+abap2UI5's transpiled runtime (README, "Development") - keep them runnable
+there: no `sy-sysid` skips, implement every interface method a double needs.
+
 ## Code rules
 
 - abaplint (`abaplint.jsonc`) is the style: upper-case keywords,
@@ -80,11 +125,17 @@ copy, exactly like the core).
 - ABAP Cloud and 7.50: released APIs only (`npm run lint:cloud`); the 7.02
   downport must lint (`ABAP_702`). After the downport the `@` escapes are
   gone - **never name a host variable like a column** (`WHERE day = @day`
-  becomes `day = day`). Put `UP TO n ROWS` right after `INTO`.
+  becomes `day = day`). Write a `SELECT` with `INTO` as its last clause and
+  `UP TO n ROWS` right after it (`... WHERE ... ORDER BY ... INTO TABLE @x UP
+  TO n ROWS.`) - the documented 7.50 strict form, accepted on ABAP Cloud; the
+  downport turns it into the classic order. Open SQL comparisons with a
+  constant go through a host variable, not a backtick literal.
 - abapGit file format (see abap2UI5's `abap-check` skill): `.xml` with BOM,
   LF, one final newline, no trailing blanks, lines ≤ 255, no `'` in
   `<DESCRIPT>`. Table sidecars use only the field shapes of the exported
-  core/addon tables (CHAR, INT4, STRG, data elements MANDT/TIMESTAMPL).
+  core/addon tables (CHAR, INT4, STRG, data elements MANDT/TIMESTAMPL) plus
+  `DEC 15` for sums (the shape of the exported DEC fields: `INTTYPE P`,
+  `INTLEN 000008`, `LENG 000015`, no `DECIMALS` for zero).
 - Views: `z2ui5_cl_ui5_view_builder`, one statement per subtree, the house
   chain layout (`npm run fmt:chains`), UI5 1.71 floor, data through `t =`,
   `#EC CI_SORTSEQ` on sequential internal-table reads, `##NO_HANDLER` on empty
@@ -96,6 +147,7 @@ copy, exactly like the core).
 npm ci
 npm run lint && npm run lint:cloud && npm run lint:standalone && npm run check:abap2ui5
 npm run downport && npm run lint:702     # rewrites src/ - run on a copy, never commit
+# ABAP Unit on the transpiled runtime - README, "Development"
 ```
 
 All must be green before a push. Until abap2UI5 releases the monitor hook,
