@@ -675,18 +675,20 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                     event       = ls_log-event
                     error_class = ls_log-error_class
                     error_head  = ls_log-error_head.     "#EC CI_SORTSEQ
+      DATA(lv_index) = sy-tabix.
       IF sy-subrc <> 0.
         APPEND VALUE #( key         = |G{ lines( result ) + 1 }|
                         app         = ls_log-app
                         event       = ls_log-event
                         error_class = ls_log-error_class
                         error_head  = ls_log-error_head ) TO result ASSIGNING <error>.
+        lv_index = lines( result ).
+        " the rows come newest first: the first row of a group is its last
+        " occurrence, every later one moves the first occurrence back
         APPEND ls_log-timestampl TO lt_last.
         APPEND ls_log-timestampl TO lt_first.
       ENDIF.
-      DATA(lv_index) = sy-tabix.
       <error>-count = <error>-count + 1.
-      " newest first - every later row of the group is older
       lt_first[ lv_index ] = ls_log-timestampl.
     ENDLOOP.
 
