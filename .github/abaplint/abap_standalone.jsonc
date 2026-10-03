@@ -1,0 +1,40 @@
+{
+  "global": {
+    "files": "/../../src/**/*.*",
+    // package 01 alone - what the generated standalone branch ships - must
+    // activate on the RELEASED abap2UI5, without the monitor hook
+    "exclude": ["/src/02/z2ui5_cl_cockpit"]
+  },
+  "dependencies": [
+    {
+      "url": "https://github.com/abapedia/steampunk-2305-api-intersect-702",
+      "folder": "/../../.abaplint-deps/steampunk",
+      "files": "/src/**/*.*"
+    },
+    {
+      "url": "https://github.com/abap2UI5/abap2UI5",
+      "branch": "main",
+      "folder": "/../../.abaplint-deps/abap2UI5",
+      "files": "/src/**/*.*"
+    }
+  ],
+  "syntax": {
+    "version": "Cloud",
+    "errorNamespace": "."
+  },
+  "rules": {
+    "downport": true,
+    "begin_end_names": true,
+    "check_ddic": true,
+    "check_include": true,
+    "check_syntax": true,
+    "global_class": true,
+    "definitions_top": false,
+    "implement_methods": true,
+    "method_implemented_twice": true,
+    "parser_error": true,
+    "superclass_final": true,
+    "unknown_types": true,
+    "xml_consistency": true
+  }
+}

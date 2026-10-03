@@ -1,0 +1,47 @@
+name: publish-standalone
+
+# Rebuilds the `standalone` branch from main: everything except package 02
+# (the monitor class, the only object that implements z2ui5_if_ui5_monitor).
+# abapGit always pulls a whole repository, so an installation whose abap2UI5
+# does not have the monitor hook yet installs this branch instead of main -
+# Installation & Security and Drafts & Housekeeping work there right away.
+# See README.md, "Two packages, two branches".
+
+on:
+  push:
+    branches: [main]
+  # Manual rebuild, e.g. after a direct push to main that started no run.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-standalone
+  cancel-in-progress: false
+
+jobs:
+  publish-standalone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      with:
+        node-version: '22'
+        cache: 'npm'
+    - run: npm ci
+
+    # the branch must activate on the released abap2UI5 - lint it there first
+    - name: Lint package 01 against the released abap2UI5
+      run: npx abaplint .github/abaplint/abap_standalone.jsonc
+
+    - name: Remove package 02
+      run: git rm -r -q src/02
+
+    - name: Commit and push to standalone
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git commit -q -m "generate standalone from ${GITHUB_SHA}"
+        git push --force origin HEAD:standalone

@@ -1,0 +1,42 @@
+{
+  "global": {
+    "files": "/../../src/**/*.*",
+    // TEMPORARY: package 02 implements z2ui5_if_ui5_monitor, which the
+    // generated 702 branch of abap2UI5 only carries once the core change is
+    // merged and released. Until then the 702 check covers package 01 (all
+    // logic, the app and the tables); drop this exclude afterwards.
+    "exclude": ["/src/02/z2ui5_cl_cockpit"]
+  },
+  "dependencies": [
+    {
+      "url": "https://github.com/open-abap/open-abap-core",
+      "folder": "/../../.abaplint-deps/open-abap-core",
+      "files": "/src/**/*.*"
+    },
+    {
+      "url": "https://github.com/abap2UI5/abap2UI5",
+      "branch": "702",
+      "folder": "/../../.abaplint-deps/abap2UI5-702",
+      "files": "/src/**/*.*"
+    }
+  ],
+  "syntax": {
+    "version": "v702",
+    "errorNamespace": "."
+  },
+  "rules": {
+    "downport": true,
+    "definitions_top": true,
+    "begin_end_names": true,
+    "check_ddic": true,
+    "check_include": true,
+    "check_syntax": true,
+    "global_class": true,
+    "implement_methods": true,
+    "method_implemented_twice": true,
+    "parser_error": true,
+    "superclass_final": true,
+    "unknown_types": true,
+    "xml_consistency": true
+  }
+}
