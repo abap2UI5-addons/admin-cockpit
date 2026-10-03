@@ -22,7 +22,8 @@ README.md is the user documentation; keep it in step with every change.
 | `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
-| `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `check-abap2UI5`, `publish-standalone` |
+| `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `publish-standalone` |
+| `.github/scripts/unit.mjs` | `npm run unit` - the ABAP Unit tests on abap2UI5's transpiled runtime, in `.unit/` (git-ignored); `ABAP_UNIT` runs it |
 | `abaplint.jsonc` | Standard ABAP 7.50, the strict rule set |
 | `abap2ui5lint.jsonc` | the abap2UI5 linter (UI5 1.71 floor, `chain-house-layout`) |
 
@@ -112,8 +113,9 @@ the roll-area buffer with `z2ui5_cl_cockpit_setup=>set_buffer( )`, never into
 the table. Classes that touch the database are `RISK LEVEL DANGEROUS`, use the
 app `ZZ_COCKPIT_UNIT_TEST` and days in 2099, never commit (`write( )`, not
 `record( )`), and `teardown` deletes their rows and rolls back. They run on
-abap2UI5's transpiled runtime (README, "Development") - keep them runnable
-there: no `sy-sysid` skips, implement every interface method a double needs.
+abap2UI5's transpiled runtime (`npm run unit`, CI `ABAP_UNIT`; README,
+"Development") - keep them runnable there: no `sy-sysid` skips, implement
+every interface method a double needs.
 
 ## Code rules
 
@@ -147,12 +149,13 @@ there: no `sy-sysid` skips, implement every interface method a double needs.
 npm ci
 npm run lint && npm run lint:cloud && npm run lint:standalone && npm run check:abap2ui5
 npm run downport && npm run lint:702     # rewrites src/ - run on a copy, never commit
-# ABAP Unit on the transpiled runtime - README, "Development"
+npm run unit                             # ABAP Unit on the transpiled runtime - README, "Development"
 ```
 
 All must be green before a push. Until abap2UI5 releases the monitor hook,
-`abaplint.jsonc` resolves abap2UI5 from the branch
-`claude/abap2ui5-project-brainstorm-nt7ifs` and `abap_702.jsonc` excludes
-`src/02`; revert both when the release is out (README, "Development").
+`abaplint.jsonc`, `ABAP_UNIT.yaml` and `.github/scripts/unit.mjs` resolve
+abap2UI5 from the branch `claude/abap2ui5-project-brainstorm-nt7ifs` and
+`abap_702.jsonc` excludes `src/02`; revert them when the release is out
+(README, "Development").
 Local runs can pre-fill `.abaplint-deps/` (git-ignored) - abaplint uses a
 dependency folder that exists instead of cloning.

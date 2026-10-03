@@ -309,6 +309,7 @@ npm run lint:cloud      # ABAP Cloud
 npm run lint:standalone # package 01 against the released abap2UI5
 npm run lint:702        # after npm run downport (rewrites src/ - CI only)
 npm run check:abap2ui5  # the abap2UI5 linter: views, bindings, chain layout
+npm run unit            # the ABAP Unit tests on abap2UI5's transpiled runtime
 ```
 
 **Unit tests.** The pure logic has ABAP Unit tests (`*.clas.testclasses.abap`):
@@ -319,18 +320,25 @@ access decision, the Agents figures and when an error can be reproduced. The
 classes that touch the database (`ltcl_salt`, `ltcl_rec`) are `RISK LEVEL
 DANGEROUS`: they write rows of the test app `ZZ_COCKPIT_UNIT_TEST` on days in
 2099, never commit, and delete and roll back in `teardown`. Without a system
-they run on abap2UI5's transpiled runtime: copy `src/01` and `src/02` into a
-package folder of a clone of abap2UI5 (the branch with
-`z2ui5_if_ui5_monitor`), `npm ci && npm run downport && npm run
-auto_transpile`, and run the generated `node/output` tests of
-`Z2UI5_CL_COCKPIT*`.
+they run on abap2UI5's transpiled runtime (SQLite behind the database
+statements, so the `DANGEROUS` classes run too): `npm run unit` runs every
+`Z2UI5_CL_COCKPIT*` test, `UNIT_FILTER=ltcl_rec npm run unit` only those whose
+`OBJECT: class->method` contains the text. `.github/scripts/unit.mjs` is the
+whole recipe, and the `ABAP_UNIT` workflow runs the same script on every push
+and pull request: a checkout of abap2UI5 (the branch with
+`z2ui5_if_ui5_monitor`) in `.unit/abap2UI5` (git-ignored; cloned on the first
+run, refreshed on every later one), `npm ci` there, `src/01` and `src/02`
+copied in as one more package, `npm run downport && npm run auto_transpile`,
+then the generated tests - each one printed, exit code 1 on any failure or
+when none ran. The first run takes a few minutes.
 
 **Temporary state:** the monitor interface is not on abap2UI5's `main` yet. Until
 it is merged, `abaplint.jsonc` resolves abap2UI5 from the branch
 `claude/abap2ui5-project-brainstorm-nt7ifs` (abaplint's CLI supports `branch`
-on a dependency), and the 7.02 check excludes `src/02`, because abap2UI5's
+on a dependency) - and so do `ABAP_UNIT.yaml` and `.github/scripts/unit.mjs`
+for the unit tests - and the 7.02 check excludes `src/02`, because abap2UI5's
 generated `702` branch carries the interface only after the release. Switch
-both back to `main` / no exclude once the core change is released.
+all of them back to `main` / no exclude once the core change is released.
 
 See [AGENTS.md](AGENTS.md) for the conventions of this repository.
 
