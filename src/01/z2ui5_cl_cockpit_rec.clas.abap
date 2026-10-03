@@ -46,8 +46,9 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
         error_class    TYPE string,
       END OF ty_s_roundtrip.
 
-    "! Persist one roundtrip according to the settings, and commit unless
-    "! the app is sticky. Never raises - a monitor must not break an app.
+    "! Persist one roundtrip according to the settings, and commit. A sticky
+    "! roundtrip is buffered instead and written with the next one that is
+    "! not sticky. Never raises - a monitor must not break an app.
     CLASS-METHODS record
       IMPORTING
         is_roundtrip TYPE ty_s_roundtrip.
@@ -65,6 +66,10 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
 
     CONSTANTS c_int_max TYPE i VALUE 2147483647.
+    " entries of sticky roundtrips waiting for a roundtrip that may commit
+    CONSTANTS c_buffer_max TYPE i VALUE 500.
+
+    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_roundtrip WITH EMPTY KEY.
 
     CLASS-METHODS write_agg
       IMPORTING
@@ -119,17 +124,35 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     "   success and rolled back before the call on failure. COMMIT WORK
     "   commits the monitor's rows and nothing of the app.
     " - sticky: the app's own - it may hold uncommitted work, update task
-    "   registrations and locks across roundtrips, which a COMMIT WORK would
-    "   trigger or release. The rows are written without it then: the
-    "   implicit database commit at the end of the request persists them,
-    "   and the app's SAP LUW stays untouched.
+    "   registrations and locks across roundtrips. Nothing is written then:
+    "   the entry waits in the roll area (which a sticky session keeps) and
+    "   is written with the first roundtrip of this roll area that is not
+    "   sticky. A session that ends while still sticky loses its buffered
+    "   entries - the price of never touching the app's LUW. A secondary
+    "   database connection would avoid that, but exists on Standard ABAP
+    "   only, and the cockpit runs on ABAP Cloud as well.
     TRY.
-        write( is_roundtrip ).
-        IF is_roundtrip-check_sticky = abap_false.
-          COMMIT WORK.
+        IF is_roundtrip-check_sticky = abap_true.
+          IF lines( gt_buffer ) < c_buffer_max.
+            APPEND is_roundtrip TO gt_buffer.
+          ENDIF.
+          RETURN.
         ENDIF.
-      CATCH cx_root ##NO_HANDLER.
-        " never break an app because of the monitor
+
+        DATA(lt_buffer) = gt_buffer.
+        CLEAR gt_buffer.
+        LOOP AT lt_buffer INTO DATA(ls_buffered).
+          write( ls_buffered ).
+        ENDLOOP.
+        write( is_roundtrip ).
+        COMMIT WORK.
+      CATCH cx_root.
+        " never break an app because of the monitor - and the LUW held
+        " nothing but the monitor's own rows, so nothing else is undone
+        TRY.
+            ROLLBACK WORK.                               "#EC CI_ROLLBACK
+          CATCH cx_root ##NO_HANDLER.
+        ENDTRY.
     ENDTRY.
 
   ENDMETHOD.

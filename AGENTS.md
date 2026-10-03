@@ -45,11 +45,13 @@ README.md is the user documentation; keep it in step with every change.
 roundtrip. Rules the recorder keeps - do not loosen them:
 
 - **Never raise** out of `record( )` - catch `cx_root`.
-- **Commit only when `check_sticky = abap_false`.** A sticky app owns the LUW
-  (uncommitted work, update tasks, locks); rows are then written without
-  `COMMIT WORK` and persisted by the implicit database commit at the end of the
-  request. Never `ROLLBACK WORK` - the core already rolled back a failed
-  non-sticky roundtrip.
+- **Commit only when `check_sticky = abap_false`** - with `COMMIT WORK`, the
+  core has no commit helper (and its utility class is not released API). A
+  sticky app owns the LUW (uncommitted work, update tasks, locks): its entries
+  are buffered in the roll area (`gt_buffer`, capped) and written with the next
+  non-sticky roundtrip. Never write into a sticky app's LUW. `ROLLBACK WORK`
+  only on the recorder's own failure in a non-sticky roundtrip, where the LUW
+  holds nothing else.
 - **Privacy by default** (`user_tracking = HASH`): no user names unless the
   setting is `NAME`. Pseudonyms are salted per UTC day and the old salt is
   deleted. Any new place that stores or shows a user must respect

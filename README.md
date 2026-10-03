@@ -89,11 +89,16 @@ which decides by the settings what is persisted:
 **It never breaks an app.** Everything is caught; the core swallows anything a
 monitor raises anyway. **Commit semantics** follow the interface: for an app
 that is not sticky the LUW is empty when the monitor runs (the framework
-committed its draft save, or rolled back a failed roundtrip before the
-call), so the recorder commits its rows with `COMMIT WORK`. For a sticky
-(stateful) app the LUW is the app's own, so the recorder writes **without**
-a commit: the implicit database commit at the end of the request persists
-the rows, and the app's update tasks and locks stay untouched.
+committed its draft save, or rolled back a failed roundtrip right before the
+call), so the recorder writes its rows and issues `COMMIT WORK` itself - the
+core offers no commit helper. For a sticky (stateful) app the LUW belongs to
+the app (uncommitted work, update tasks, locks), so the recorder writes
+**nothing** then: the entry waits in the roll area, which a sticky session
+keeps, and is written with the first roundtrip of that roll area that is not
+sticky (at most 500 entries are buffered). A session that ends while still
+sticky loses its buffered entries - the price of never touching the app's
+LUW; a secondary database connection would avoid it, but exists on Standard
+ABAP only.
 
 **What it costs:** a handful of single-row statements per roundtrip
 (settings and the daily salt are read once per roll area). Mode `SAMPLE`

@@ -15,10 +15,20 @@
   // and structure gates run without them
   "render": false,
 
+  // every class, not only the app: the helpers and the monitor are judged by
+  // the source-side rules (round trip, activation, released-API check)
+  "allClasses": true,
+
   "rules": {
     // the house layout of the view builder chain (view-chain-layout skill)
     "chain-house-layout": { "severity": "warning" },
-    "missing-on-navigated-branch": "warning"
+    "missing-on-navigated-branch": "warning",
+    // TEMPORARY, narrow: z2ui5_if_ui5_monitor IS released - abap2UI5 adds it
+    // to src/02 (branch claude/abap2ui5-project-brainstorm-nt7ifs) - but the
+    // linter's released-API list does not know it yet and files it under the
+    // z2ui5_if_ui5_* engine prefix. Only the monitor class, the one object
+    // that implements it, is waived; drop this once the linter lists it.
+    "non-released-api": { "exclude": ["z2ui5_cl_cockpit_monitor\\."] }
   },
 
   "failOn": "warning"
