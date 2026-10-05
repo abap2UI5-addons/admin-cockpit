@@ -32,7 +32,11 @@ README.md is the user documentation; keep it in step with every change.
 - **Nothing in `src/01` may name `z2ui5_if_ui5_monitor` or
   `z2ui5_cl_cockpit_monitor`.** The app finds both by name at run time
   (`z2ui5_cl_cockpit_stats=>get_monitor`). `npm run lint:standalone` proves it:
-  it lints `src/01` against abap2UI5 `main` without the hook.
+  it lints `src/01` against the abap2UI5 release tag `1.146.0`, which has no
+  hook (`main` has it since abap2UI5#2837, so linting against `main` proves
+  nothing). The tag has a dependency folder of its own
+  (`.abaplint-deps/abap2UI5-released`), so a pre-filled `main` checkout never
+  stands in for it. Move the pin only to a release that still lacks the hook.
 - `src/02` stays a thin adapter: `MOVE-CORRESPONDING` into
   `z2ui5_cl_cockpit_rec=>ty_s_roundtrip` and `record( )`. Logic goes into the
   recorder (`src/01`), so it ships everywhere and a customer monitor can call
