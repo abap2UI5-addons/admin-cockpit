@@ -48,6 +48,16 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
         response_warn_kb   TYPE i,
         " runtime hints: a model above this size is reported
         model_warn_kb      TYPE i,
+        " alerts: an error rate at or above this many percent raises one,
+        " 0 switches the rule off
+        alert_err_pct      TYPE i,
+        " alerts: a p95 at or above this many milliseconds raises one, 0
+        " switches the rule off
+        alert_p95_ms       TYPE i,
+        " alerts: fewer roundtrips than this in the window raise nothing
+        alert_min_cnt      TYPE i,
+        " alerts: the window - the UTC hour running now plus this many before
+        alert_hours        TYPE i,
         " the UTC day the own tables were last purged by the monitor
         last_purge         TYPE string,
       END OF ty_s_settings.
@@ -194,6 +204,13 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! The alert settings in their bounds: 0 switches a threshold off (not
+    "! the default, unlike the other settings), a value out of range falls
+    "! back to the default.
+    CLASS-METHODS check_alerts
+      CHANGING
+        cs_set TYPE ty_s_settings.
+
     CLASS-METHODS to_int
       IMPORTING
         val           TYPE clike
@@ -255,6 +272,18 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
         WHEN `MODEL_WARN_KB`.
           result-model_warn_kb = to_int( val     = ls_row-value
                                          default = result-model_warn_kb ).
+        WHEN `ALERT_ERR_PCT`.
+          result-alert_err_pct = to_int( val     = ls_row-value
+                                         default = result-alert_err_pct ).
+        WHEN `ALERT_P95_MS`.
+          result-alert_p95_ms = to_int( val     = ls_row-value
+                                        default = result-alert_p95_ms ).
+        WHEN `ALERT_MIN_CNT`.
+          result-alert_min_cnt = to_int( val     = ls_row-value
+                                         default = result-alert_min_cnt ).
+        WHEN `ALERT_HOURS`.
+          result-alert_hours = to_int( val     = ls_row-value
+                                       default = result-alert_hours ).
         WHEN `LAST_PURGE`.
           result-last_purge = ls_row-value.
       ENDCASE.
@@ -263,6 +292,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     IF result-sample_pct < 1 OR result-sample_pct > 100.
       result-sample_pct = get_default( )-sample_pct.
     ENDIF.
+    check_alerts( CHANGING cs_set = result ).
 
     gs_settings = result.
     gv_loaded   = abap_true.
@@ -279,7 +309,11 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
                       user_tracking      = cs_users-hash
                       unused_days        = 90
                       response_warn_kb   = 500
-                      model_warn_kb      = 1024 ).
+                      model_warn_kb      = 1024
+                      alert_err_pct      = 5
+                      alert_p95_ms       = 2000
+                      alert_min_cnt      = 20
+                      alert_hours        = 1 ).
 
   ENDMETHOD.
 
@@ -317,6 +351,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     IF ls_set-model_warn_kb <= 0.
       ls_set-model_warn_kb = ls_def-model_warn_kb.
     ENDIF.
+    check_alerts( CHANGING cs_set = ls_set ).
 
     row_save( name  = `MODE`
               value = ls_set-mode ).
@@ -336,6 +371,14 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
               value = |{ ls_set-response_warn_kb }| ).
     row_save( name  = `MODEL_WARN_KB`
               value = |{ ls_set-model_warn_kb }| ).
+    row_save( name  = `ALERT_ERR_PCT`
+              value = |{ ls_set-alert_err_pct }| ).
+    row_save( name  = `ALERT_P95_MS`
+              value = |{ ls_set-alert_p95_ms }| ).
+    row_save( name  = `ALERT_MIN_CNT`
+              value = |{ ls_set-alert_min_cnt }| ).
+    row_save( name  = `ALERT_HOURS`
+              value = |{ ls_set-alert_hours }| ).
 
     reset_buffer( ).
 
@@ -485,6 +528,24 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
     gs_settings = settings.
     gv_loaded   = abap_true.
+
+  ENDMETHOD.
+
+  METHOD check_alerts.
+
+    DATA(ls_def) = get_default( ).
+    IF cs_set-alert_err_pct < 0 OR cs_set-alert_err_pct > 100.
+      cs_set-alert_err_pct = ls_def-alert_err_pct.
+    ENDIF.
+    IF cs_set-alert_p95_ms < 0.
+      cs_set-alert_p95_ms = ls_def-alert_p95_ms.
+    ENDIF.
+    IF cs_set-alert_min_cnt <= 0.
+      cs_set-alert_min_cnt = ls_def-alert_min_cnt.
+    ENDIF.
+    IF cs_set-alert_hours < 0 OR cs_set-alert_hours > 23.
+      cs_set-alert_hours = ls_def-alert_hours.
+    ENDIF.
 
   ENDMETHOD.
 

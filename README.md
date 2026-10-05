@@ -10,7 +10,7 @@ app, installed with abapGit next to abap2UI5.
 
 | Tab | What it shows | Needs |
 |---|---|---|
-| **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size - and the last 30 days, one row per day | monitor |
+| **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
 | **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
 | **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
@@ -18,7 +18,7 @@ app, installed with abapGit next to abap2UI5.
 | **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
 | **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
 | **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/agent)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
-| **Settings** | Monitor mode, slow threshold, retention, privacy mode, administrators, and the change log (claims, administrators, settings, deletions, reproductions) | - |
+| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, test notifications) | - |
 
 The tabs marked *-* work **without any logging** - install, open, read the
 traffic light. That is the quick win.
@@ -90,6 +90,7 @@ which decides by the settings what is persisted:
 | `Z2UI5_T_CK_SET` | settings | name/value |
 | `Z2UI5_T_CK_ADM` | administrators | user names |
 | `Z2UI5_T_CK_AUD` | every change made in the cockpit | change log: time, user, action, details - kept as long as the aggregates |
+| `Z2UI5_T_CK_ALR` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - kept as long as the aggregates |
 
 **Lock-free and overflow-safe.** A roundtrip is added to the row of its hour
 with one `UPDATE ... SET cnt = cnt + 1, ms_sum = ms_sum + n, ...` - atomic on
@@ -143,6 +144,10 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 | User tracking | `HASH` | `HASH`, `NONE`, `NAME` - see below |
 | App unused after | 90 days | Apps tab |
 | Hint thresholds | 500 KB response, 1024 KB model | Performance tab |
+| Alert: error rate from | 5 % | `0` switches the rule off - see [Alerts](#alerts) |
+| Alert: p95 from | 2000 ms | `0` switches the rule off |
+| Alert: only with at least | 20 roundtrips | per app, and over all apps |
+| Alert: window | running UTC hour plus 1 | `0` to `23` hours before the running one |
 
 ## Privacy and the works council
 
@@ -277,12 +282,73 @@ The traffic light gets an agent line: disabled is green; enabled without an
 agent administrator is red; enabled with an `APP *` allow rule (every app
 class, not only the opted-in ones) or with no reachable app at all is yellow.
 
+## Alerts
+
+Two rules, both on the Settings tab: an **error rate** and a **p95 response
+time**, each "from" a threshold. They are evaluated on the aggregates of the
+monitor, in a window of the UTC hour running now plus a number of full hours
+before it (default: 1, so 60 to 120 minutes), per app and over all apps:
+
+- an app with fewer roundtrips in the window than the minimum (default 20)
+  raises nothing - three failures out of four are no alert;
+- the line over all apps raises a rule only when no single app raises it
+  already - it is there for the many small apps that stay below the minimum
+  one by one, and one broken app is not reported twice.
+
+The Overview tab evaluates the rules live: what is exceeded right now, and the
+history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
+history in `Z2UI5_T_CK_ALR`: an alert is *raised* by the first run that finds
+the threshold exceeded and *cleared* by the first run that no longer finds it -
+so a broken app costs one notification when it breaks and one when it is fine
+again, not one per run. Schedule the job every 15 minutes (see
+[Housekeeping and background jobs](#housekeeping-and-background-jobs)); without
+it the Overview still shows what is exceeded, but nothing is kept or sent.
+
+**Notifications** go to a class of your own implementing
+`z2ui5_if_cockpit_notify` (found like the user exit, first implementer by
+name). It gets one structure per raised or cleared alert - rule, app, value,
+threshold, roundtrips, time, `<SID>/<client>` and a ready sentence - and is
+called inside the job's LUW: the job commits after it, so a mail queued with
+the released mail API is sent with that commit.
+
+```abap
+CLASS zcl_my_cockpit_notify DEFINITION PUBLIC FINAL CREATE PUBLIC.
+  PUBLIC SECTION.
+    INTERFACES z2ui5_if_cockpit_notify.
+ENDCLASS.
+
+CLASS zcl_my_cockpit_notify IMPLEMENTATION.
+  METHOD z2ui5_if_cockpit_notify~notify.
+    " ABAP Cloud - on Standard ABAP cl_bcs, or your chat webhook, or a ticket.
+    " notify( ) may raise any cx_static_check: the cockpit notes it in the
+    " alert history and goes on.
+    DATA(lo_mail) = cl_bcs_mail_message=>create_instance( ).
+    lo_mail->set_sender( 'abap2ui5@example.com' ).
+    lo_mail->add_recipient( 'basis-team@example.com' ).
+    lo_mail->set_subject( CONV #( |[{ alert-system }] { alert-event }: { alert-text }| ) ).
+    lo_mail->set_main( cl_bcs_mail_textpart=>create_instance(
+      iv_content      = alert-text
+      iv_content_type = 'text/plain' ) ).
+    lo_mail->send( ).
+  ENDMETHOD.
+ENDCLASS.
+```
+
+Whatever the class raises is caught and noted in the alert history
+("Notification" column) - a failing notification never stops the job. The
+button **Send a test notification** on the Settings tab calls the class with
+event `TEST` (administrators only, written to the change log). Without a
+class, alerts are still evaluated, kept and shown - only nobody is told, and
+the Overview says so.
+
 ## Housekeeping and background jobs
 
 The Drafts & Housekeeping tab deletes expired drafts (older than the expiry the
 framework computes - 4 hours by default, or what your user exit sets) through
 the framework's own draft store, and purges the cockpit's rows past their
-retention. For a job, call `z2ui5_cl_cockpit_job=>run( )`:
+retention. For a job, call `z2ui5_cl_cockpit_job=>run( )` - it also evaluates
+the [alerts](#alerts), so schedule it every 15 minutes when you want to be
+notified:
 
 - **Standard ABAP** - a two-line report, scheduled in SM36:
 
@@ -317,7 +383,8 @@ npm run unit            # the ABAP Unit tests on abap2UI5's transpiled runtime
 p95 from the histogram, the runtime hint rules, error grouping, unused apps,
 the privacy modes and the daily salt rotation, the recorder's aggregation,
 the security traffic light and the agent check from given structures, the
-access decision, the Agents figures and when an error can be reproduced. The
+access decision, the Agents figures, when an error can be reproduced, and the
+alert rules with what a run raises and clears. The
 classes that touch the database (`ltcl_salt`, `ltcl_rec`) are `RISK LEVEL
 DANGEROUS`: they write rows of the test app `ZZ_COCKPIT_UNIT_TEST` on days in
 2099, never commit, and delete and roll back in `teardown`. Without a system
@@ -346,7 +413,6 @@ See [AGENTS.md](AGENTS.md) for the conventions of this repository.
 - **Reproduce with the user's input** - record the model delta and the event
   arguments of a failed roundtrip (opt-in, privacy!) so the replay sends them
   too.
-- Alert thresholds (error rate, p95) with a notification.
 - Per-app authorization overview: which roles may start which app classes.
 
 ## License

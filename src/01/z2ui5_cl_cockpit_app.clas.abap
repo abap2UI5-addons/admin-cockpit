@@ -37,6 +37,9 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA s_monitor     TYPE z2ui5_cl_cockpit_stats=>ty_s_monitor.
     DATA s_kpi         TYPE z2ui5_cl_cockpit_stats=>ty_s_kpi.
     DATA t_trend       TYPE z2ui5_cl_cockpit_stats=>ty_t_day.
+    DATA s_alerts      TYPE z2ui5_cl_cockpit_alert=>ty_s_status.
+    DATA t_alert_now   TYPE z2ui5_cl_cockpit_alert=>ty_t_alert.
+    DATA t_alert_log   TYPE z2ui5_cl_cockpit_alert=>ty_t_history.
     DATA t_apps        TYPE z2ui5_cl_cockpit_stats=>ty_t_app.
     DATA t_unused      TYPE z2ui5_cl_cockpit_stats=>ty_t_unused.
     DATA unused_title  TYPE string.
@@ -339,6 +342,101 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{AVG_MS}`
                     )->tag( `Text`
                         )->a( n = `text` v = `{P95_MS}` ).
+
+    overview->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( s_alerts-text )
+        )->a( n = `type`     v = client->_bind( s_alerts-strip_type )
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( s_monitor-check_data )
+        )->a( n = `class`    v = `sapUiMediumMarginTop sapUiSmallMarginBottom` ).
+
+    overview->ele( `Table`
+        )->a( n = `headerText` v = `Alert thresholds exceeded now`
+        )->a( n = `items`      v = client->_bind( t_alert_now )
+        )->a( n = `visible`    v = client->_bind( s_alerts-check_now )
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Value`
+            )->tag( `Column`
+                )->a( n = `header` v = `Threshold`
+            )->tag( `Column`
+                )->a( n = `header` v = `Roundtrips`
+            )->tag( `Column`
+                )->a( n = `header` v = `Details`
+                )->a( n = `width`  v = `40%`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{APP}`
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{VALUE}`
+                        )->a( n = `state` v = `Error`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LIMIT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{ROUNDTRIPS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TEXT}` ).
+
+    overview->ele( `Table`
+        )->a( n = `headerText`       v = `Alert history - raised and cleared by the housekeeping job, open ones first`
+        )->a( n = `items`            v = client->_bind( t_alert_log )
+        )->a( n = `visible`          v = client->_bind( s_monitor-check_data )
+        )->a( n = `noDataText`       v = `No alert so far - or the housekeeping job has not run yet.`
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `10`
+        )->a( n = `class`            v = `sapUiSmallMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Status`
+            )->tag( `Column`
+                )->a( n = `header` v = `Rule`
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Value`
+            )->tag( `Column`
+                )->a( n = `header` v = `Threshold`
+            )->tag( `Column`
+                )->a( n = `header` v = `Raised (UTC)`
+            )->tag( `Column`
+                )->a( n = `header` v = `Cleared (UTC)`
+            )->tag( `Column`
+                )->a( n = `header` v = `Notification`
+                )->a( n = `width`  v = `30%`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{STATUS}`
+                        )->a( n = `state` v = `{STATE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{RULE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{APP}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALUE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LIMIT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{RAISED}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{CLEARED}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{NOTE}` ).
 
     " --- Apps -----------------------------------------------------------
     DATA(apps) = bar->ele( `IconTabFilter`
@@ -1351,6 +1449,54 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 )->a( n = `enabled` v = client->_bind( s_head-can_change )
                 )->a( n = `press`   v = client->_event( `SETTINGS_SAVE` ) ).
 
+    settings->ele( n = `SimpleForm` ns = `form`
+        )->a( n = `title`    v = `Alerts - evaluated by the housekeeping job z2ui5_cl_cockpit_job=>run( )`
+        )->a( n = `layout`   v = `ResponsiveGridLayout`
+        )->a( n = `editable` v = `true`
+
+        )->ele( n = `content` ns = `form`
+
+            )->tag( `Label`
+                )->a( n = `text` v = `Error rate from (%, 0 = off)`
+            )->tag( `Input`
+                )->a( n = `value`   v = client->_bind( s_set-alert_err_pct )
+                )->a( n = `type`    v = `Number`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->tag( `Label`
+                )->a( n = `text` v = `p95 response time from (ms, 0 = off)`
+            )->tag( `Input`
+                )->a( n = `value`   v = client->_bind( s_set-alert_p95_ms )
+                )->a( n = `type`    v = `Number`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->tag( `Label`
+                )->a( n = `text` v = `Only with at least (roundtrips)`
+            )->tag( `Input`
+                )->a( n = `value`   v = client->_bind( s_set-alert_min_cnt )
+                )->a( n = `type`    v = `Number`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->tag( `Label`
+                )->a( n = `text` v = `Window: running UTC hour plus (hours)`
+            )->tag( `Input`
+                )->a( n = `value`   v = client->_bind( s_set-alert_hours )
+                )->a( n = `type`    v = `Number`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->tag( `Label`
+                )->a( n = `text` v = `Notification`
+            )->tag( `Text`
+                )->a( n = `text` v = client->_bind( s_alerts-notifier )
+            )->tag( `Label`
+            )->tag( `Button`
+                )->a( n = `text`    v = `Save settings`
+                )->a( n = `type`    v = `Emphasized`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+                )->a( n = `press`   v = client->_event( `SETTINGS_SAVE` )
+            )->tag( `Label`
+            )->tag( `Button`
+                )->a( n = `text`    v = `Send a test notification`
+                )->a( n = `icon`    v = `sap-icon://email`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+                )->a( n = `press`   v = client->_event( `ALERT_TEST` ) ).
+
     settings->tag( `MessageStrip`
         )->a( n = `text`     v = `Germany and other countries: recording which user used which app and how long ` &&
                                  `it took can be performance and behaviour monitoring subject to works council ` &&
@@ -1977,10 +2123,23 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-settings
                                           text   = |mode { s_set-mode }, user tracking { s_set-user_tracking }, | &&
                                                    |slow { s_set-slow_ms } ms, retention { s_set-retention_days }/| &&
-                                                   |{ s_set-agg_retention_days } days| ).
+                                                   |{ s_set-agg_retention_days } days, alerts { s_set-alert_err_pct } %/| &&
+                                                   |{ s_set-alert_p95_ms } ms from { s_set-alert_min_cnt } roundtrips, | &&
+                                                   |window +{ s_set-alert_hours } h| ).
               COMMIT WORK.
               client->message_toast_display( `Settings saved` ).
               load_head( ).
+              load_tab( ).
+            ENDIF.
+
+          WHEN `ALERT_TEST`.
+            IF check_change( ) = abap_true.
+              DATA(lv_sent) = z2ui5_cl_cockpit_alert=>send_test( ).
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-alert
+                                          text   = |test notification: { lv_sent }| ).
+              " the commit sends what the notification class queued
+              COMMIT WORK.
+              client->message_box_display( |Test notification: { lv_sent }| ).
               load_tab( ).
             ENDIF.
 
@@ -2041,8 +2200,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     CASE tab.
       WHEN `OVERVIEW`.
-        s_kpi   = z2ui5_cl_cockpit_stats=>get_kpi( ).
-        t_trend = z2ui5_cl_cockpit_stats=>get_trend( ).
+        s_kpi       = z2ui5_cl_cockpit_stats=>get_kpi( ).
+        t_trend     = z2ui5_cl_cockpit_stats=>get_trend( ).
+        t_alert_now = z2ui5_cl_cockpit_alert=>check( ).
+        s_alerts    = z2ui5_cl_cockpit_alert=>get_status( t_alert_now ).
+        t_alert_log = z2ui5_cl_cockpit_alert=>get_history( ).
       WHEN `APPS`.
         t_apps   = z2ui5_cl_cockpit_stats=>get_apps( lv_days ).
         t_unused = z2ui5_cl_cockpit_stats=>get_unused( ).
@@ -2066,6 +2228,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         s_agent = z2ui5_cl_cockpit_agent=>get_info( lv_days ).
       WHEN `SETTINGS`.
         s_set = z2ui5_cl_cockpit_setup=>get( ).
+        s_alerts-notifier = z2ui5_cl_cockpit_alert=>get_notifier_class( ).
+        IF s_alerts-notifier IS INITIAL.
+          s_alerts-notifier = `none - implement z2ui5_if_cockpit_notify to be told (README, Alerts)`.
+        ENDIF.
         CLEAR t_admins.
         LOOP AT z2ui5_cl_cockpit_setup=>get_admins( ) INTO DATA(lv_admin).
           APPEND VALUE #( uname = lv_admin ) TO t_admins.

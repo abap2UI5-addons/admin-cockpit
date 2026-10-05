@@ -35,6 +35,7 @@ CLASS z2ui5_cl_cockpit_auth DEFINITION PUBLIC FINAL CREATE PUBLIC.
         purge    TYPE string VALUE `LOG_PURGE`,
         job      TYPE string VALUE `HOUSEKEEPING`,
         repro    TYPE string VALUE `ERROR_REPRODUCE`,
+        alert    TYPE string VALUE `ALERT_TEST`,
       END OF cs_log.
 
     TYPES:

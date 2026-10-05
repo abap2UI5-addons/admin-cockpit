@@ -19,7 +19,7 @@ README.md is the user documentation; keep it in step with every change.
 
 | Path | |
 |---|---|
-| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`); ABAP Unit tests in `*.clas.testclasses.abap` |
+| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_CK_ALR`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
 | `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `publish-standalone` |
@@ -95,6 +95,18 @@ it there. Every change made through the cockpit (claim, administrators,
 settings, deletions, purges, reproductions) is written with
 `z2ui5_cl_cockpit_auth=>log( )` to `Z2UI5_T_CK_AUD` before or with the commit
 of the change.
+
+## Alerts
+
+`z2ui5_cl_cockpit_alert`: `evaluate( )` (the rules) and `diff( )` (what a run
+raises and clears) are pure and unit-tested - change the rules there. `run( )`
+is called by `z2ui5_cl_cockpit_job=>run( )` only, never from the monitor: the
+customer's notification class may be slow or send mail, which has no place in
+a user's roundtrip. `run( )` does not commit - the job commits after it, so a
+mail the notification queued is sent with that commit. A notification that
+raises is caught and noted in the alert history, never re-raised. Thresholds
+use `0` for off - `z2ui5_cl_cockpit_setup=>check_alerts( )` keeps it, unlike
+the other settings where a non-positive value falls back to the default.
 
 ## Optional addons only by name
 

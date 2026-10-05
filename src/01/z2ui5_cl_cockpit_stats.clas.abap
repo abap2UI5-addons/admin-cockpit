@@ -171,6 +171,16 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         t_app        TYPE ty_t_live_app,
       END OF ty_s_live.
 
+    TYPES:
+      BEGIN OF ty_s_window,
+        " the app class, empty for the line over all apps
+        app        TYPE string,
+        roundtrips TYPE i,
+        errors     TYPE i,
+        p95_ms     TYPE i,
+      END OF ty_s_window.
+    TYPES ty_t_window TYPE STANDARD TABLE OF ty_s_window WITH EMPTY KEY.
+
     CLASS-METHODS get_monitor
       RETURNING
         VALUE(result) TYPE ty_s_monitor.
@@ -252,6 +262,16 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         minutes       TYPE i DEFAULT 5
       RETURNING
         VALUE(result) TYPE ty_s_live.
+
+    "! The figures the alert rules look at: per app and one line over all
+    "! apps (app empty, first), for the UTC hour running now and the given
+    "! number of full hours before it.
+    "! @parameter hours | full UTC hours before the running one, 0 to 23
+    CLASS-METHODS get_window
+      IMPORTING
+        hours         TYPE i
+      RETURNING
+        VALUE(result) TYPE ty_t_window.
 
   PROTECTED SECTION.
 
@@ -1114,6 +1134,54 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     " the lock-manager addon is a hint only, never a dependency
     result-check_lock = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( `Z2UI5_CL_APP_SM12` ) = abap_true ).
+
+  ENDMETHOD.
+
+  METHOD get_window.
+
+    DATA lt_rows TYPE ty_t_db_sum.
+    DATA ls_all TYPE ty_s_sum.
+    DATA lt_sum TYPE ty_t_sum_app.
+
+    DATA(lv_from_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( hours * 3600 ).
+    DATA(lv_from_day) = z2ui5_cl_cockpit_setup=>day_of( lv_from_ts ).
+    DATA(lv_from_key) = |{ lv_from_day }{ z2ui5_cl_cockpit_setup=>hour_of( lv_from_ts ) }|.
+
+    " one day or two (the window may span midnight UTC) - the hours are
+    " filtered here, a key over day and hour does not exist in the table
+    SELECT day, hour, app,
+           SUM( cnt ) AS cnt, SUM( cnt_err ) AS cnt_err,
+           SUM( ms_sum ) AS ms_sum, MAX( ms_max ) AS ms_max,
+           SUM( h01 ) AS h01, SUM( h02 ) AS h02, SUM( h03 ) AS h03, SUM( h04 ) AS h04, SUM( h05 ) AS h05,
+           SUM( h06 ) AS h06, SUM( h07 ) AS h07, SUM( h08 ) AS h08, SUM( h09 ) AS h09
+      FROM z2ui5_t_ck_agg
+      WHERE day >= @lv_from_day
+      GROUP BY day, hour, app
+      INTO CORRESPONDING FIELDS OF TABLE @lt_rows.
+
+    LOOP AT lt_rows INTO DATA(ls_row).
+      IF |{ ls_row-day }{ ls_row-hour }| < lv_from_key.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app ASSIGNING FIELD-SYMBOL(<sum>).
+      IF sy-subrc <> 0.
+        INSERT VALUE #( app = ls_row-app ) INTO TABLE lt_sum ASSIGNING <sum>.
+      ENDIF.
+      add_sum( EXPORTING is_row = ls_row
+               CHANGING  cs_sum = <sum> ).
+      add_sum( EXPORTING is_row = ls_row
+               CHANGING  cs_sum = ls_all ).
+    ENDLOOP.
+
+    APPEND VALUE #( roundtrips = to_i( ls_all-cnt )
+                    errors     = to_i( ls_all-cnt_err )
+                    p95_ms     = p95( ls_all ) ) TO result.
+    LOOP AT lt_sum INTO DATA(ls_sum).
+      APPEND VALUE #( app        = COND #( WHEN ls_sum-app IS INITIAL THEN `(no app resolved)` ELSE ls_sum-app )
+                      roundtrips = to_i( ls_sum-cnt )
+                      errors     = to_i( ls_sum-cnt_err )
+                      p95_ms     = p95( ls_sum ) ) TO result.
+    ENDLOOP.
 
   ENDMETHOD.
 

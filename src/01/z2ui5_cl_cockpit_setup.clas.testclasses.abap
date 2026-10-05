@@ -17,6 +17,7 @@ CLASS ltcl_privacy DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS hash_mode_without_name FOR TESTING.
     METHODS hash_mode_ignores_case FOR TESTING.
     METHODS buckets FOR TESTING.
+    METHODS alert_settings FOR TESTING.
 
     METHODS use
       IMPORTING
@@ -144,6 +145,29 @@ CLASS ltcl_privacy IMPLEMENTATION.
                                         act = z2ui5_cl_cockpit_setup=>bucket_index( 30000 ) ).
     cl_abap_unit_assert=>assert_equals( exp = 9
                                         act = z2ui5_cl_cockpit_setup=>bucket_index( 999999 ) ).
+
+  ENDMETHOD.
+
+  METHOD alert_settings.
+
+    " 0 keeps a threshold switched off through a save; out of range falls back
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    ls_set-alert_err_pct = 0.
+    ls_set-alert_p95_ms  = -1.
+    ls_set-alert_min_cnt = 0.
+    ls_set-alert_hours   = 24.
+
+    z2ui5_cl_cockpit_setup=>check_alerts( CHANGING cs_set = ls_set ).
+
+    DATA(ls_def) = z2ui5_cl_cockpit_setup=>get_default( ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = ls_set-alert_err_pct ).
+    cl_abap_unit_assert=>assert_equals( exp = ls_def-alert_p95_ms
+                                        act = ls_set-alert_p95_ms ).
+    cl_abap_unit_assert=>assert_equals( exp = ls_def-alert_min_cnt
+                                        act = ls_set-alert_min_cnt ).
+    cl_abap_unit_assert=>assert_equals( exp = ls_def-alert_hours
+                                        act = ls_set-alert_hours ).
 
   ENDMETHOD.
 
