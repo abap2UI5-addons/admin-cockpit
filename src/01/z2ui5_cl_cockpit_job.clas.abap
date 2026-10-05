@@ -22,10 +22,15 @@ CLASS z2ui5_cl_cockpit_job DEFINITION PUBLIC FINAL CREATE PUBLIC.
         usr_deleted    TYPE i,
         act_deleted    TYPE i,
         aud_deleted    TYPE i,
+        alr_deleted    TYPE i,
+        alerts         TYPE z2ui5_cl_cockpit_alert=>ty_s_run,
         message        TYPE string,
       END OF ty_s_result.
 
-    "! Everything: expired drafts plus the own tables. Commits.
+    "! Everything: expired drafts, the own tables, and the alert rules -
+    "! raised and cleared alerts are kept and notified
+    "! (z2ui5_cl_cockpit_alert). Commits. Scheduled every 15 minutes, the job
+    "! is the cockpit's alerting.
     CLASS-METHODS run
       RETURNING
         VALUE(result) TYPE ty_s_result.
@@ -59,6 +64,15 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
         result-message = |Drafts not deleted: { lx->get_text( ) }|.
     ENDTRY.
 
+    TRY.
+        result-alerts = z2ui5_cl_cockpit_alert=>run( ).
+        COMMIT WORK.
+        result-message = |{ result-message }; { result-alerts-message }|.
+      CATCH cx_root INTO DATA(lx_alert).
+        ROLLBACK WORK.                                   "#EC CI_ROLLBACK
+        result-message = |{ result-message }; alerts not evaluated: { lx_alert->get_text( ) }|.
+    ENDTRY.
+
   ENDMETHOD.
 
   METHOD purge_own.
@@ -83,6 +97,9 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-agg_retention_days * 86400 ).
     DELETE FROM z2ui5_t_ck_aud WHERE timestampl < @lv_aud_ts.
     result-aud_deleted = sy-dbcnt.
+    " and so does the alert history
+    DELETE FROM z2ui5_t_ck_alr WHERE raised < @lv_aud_ts.
+    result-alr_deleted = sy-dbcnt.
 
   ENDMETHOD.
 

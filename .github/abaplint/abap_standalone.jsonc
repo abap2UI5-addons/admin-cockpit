@@ -2,7 +2,11 @@
   "global": {
     "files": "/../../src/**/*.*",
     // package 01 alone - what the generated standalone branch ships - must
-    // activate on the RELEASED abap2UI5, without the monitor hook
+    // activate on the RELEASED abap2UI5, without the monitor hook. The
+    // dependency below is pinned to the release tag 1.146.0: main carries the
+    // hook since abap2UI5#2837, so linting against main would let a static
+    // reference to z2ui5_if_ui5_monitor in src/01 pass. Its own folder keeps a
+    // pre-filled main checkout (.abaplint-deps/abap2UI5) from standing in.
     "exclude": ["/src/02/z2ui5_cl_cockpit"]
   },
   "dependencies": [
@@ -13,8 +17,8 @@
     },
     {
       "url": "https://github.com/abap2UI5/abap2UI5",
-      "branch": "main",
-      "folder": "/../../.abaplint-deps/abap2UI5",
+      "branch": "1.146.0",
+      "folder": "/../../.abaplint-deps/abap2UI5-released",
       "files": "/src/**/*.*"
     }
   ],
