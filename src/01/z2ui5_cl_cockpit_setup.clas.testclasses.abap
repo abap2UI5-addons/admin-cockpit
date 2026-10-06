@@ -18,6 +18,12 @@ CLASS ltcl_privacy DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS hash_mode_ignores_case FOR TESTING.
     METHODS buckets FOR TESTING.
     METHODS alert_settings FOR TESTING.
+    METHODS ts_minus_seconds FOR TESTING.
+    METHODS assert_minus
+      IMPORTING
+        ts      TYPE string
+        seconds TYPE i
+        exp     TYPE string.
 
     METHODS use
       IMPORTING
@@ -168,6 +174,36 @@ CLASS ltcl_privacy IMPLEMENTATION.
                                         act = ls_set-alert_min_cnt ).
     cl_abap_unit_assert=>assert_equals( exp = ls_def-alert_hours
                                         act = ls_set-alert_hours ).
+
+  ENDMETHOD.
+
+  METHOD ts_minus_seconds.
+
+    " within the day, across midnight, across a month and a year, whole days
+    assert_minus( ts      = '20990315103000'
+                  seconds = 10
+                  exp     = '20990315102950' ).
+    assert_minus( ts      = '20990101000010'
+                  seconds = 20
+                  exp     = '20981231235950' ).
+    assert_minus( ts      = '20990301120000'
+                  seconds = 2 * 86400
+                  exp     = '20990227120000' ).
+    assert_minus( ts      = '20990301000000'
+                  seconds = 86400 + 3600
+                  exp     = '20990227230000' ).
+
+  ENDMETHOD.
+
+  METHOD assert_minus.
+
+    DATA lv_ts TYPE timestampl.
+    DATA lv_exp TYPE timestampl.
+    lv_ts = ts.
+    lv_exp = exp.
+    cl_abap_unit_assert=>assert_equals( exp = lv_exp
+                                        act = z2ui5_cl_cockpit_setup=>ts_minus_seconds( ts      = lv_ts
+                                                                                       seconds = seconds ) ).
 
   ENDMETHOD.
 

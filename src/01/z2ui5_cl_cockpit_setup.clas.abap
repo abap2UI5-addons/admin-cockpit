@@ -170,6 +170,14 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE timestampl.
 
+    "! A timestamp n seconds before the given one, in whole seconds.
+    CLASS-METHODS ts_minus_seconds
+      IMPORTING
+        ts            TYPE timestampl
+        seconds       TYPE i
+      RETURNING
+        VALUE(result) TYPE timestampl.
+
     "! A timestamp as readable UTC text, YYYY-MM-DD hh:mm:ss.
     CLASS-METHODS ts_text
       IMPORTING
@@ -636,8 +644,33 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD now_minus_seconds.
 
-    result = cl_abap_tstmp=>subtractsecs( tstmp = now( )
-                                          secs  = seconds ).
+    result = ts_minus_seconds( ts      = now( )
+                               seconds = seconds ).
+
+  ENDMETHOD.
+
+  METHOD ts_minus_seconds.
+
+    " By hand, not with cl_abap_tstmp=>subtractsecs: on a system that
+    " raised CX_PARAMETER_INVALID_TYPE ("Parameter TSTMP has invalid type")
+    " for every caller - the first screen after the claim (2026-10-06).
+    " Date and time of day in UTC, the whole days off the date, the rest off
+    " the time - one day more when the time of day is smaller than the rest
+    " (the subtraction of a t wraps around midnight by itself).
+    DATA lv_date TYPE d.
+    DATA lv_time TYPE t.
+    DATA lv_rest TYPE i.
+    DATA lv_time_secs TYPE i.
+
+    CONVERT TIME STAMP ts TIME ZONE `UTC` INTO DATE lv_date TIME lv_time.
+    lv_rest = seconds MOD 86400.
+    lv_date = lv_date - seconds DIV 86400.
+    lv_time_secs = lv_time.
+    IF lv_time_secs < lv_rest.
+      lv_date = lv_date - 1.
+    ENDIF.
+    lv_time = lv_time - lv_rest.
+    CONVERT DATE lv_date TIME lv_time INTO TIME STAMP result TIME ZONE `UTC`.
 
   ENDMETHOD.
 
