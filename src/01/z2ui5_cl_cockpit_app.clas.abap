@@ -99,6 +99,9 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS nav_lock_monitor.
     METHODS model_init.
 
+    "! Enum properties bound to a tab's data, never empty - see there.
+    METHODS enum_defaults.
+
   PRIVATE SECTION.
 ENDCLASS.
 
@@ -129,6 +132,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ELSEIF client->check_on_event( ).
       on_event( ).
     ENDIF.
+    enum_defaults( ).
 
   ENDMETHOD.
 
@@ -2275,6 +2279,38 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         client->message_box_display( text = `The lock monitor of the lock-manager addon could not be started.`
                                      type = `warning` ).
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD enum_defaults.
+
+    " Every tab is part of the one view, so UI5 renders a MessageStrip or a
+    " NumericContent of a tab whose data is loaded only when the tab is
+    " opened. An empty enum value fails the property's type check ("" is
+    " of type string, expected sap.ui.core.MessageType) and terminates the
+    " app. Set at the end of every roundtrip, so a tab loaded later
+    " overwrites the default with its own value.
+    IF s_monitor-strip_type IS INITIAL.
+      s_monitor-strip_type = `Information`.
+    ENDIF.
+    IF s_alerts-strip_type IS INITIAL.
+      s_alerts-strip_type = `Information`.
+    ENDIF.
+    IF s_agent-strip_type IS INITIAL.
+      s_agent-strip_type = `Information`.
+    ENDIF.
+    IF s_repro-strip_type IS INITIAL.
+      s_repro-strip_type = `Information`.
+    ENDIF.
+    IF s_kpi-p95_state IS INITIAL.
+      s_kpi-p95_state = `Neutral`.
+    ENDIF.
+    IF s_kpi-error_state IS INITIAL.
+      s_kpi-error_state = `Neutral`.
+    ENDIF.
+    IF s_kpi-drafts_state IS INITIAL.
+      s_kpi-drafts_state = `Neutral`.
+    ENDIF.
 
   ENDMETHOD.
 
