@@ -46,8 +46,24 @@ tabs follow with the first release.*
    the first user who presses its button becomes the administrator (see
    [Security of the cockpit itself](#security-of-the-cockpit-itself)).
 
+4. **Switch the monitor on** in your user exit, once the pull is complete and
+   every object is active. abap2UI5 calls no monitor until the exit says so,
+   so a cockpit that does not activate cannot break your apps:
+
+   ```abap
+   METHOD z2ui5_if_ui5_exit~set_config_http_post.
+     cs_config-check_monitor_active = abap_true.
+   ENDMETHOD.
+   ```
+
+   Until then the usage, error and performance tabs stay empty. Setting it
+   back to `abap_false` stops the recording on the next roundtrip. The field
+   exists in abap2UI5 releases that ship the opt-in. On an abap2UI5 that has
+   the monitor hook but not the field yet, the monitor runs as soon as the
+   cockpit is installed.
+
 Once your abap2UI5 has the monitor hook, switch the abapGit repository from
-`standalone` to `main` and pull - nothing else changes.
+`standalone` to `main` and pull. Then switch the monitor on (step 4).
 
 ### Two packages, two branches
 
@@ -73,7 +89,8 @@ linting `src/01` against the released abap2UI5 (the tag `1.146.0`, pinned:
 
 ## How the monitor works
 
-abap2UI5 finds `z2ui5_cl_cockpit_monitor` on its own - the first class
+Once the user exit switches it on (`check_monitor_active`, installation step
+4), abap2UI5 finds `z2ui5_cl_cockpit_monitor` on its own - the first class
 implementing `z2ui5_if_ui5_monitor` by name, looked up once per roll area,
 the way it finds the user exit - and calls `on_roundtrip` once per POST
 roundtrip, after the response is built, on success and on failure. The class
@@ -107,7 +124,9 @@ them saturated at the largest `INT4` - and whatever a database still refuses,
 `record( )` catches: the monitor never dumps.
 
 **It never breaks an app.** Everything is caught; the core swallows anything a
-monitor raises anyway. **Commit semantics** follow the interface: for an app
+monitor raises anyway. A syntax error is the one thing no `CATCH` stops - a
+class that does not activate dumps whoever calls it - which is why the core
+calls no monitor until the exit switches it on. **Commit semantics** follow the interface: for an app
 that is not sticky the LUW is empty when the monitor runs (the framework
 committed its draft save, or rolled back a failed roundtrip right before the
 call), so the recorder writes its rows and issues `COMMIT WORK` itself - the

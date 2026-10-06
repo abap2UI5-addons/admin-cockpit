@@ -47,7 +47,13 @@ README.md is the user documentation; keep it in step with every change.
 ## The monitor contract
 
 `z2ui5_if_ui5_monitor` (abap2UI5 `src/02`) calls `on_roundtrip` once per POST
-roundtrip. Rules the recorder keeps - do not loosen them:
+roundtrip - only once the installation's user exit sets
+`check_monitor_active` (the core's opt-in, README installation step 4). A
+syntax error anywhere the monitor reaches is a short dump no `CATCH` stops,
+and before the opt-in a half-activated pull of this repository took every
+abap2UI5 app down with it. So every pull must leave all objects active and
+syntax-clean (the abap-check catalogue lists what abaplint misses). Rules the
+recorder keeps - do not loosen them:
 
 - **Never raise** out of `record( )` - catch `cx_root`.
 - **Commit only when `check_sticky = abap_false`** - with `COMMIT WORK`, the
