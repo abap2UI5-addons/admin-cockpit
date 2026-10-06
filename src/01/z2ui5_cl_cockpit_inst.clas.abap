@@ -653,8 +653,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     LOOP AT lt_classes INTO DATA(ls_class).
       APPEND to_upper( ls_class-classname ) TO result.
     ENDLOOP.
-    SORT result.
-    DELETE ADJACENT DUPLICATES FROM result.
+    SORT result BY table_line.
+    DELETE ADJACENT DUPLICATES FROM result COMPARING table_line.
 
   ENDMETHOD.
 

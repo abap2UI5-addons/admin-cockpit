@@ -35,6 +35,7 @@
     "unreachable_code": true,
     "unused_variables": true,
     "unused_types": true,
+    "redundant_conversion": true,
     "unused_methods": true,
     "identical_conditions": true,
     "identical_contents": true,
