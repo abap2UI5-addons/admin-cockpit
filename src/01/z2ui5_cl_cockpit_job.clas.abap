@@ -87,9 +87,9 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
     DELETE FROM z2ui5_t_ck_log WHERE timestampl < @lv_log_ts.
     result-log_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_ck_usr WHERE day < @lv_usr_day.
+    DELETE FROM z2ui5_t_ck_usr WHERE utc_day < @lv_usr_day.
     result-usr_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_ck_agg WHERE day < @lv_agg_day.
+    DELETE FROM z2ui5_t_ck_agg WHERE utc_day < @lv_agg_day.
     result-agg_deleted = sy-dbcnt.
     DELETE FROM z2ui5_t_ck_act WHERE last_seen < @lv_act_ts.
     result-act_deleted = sy-dbcnt.

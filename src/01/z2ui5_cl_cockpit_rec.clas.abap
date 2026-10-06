@@ -237,9 +237,9 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     DATA lt_h TYPE STANDARD TABLE OF i WITH EMPTY KEY.
 
     " host variables named like no column - after the 7.02 downport drops
-    " the @ escapes, a parameter called DAY would compare the column to itself
-    DATA(lv_day) = CONV z2ui5_t_ck_agg-day( day ).
-    DATA(lv_hour) = CONV z2ui5_t_ck_agg-hour( hour ).
+    " the @ escapes, a host variable named like a column compares it to itself
+    DATA(lv_day) = CONV z2ui5_t_ck_agg-utc_day( day ).
+    DATA(lv_hour) = CONV z2ui5_t_ck_agg-utc_hour( hour ).
     DATA(lv_event) = CONV z2ui5_t_ck_agg-event( is_rt-event ).
     DATA(lv_app) = CONV z2ui5_t_ck_agg-app( is_rt-app ).
 
@@ -300,16 +300,16 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
             h07        = h07 + @lv_h07,
             h08        = h08 + @lv_h08,
             h09        = h09 + @lv_h09
-        WHERE day   = @lv_day
-          AND hour  = @lv_hour
-          AND app   = @lv_app
-          AND event = @lv_event.
+        WHERE utc_day  = @lv_day
+          AND utc_hour = @lv_hour
+          AND app      = @lv_app
+          AND event    = @lv_event.
       IF sy-dbcnt > 0.
         EXIT.
       ENDIF.
 
-      ls_agg = VALUE #( day           = lv_day
-                        hour          = lv_hour
+      ls_agg = VALUE #( utc_day       = lv_day
+                        utc_hour      = lv_hour
                         app           = lv_app
                         event         = lv_event
                         cnt           = lv_cnt
@@ -351,17 +351,17 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     DATA(lv_mod_max) = is_rt-bytes_model.
     IF lv_ms_max > 0.
       UPDATE z2ui5_t_ck_agg SET ms_max = @lv_ms_max
-        WHERE day = @lv_day AND hour = @lv_hour AND app = @lv_app AND event = @lv_event
+        WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
           AND ms_max < @lv_ms_max.
     ENDIF.
     IF lv_res_max > 0.
       UPDATE z2ui5_t_ck_agg SET bytes_res_max = @lv_res_max
-        WHERE day = @lv_day AND hour = @lv_hour AND app = @lv_app AND event = @lv_event
+        WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
           AND bytes_res_max < @lv_res_max.
     ENDIF.
     IF lv_mod_max > 0.
       UPDATE z2ui5_t_ck_agg SET bytes_mod_max = @lv_mod_max
-        WHERE day = @lv_day AND hour = @lv_hour AND app = @lv_app AND event = @lv_event
+        WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
           AND bytes_mod_max < @lv_mod_max.
     ENDIF.
 
@@ -375,7 +375,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     DATA(lv_now) = z2ui5_cl_cockpit_setup=>now( ).
 
     IF user_key IS NOT INITIAL.
-      ls_usr-day        = day.
+      ls_usr-utc_day    = day.
       ls_usr-app        = lv_app.
       ls_usr-user_key   = user_key.
       ls_usr-first_seen = lv_now.
@@ -398,7 +398,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
     ls_log-id             = cl_system_uuid=>create_uuid_c32_static( ).
     ls_log-timestampl     = is_rt-timestampl.
-    ls_log-day            = day.
+    ls_log-utc_day        = day.
     ls_log-app            = is_rt-app.
     ls_log-event          = is_rt-event.
     ls_log-user_key       = user_key.

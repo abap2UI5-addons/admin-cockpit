@@ -107,15 +107,15 @@ CLASS ltcl_rec IMPLEMENTATION.
   METHOD agg.
 
     DATA lv_app TYPE z2ui5_t_ck_agg-app.
-    DATA lv_day TYPE z2ui5_t_ck_agg-day.
+    DATA lv_day TYPE z2ui5_t_ck_agg-utc_day.
     DATA lv_event TYPE z2ui5_t_ck_agg-event.
     lv_app = c_app.
     lv_day = c_day.
     lv_event = event.
     SELECT SINGLE * FROM z2ui5_t_ck_agg
-      WHERE day   = @lv_day
-        AND app   = @lv_app
-        AND event = @lv_event
+      WHERE utc_day = @lv_day
+        AND app     = @lv_app
+        AND event   = @lv_event
       INTO @result.
     IF sy-subrc <> 0.
       CLEAR result.
@@ -146,7 +146,7 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     DATA(ls_agg) = agg( ).
     cl_abap_unit_assert=>assert_equals( exp = `10`
-                                        act = ls_agg-hour ).
+                                        act = ls_agg-utc_hour ).
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = ls_agg-cnt ).
     cl_abap_unit_assert=>assert_equals( exp = 1
@@ -202,7 +202,7 @@ CLASS ltcl_rec IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = `PREV`
                                         act = ls_log-draft_id_prev ).
     cl_abap_unit_assert=>assert_equals( exp = c_day
-                                        act = ls_log-day ).
+                                        act = ls_log-utc_day ).
     " user tracking NONE: neither a name nor a pseudonym
     cl_abap_unit_assert=>assert_initial( ls_log-uname ).
     cl_abap_unit_assert=>assert_initial( ls_log-user_key ).
@@ -229,7 +229,7 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     DATA lv_count TYPE i.
     DATA lv_app TYPE z2ui5_t_ck_usr-app.
-    DATA lv_day TYPE z2ui5_t_ck_usr-day.
+    DATA lv_day TYPE z2ui5_t_ck_usr-utc_day.
 
     use( tracking = z2ui5_cl_cockpit_setup=>cs_users-name ).
     DATA(ls_rt) = roundtrip( 10 ).
@@ -244,7 +244,7 @@ CLASS ltcl_rec IMPLEMENTATION.
     lv_day = c_day.
     SELECT COUNT( * ) FROM z2ui5_t_ck_usr
       WHERE app = @lv_app
-        AND day = @lv_day
+        AND utc_day = @lv_day
       INTO @lv_count.
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lv_count ).
