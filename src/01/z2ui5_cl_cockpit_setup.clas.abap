@@ -394,8 +394,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD row_save.
 
-    DATA(ls_row) = VALUE ty_s_row( name  = name
-                                   value = value ).
+    DATA(ls_row) = VALUE z2ui5_t_ck_set( name  = name
+                                         value = value ).
     MODIFY z2ui5_t_ck_set FROM @ls_row.
 
   ENDMETHOD.
@@ -490,8 +490,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
         CATCH cx_uuid_error.
           RETURN.
       ENDTRY.
-      DATA(ls_row) = VALUE ty_s_row( name  = lv_name
-                                     value = lv_value ).
+      DATA(ls_row) = VALUE z2ui5_t_ck_set( name  = lv_name
+                                           value = lv_value ).
       INSERT z2ui5_t_ck_set FROM @ls_row.
       IF sy-subrc <> 0.
         " another work process created it a moment ago - use that one
