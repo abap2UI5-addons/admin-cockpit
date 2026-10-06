@@ -154,6 +154,14 @@ every interface method a double needs.
   core/addon tables (CHAR, INT4, STRG, data elements MANDT/TIMESTAMPL) plus
   `DEC 15` for sums (the shape of the exported DEC fields: `INTTYPE P`,
   `INTLEN 000008`, `LENG 000015`, no `DECIMALS` for zero).
+- **No SQL reserved word as a field name.** The dictionary refuses to
+  activate a table with a field called `DAY` or `HOUR` (*"DAY is a reserved
+  word (choose another field name)"*, table `TRESE`) - abaplint stayed green
+  on it. The UTC day and hour columns are `UTC_DAY` and `UTC_HOUR` for that
+  reason. Confirmed on a system so far: `DAY`, `HOUR`, `ZONE`, `HANDLER`,
+  `SECTION`, `PARAMETER` - but `TRESE` holds many more SQL keywords, so a
+  bare date part or SQL keyword is suspect even when not listed. Prefix it
+  (`UTC_`, `CNT_`, `MS_`, ...).
 - Views: `z2ui5_cl_ui5_view_builder`, one statement per subtree, the house
   chain layout (`npm run fmt:chains`), UI5 1.71 floor, data through `t =`,
   `#EC CI_SORTSEQ` on sequential internal-table reads, `##NO_HANDLER` on empty

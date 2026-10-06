@@ -357,10 +357,10 @@ CLASS ltcl_stats IMPLEMENTATION.
     DATA(lt_impl) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `ZZ_APP_OLD` )
                                                               ( `ZZ_APP_RECENT` )
                                                               ( `ZZ_APP_NEVER` ) ).
-    INSERT VALUE #( app = `ZZ_APP_OLD`
-                    day = `20260101` ) INTO TABLE lt_last.
-    INSERT VALUE #( app = `ZZ_APP_RECENT`
-                    day = `20261001` ) INTO TABLE lt_last.
+    INSERT VALUE #( app     = `ZZ_APP_OLD`
+                    utc_day = `20260101` ) INTO TABLE lt_last.
+    INSERT VALUE #( app     = `ZZ_APP_RECENT`
+                    utc_day = `20261001` ) INTO TABLE lt_last.
 
     DATA(lt_unused) = z2ui5_cl_cockpit_stats=>unused_of( it_impl  = lt_impl
                                                          it_last  = lt_last
