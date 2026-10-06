@@ -214,7 +214,7 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CLASS-METHODS to_int
       IMPORTING
         val           TYPE clike
-        default       TYPE i
+        fallback      TYPE i
       RETURNING
         VALUE(result) TYPE i.
 
@@ -248,42 +248,42 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
             result-mode = ls_row-value.
           ENDIF.
         WHEN `SAMPLE_PCT`.
-          result-sample_pct = to_int( val     = ls_row-value
-                                      default = result-sample_pct ).
+          result-sample_pct = to_int( val      = ls_row-value
+                                      fallback = result-sample_pct ).
         WHEN `SLOW_MS`.
-          result-slow_ms = to_int( val     = ls_row-value
-                                   default = result-slow_ms ).
+          result-slow_ms = to_int( val      = ls_row-value
+                                   fallback = result-slow_ms ).
         WHEN `RETENTION_DAYS`.
-          result-retention_days = to_int( val     = ls_row-value
-                                          default = result-retention_days ).
+          result-retention_days = to_int( val      = ls_row-value
+                                          fallback = result-retention_days ).
         WHEN `AGG_RETENTION_DAYS`.
-          result-agg_retention_days = to_int( val     = ls_row-value
-                                              default = result-agg_retention_days ).
+          result-agg_retention_days = to_int( val      = ls_row-value
+                                              fallback = result-agg_retention_days ).
         WHEN `USER_TRACKING`.
           IF ls_row-value = cs_users-hash OR ls_row-value = cs_users-none OR ls_row-value = cs_users-name.
             result-user_tracking = ls_row-value.
           ENDIF.
         WHEN `UNUSED_DAYS`.
-          result-unused_days = to_int( val     = ls_row-value
-                                       default = result-unused_days ).
+          result-unused_days = to_int( val      = ls_row-value
+                                       fallback = result-unused_days ).
         WHEN `RESPONSE_WARN_KB`.
-          result-response_warn_kb = to_int( val     = ls_row-value
-                                            default = result-response_warn_kb ).
+          result-response_warn_kb = to_int( val      = ls_row-value
+                                            fallback = result-response_warn_kb ).
         WHEN `MODEL_WARN_KB`.
-          result-model_warn_kb = to_int( val     = ls_row-value
-                                         default = result-model_warn_kb ).
+          result-model_warn_kb = to_int( val      = ls_row-value
+                                         fallback = result-model_warn_kb ).
         WHEN `ALERT_ERR_PCT`.
-          result-alert_err_pct = to_int( val     = ls_row-value
-                                         default = result-alert_err_pct ).
+          result-alert_err_pct = to_int( val      = ls_row-value
+                                         fallback = result-alert_err_pct ).
         WHEN `ALERT_P95_MS`.
-          result-alert_p95_ms = to_int( val     = ls_row-value
-                                        default = result-alert_p95_ms ).
+          result-alert_p95_ms = to_int( val      = ls_row-value
+                                        fallback = result-alert_p95_ms ).
         WHEN `ALERT_MIN_CNT`.
-          result-alert_min_cnt = to_int( val     = ls_row-value
-                                         default = result-alert_min_cnt ).
+          result-alert_min_cnt = to_int( val      = ls_row-value
+                                         fallback = result-alert_min_cnt ).
         WHEN `ALERT_HOURS`.
-          result-alert_hours = to_int( val     = ls_row-value
-                                       default = result-alert_hours ).
+          result-alert_hours = to_int( val      = ls_row-value
+                                       fallback = result-alert_hours ).
         WHEN `LAST_PURGE`.
           result-last_purge = ls_row-value.
       ENDCASE.
@@ -551,7 +551,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD to_int.
 
-    result = default.
+    result = fallback.
     DATA(lv_val) = condense( val ).
     IF lv_val IS INITIAL.
       RETURN.
@@ -559,7 +559,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     TRY.
         result = lv_val.
       CATCH cx_root.
-        result = default.
+        result = fallback.
     ENDTRY.
 
   ENDMETHOD.

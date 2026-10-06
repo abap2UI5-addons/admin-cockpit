@@ -803,7 +803,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
 
     DATA(lv_from)  = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
-    DATA(lv_app)   = CONV ty_s_error-app( is_error-app ).
+    DATA(lv_app)   = is_error-app.
     DATA(lv_event) = is_error-event.
     DATA(lv_class) = is_error-error_class.
     DATA(lv_head)  = is_error-error_head.
@@ -1263,6 +1263,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA lt_h TYPE STANDARD TABLE OF ty_p WITH EMPTY KEY.
     DATA lv_total TYPE ty_p.
     DATA lv_cum TYPE ty_p.
+    DATA lv_target TYPE ty_p.
     DATA lv_lower TYPE i.
 
     lt_h = VALUE #( ( is_sum-h01 ) ( is_sum-h02 ) ( is_sum-h03 ) ( is_sum-h04 ) ( is_sum-h05 )
@@ -1274,7 +1275,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lv_target) = lv_total * 95 / 100.
+    lv_target = lv_total * 95 / 100.
     LOOP AT lt_h INTO lv_h.
       DATA(lv_index) = sy-tabix.
       DATA(lv_upper) = z2ui5_cl_cockpit_setup=>bucket_upper( lv_index ).

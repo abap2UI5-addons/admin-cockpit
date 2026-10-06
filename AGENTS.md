@@ -162,6 +162,20 @@ every interface method a double needs.
   `SECTION`, `PARAMETER` - but `TRESE` holds many more SQL keywords, so a
   bare date part or SQL keyword is suspect even when not listed. Prefix it
   (`UTC_`, `CNT_`, `MS_`, ...).
+- **Things a system refuses or warns about that abaplint does not report.**
+  The full list is in abap2UI5's `abap-check` skill. These four reached a
+  system from here:
+  - A parameter named `default` does not activate. The class pool reads it
+    as the `DEFAULT` addition of the parameter before it (*"Unable to
+    interpret RETURNING"*). `to_int` takes `fallback` for that reason.
+  - `SORT itab.` and `DELETE ADJACENT DUPLICATES FROM itab.` on a table
+    `WITH EMPTY KEY` give the warning *"… is a table with an empty primary
+    key"*. Write `BY table_line` / `COMPARING table_line`, or the
+    components you mean.
+  - `DATA(x) = <packed> * n / m.` gives the warning *"type P(8,0) is used
+    here implicitly"*. Declare `x` with its type.
+  - A `CONV` to the type the operand already has is *"Redundant
+    conversion"*. abaplint's `redundant_conversion` is on for it.
 - Views: `z2ui5_cl_ui5_view_builder`, one statement per subtree, the house
   chain layout (`npm run fmt:chains`), UI5 1.71 floor, data through `t =`,
   `#EC CI_SORTSEQ` on sequential internal-table reads, `##NO_HANDLER` on empty
