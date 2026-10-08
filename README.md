@@ -509,11 +509,29 @@ What it gives you, in the session viewer:
   click failed.
 - **Request / Response** - the raw bodies, the inputs, the view XML, and for
   a step whose next click ended in an HTTP 500 the failed request itself.
+- **Time per step** (with `run( )`) - the server's time for the roundtrip
+  and how long the user waited for it in the browser (the frontend sends it
+  with the next request), orange from the *slow roundtrip* setting: "1.4 s
+  server, 6.2 s waited" right before the same button is pressed again
+  explains the double click.
 
 The Errors tab adds **"Messages users saw"**: the error and warning boxes and
 toasts of the last days, per app and text, how often and for how many users.
 Search it for the text from a ticket ("Material not found") - selecting a
 message opens the session where it was shown last, at that step.
+
+**Inputs right before an error** (Errors tab) - the fields users typed in a
+roundtrip that answered with an error box or failed, how often that
+happened when they typed them, the last message and the values typed when
+it failed. Rows of a table count as one field:
+
+```
+ZORDER  MS_HEAD/DATE     2 errors of 3 typed  66 %  Date invalid   "31.02.2026", "30.02."
+ZORDER  MT_ITEM/*/QTY    3 errors of 3 typed 100 %  Date invalid
+```
+
+A field with a high rate is where a process stumbles - a format users do not
+expect, a check that tells them too late.
 
 **Process variants** (Drafts & Housekeeping, and per app in the Apps tab
 detail) - process mining on the recordings: every run from the start of a

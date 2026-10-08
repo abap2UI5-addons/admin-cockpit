@@ -62,6 +62,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         draft_id      TYPE string,
         draft_id_prev TYPE string,
         http_status   TYPE i,
+        " server time of the roundtrip - run( ) only, 0 from record( )
+        ms_total      TYPE i,
         " the user as stored - name or pseudonym, filled by get_variants only
         user          TYPE string,
       END OF ty_s_record.
@@ -75,6 +77,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         app         TYPE string,
         event       TYPE string,
         http_status TYPE i,
+        ms_total    TYPE i,
         request     TYPE string,
         response    TYPE string,
         " what the response showed, and the values the request sent
@@ -157,6 +160,38 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         t_variant    TYPE ty_t_variant,
       END OF ty_s_variants.
 
+    TYPES:
+      "! A roundtrip as input_errors_of takes it.
+      BEGIN OF ty_s_exchange,
+        app         TYPE string,
+        request     TYPE string,
+        response    TYPE string,
+        http_status TYPE i,
+      END OF ty_s_exchange.
+    TYPES ty_t_exchange TYPE STANDARD TABLE OF ty_s_exchange WITH EMPTY KEY.
+
+    TYPES:
+      "! A field users typed, and how often an error followed in the same roundtrip.
+      BEGIN OF ty_s_input,
+        app     TYPE string,
+        field   TYPE string,
+        typed   TYPE i,
+        errors  TYPE i,
+        rate    TYPE string,
+        message TYPE string,
+        samples TYPE string,
+        state   TYPE string,
+      END OF ty_s_input.
+    TYPES ty_t_input TYPE STANDARD TABLE OF ty_s_input WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_inputs,
+        error        TYPE string,
+        records      TYPE i,
+        check_capped TYPE abap_bool,
+        t_input      TYPE ty_t_input,
+      END OF ty_s_inputs.
+
     "! The one line for the ICF handler - in place of abap2UI5's own call:
     "! runs abap2UI5, takes the time, records the request and response and
     "! feeds the roundtrip statistics (z2ui5_cl_cockpit_rec) - the monitor
@@ -218,7 +253,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         request      TYPE string
         response     TYPE string
         http_status  TYPE i DEFAULT 200
-        check_sticky TYPE abap_bool DEFAULT abap_false.
+        check_sticky TYPE abap_bool DEFAULT abap_false
+        ms_total     TYPE i DEFAULT 0.
 
     "! The recorded roundtrips that wrote one of the drafts or started from
     "! one - the steps of a session. Never raises.
@@ -340,6 +376,25 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_s_screen.
 
+    "! The fields users typed, each with how often the same roundtrip
+    "! answered with an error - an error box or a failure (HTTP 500): the
+    "! inputs a process stumbles over. Rows of a table count as one field
+    "! (MT_ITEM/*/QTY). Only fields followed by an error at least once, the
+    "! most errors first, at most 50.
+    "! @parameter it_exchange | the roundtrips, newest first
+    CLASS-METHODS input_errors_of
+      IMPORTING
+        it_exchange   TYPE ty_t_exchange
+      RETURNING
+        VALUE(result) TYPE ty_t_input.
+
+    "! input_errors_of over the recordings of the last days. Never raises.
+    CLASS-METHODS get_input_errors
+      IMPORTING
+        days          TYPE i
+      RETURNING
+        VALUE(result) TYPE ty_s_inputs.
+
     "! A recorded popup taken apart for showing it inline: what its Dialog
     "! or Popover holds, and its buttons. Its outer element goes, a popup
     "! cannot be shown inside another one.
@@ -433,6 +488,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         response      TYPE string
         http_status   TYPE i
         check_sticky  TYPE abap_bool
+        ms_total      TYPE i DEFAULT 0
       RETURNING
         VALUE(result) TYPE z2ui5_t_ck_wir
       RAISING
@@ -496,10 +552,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                     check_sticky = lv_sticky ) = abap_false.
           RETURN.
         ENDIF.
+        DATA(lv_ms) = ms_between( ts_from = lv_start
+                                  ts_to   = lv_end ).
         record_bodies( request      = lv_request
                        response     = lv_response
                        http_status  = lv_status
-                       check_sticky = lv_sticky ).
+                       check_sticky = lv_sticky
+                       ms_total     = lv_ms ).
 
         " a monitor class recorded it already - with its phases
         IF z2ui5_cl_cockpit_rec=>get_count( ) > lv_count.
@@ -510,8 +569,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                            http_status  = lv_status
                                            check_sticky = lv_sticky ).
         ls_roundtrip-timestampl = lv_start.
-        ls_roundtrip-ms_total   = ms_between( ts_from = lv_start
-                                              ts_to   = lv_end ).
+        ls_roundtrip-ms_total   = lv_ms.
         ls_roundtrip-uname      = sy-uname.
         " a failed roundtrip names no app - the draft it started from does
         IF ls_roundtrip-app IS INITIAL AND ls_roundtrip-draft_id_prev IS NOT INITIAL.
@@ -745,7 +803,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         ls_row = row_of( request      = request
                          response     = response
                          http_status  = http_status
-                         check_sticky = check_sticky ).
+                         check_sticky = check_sticky
+                         ms_total     = ms_total ).
 
         " a sticky app owns the LUW - its uncommitted work and locks must not
         " be committed by the recorder: the recording waits for a roundtrip
@@ -787,6 +846,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     result-timestampl   = z2ui5_cl_cockpit_setup=>now( ).
     result-utc_day      = z2ui5_cl_cockpit_setup=>day_of( result-timestampl ).
     result-http_status  = http_status.
+    result-ms_total     = ms_total.
     result-check_sticky = check_sticky.
     result-user_key     = z2ui5_cl_cockpit_setup=>user_key( uname = sy-uname
                                                             day   = result-utc_day ).
@@ -820,6 +880,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                                  name   = `APP`
                                                  before = lv_protocol ) ).
     ENDIF.
+    " a failure names no app - the draft it started from does
+    IF result-app IS INITIAL AND result-draft_id_prev IS NOT INITIAL.
+      result-app = to_upper( z2ui5_cl_cockpit_session=>get_app_of_draft( result-draft_id_prev ) ).
+    ENDIF.
 
     result-req_body = request.
     result-res_body = response.
@@ -847,6 +911,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         draft_id      TYPE c LENGTH 32,
         draft_id_prev TYPE c LENGTH 32,
         http_status   TYPE i,
+        ms_total      TYPE i,
       END OF ty_s_row.
     DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
     DATA lt_range TYPE ty_r_id.
@@ -866,7 +931,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           IF lt_range IS INITIAL.
             CONTINUE.
           ENDIF.
-          SELECT id, timestampl, app, event, draft_id, draft_id_prev, http_status
+          SELECT id, timestampl, app, event, draft_id, draft_id_prev, http_status, ms_total
             FROM z2ui5_t_ck_wir
             WHERE draft_id IN @lt_range
                OR draft_id_prev IN @lt_range
@@ -886,7 +951,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                       event         = ls_row-event
                       draft_id      = ls_row-draft_id
                       draft_id_prev = ls_row-draft_id_prev
-                      http_status   = ls_row-http_status ) TO result.
+                      http_status   = ls_row-http_status
+                      ms_total      = ls_row-ms_total ) TO result.
     ENDLOOP.
 
   ENDMETHOD.
@@ -936,6 +1002,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     result-app         = ls_row-app.
     result-event       = ls_row-event.
     result-http_status = ls_row-http_status.
+    result-ms_total    = ls_row-ms_total.
     result-request     = ls_row-req_body.
     result-response    = ls_row-res_body.
     result-shown       = shown_text( shown_of( ls_row-res_body ) ).
@@ -1660,6 +1727,141 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD input_errors_of.
+
+    TYPES:
+      BEGIN OF ty_s_sample,
+        app   TYPE string,
+        field TYPE string,
+        value TYPE string,
+      END OF ty_s_sample.
+    DATA lt_sample TYPE HASHED TABLE OF ty_s_sample WITH UNIQUE KEY app field value.
+    DATA lv_message TYPE string.
+    DATA lv_field TYPE string.
+    DATA lv_part TYPE string.
+    DATA lt_part TYPE string_table.
+    DATA lv_rate TYPE i.
+
+    LOOP AT it_exchange INTO DATA(ls_exchange).
+      " the error the same roundtrip answered with - a failure or an error box
+      CLEAR lv_message.
+      IF ls_exchange-http_status >= 500.
+        lv_message = |failed (HTTP { ls_exchange-http_status })|.
+      ELSE.
+        LOOP AT shown_of( ls_exchange-response ) INTO DATA(ls_shown) WHERE kind = cs_kind-box. "#EC CI_SORTSEQ
+          DATA(lv_type) = to_lower( ls_shown-type ).
+          IF lv_type = `error`.
+            lv_message = ls_shown-text.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+
+      LOOP AT input_of( ls_exchange-request ) INTO DATA(ls_input).
+        IF ls_input-path CP `event argument*`.
+          CONTINUE.
+        ENDIF.
+        " XX/ is the framework's two-way prefix; a row number is any row
+        lv_field = ls_input-path.
+        IF lv_field CP `XX/*`.
+          lv_field = substring( val = lv_field
+                                off = 3 ).
+        ENDIF.
+        SPLIT lv_field AT `/` INTO TABLE lt_part.
+        CLEAR lv_field.
+        LOOP AT lt_part INTO lv_part.
+          IF lv_part CO `0123456789`.
+            lv_part = `*`.
+          ENDIF.
+          lv_field = |{ lv_field }{ COND #( WHEN lv_field IS NOT INITIAL THEN `/` ) }{ lv_part }|.
+        ENDLOOP.
+
+        READ TABLE result ASSIGNING FIELD-SYMBOL(<input>)
+             WITH KEY app = ls_exchange-app field = lv_field. "#EC CI_SORTSEQ
+        IF sy-subrc <> 0.
+          APPEND VALUE #( app   = ls_exchange-app
+                          field = lv_field ) TO result ASSIGNING <input>.
+        ENDIF.
+        <input>-typed = <input>-typed + 1.
+        IF lv_message IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        <input>-errors = <input>-errors + 1.
+        " newest first: the first message is the last one shown
+        IF <input>-message IS INITIAL.
+          <input>-message = lv_message.
+        ENDIF.
+        DATA(lv_value) = ls_input-value.
+        IF strlen( lv_value ) > 30.
+          lv_value = |{ substring( val = lv_value
+                                   len = 30 ) }...|.
+        ENDIF.
+        IF lines( lt_sample ) < 10000.
+          INSERT VALUE #( app   = ls_exchange-app
+                          field = lv_field
+                          value = lv_value ) INTO TABLE lt_sample.
+          IF sy-subrc = 0 AND count( val = <input>-samples
+                                     sub = `"` ) < 6.
+            <input>-samples = |{ <input>-samples }{ COND #( WHEN <input>-samples IS NOT INITIAL THEN `, ` ) }| &&
+                              |"{ lv_value }"|.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+
+    DELETE result WHERE errors = 0.
+    LOOP AT result ASSIGNING <input>.
+      " DIV into an integer: a division in a template is i on a system (rounded)
+      " and a float on the transpiled runtime
+      lv_rate = <input>-errors * 100 DIV <input>-typed.
+      <input>-rate = |{ lv_rate } %|.
+      <input>-state = COND #( WHEN lv_rate >= 30 THEN `Error`
+                              ELSE `Warning` ).
+    ENDLOOP.
+    SORT result BY errors DESCENDING typed ASCENDING field ASCENDING.
+    IF lines( result ) > 50.
+      DELETE result FROM 51 TO lines( result ).
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD get_input_errors.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        app         TYPE c LENGTH 30,
+        http_status TYPE i,
+        req_body    TYPE string,
+        res_body    TYPE string,
+      END OF ty_s_row.
+    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_exchange TYPE ty_t_exchange.
+    DATA lv_from TYPE c LENGTH 8.
+
+    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
+    TRY.
+        SELECT app, http_status, req_body, res_body FROM z2ui5_t_ck_wir
+          WHERE utc_day >= @lv_from
+          ORDER BY timestampl DESCENDING
+          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+          UP TO @c_max_read ROWS.
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    result-records = lines( lt_rows ).
+    result-check_capped = xsdbool( result-records >= c_max_read ).
+
+    LOOP AT lt_rows INTO DATA(ls_row).
+      APPEND VALUE #( app         = ls_row-app
+                      request     = ls_row-req_body
+                      response    = ls_row-res_body
+                      http_status = ls_row-http_status ) TO lt_exchange.
+    ENDLOOP.
+    result-t_input = input_errors_of( lt_exchange ).
+
+  ENDMETHOD.
+
   METHOD popup_parts.
 
     DATA lt_name TYPE string_table.
@@ -1758,6 +1960,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_failed TYPE abap_bool.
     DATA lv_check_leaf TYPE abap_bool.
     DATA lv_check_repeated TYPE abap_bool.
+    DATA lv_share TYPE i.
 
     LOOP AT it_record INTO ls_record.
       lv_index = sy-tabix.
@@ -1912,7 +2115,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDLOOP.
 
     LOOP AT result ASSIGNING <variant>.
-      <variant>-share = |{ <variant>-runs * 100 / lv_total } %|.
+      " DIV into an integer - see input_errors_of
+      lv_share = <variant>-runs * 100 DIV lv_total.
+      <variant>-share = |{ lv_share } %|.
       <variant>-state = COND #( WHEN <variant>-failed > 0 THEN `Error`
                                 WHEN <variant>-path CS `(failed)` THEN `Warning`
                                 ELSE `None` ).
