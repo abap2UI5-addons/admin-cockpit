@@ -1,4 +1,4 @@
-"! <p class="shorttext synchronized">admin cockpit - recorder</p>
+"! <p class="shorttext synchronized">admin cockpit - request recorder</p>
 "!
 "! Records every roundtrip as it went over the wire: the request the browser
 "! sent (event, event arguments, the values the user changed) and the
