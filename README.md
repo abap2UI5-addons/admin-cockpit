@@ -12,13 +12,13 @@ app, installed with abapGit next to abap2UI5.
 |---|---|---|
 | **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
 | **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
-| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
+| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
-| **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
+| **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
 | **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
 | **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
 | **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/agent)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
-| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, test notifications) | - |
+| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened sessions, test notifications) | - |
 
 The tabs marked *-* work **without any logging** - install, open, read the
 traffic light. That is the quick win.
@@ -183,7 +183,10 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 
 The draft table of abap2UI5 itself carries the user name (the framework binds
 a draft to its owner). The cockpit shows its per-user statistics as "User 1,
-User 2, ..." unless user tracking is `NAME`.
+User 2, ..." unless user tracking is `NAME`, and the session list under
+today's pseudonym. The *content* of a session - the app's data after every
+step - is business data of that user: administrators only, every opened
+session in the change log (see [Sessions](#sessions---step-through-what-a-user-did)).
 
 **Germany (and similar elsewhere):** recording which employee used which
 application, when and how fast, is a technical device suitable for monitoring
@@ -279,6 +282,54 @@ the change log before it starts. Limits, all shown in the dialog:
 
 The simulator is called dynamically and named only in literals: the cockpit
 activates without it and simply does not offer the button.
+
+## Sessions - step through what a user did
+
+Every POST roundtrip of abap2UI5 saves the app as it is afterwards into a new
+draft and names the draft it started from (`ID_PREV`), across app navigations
+too. Followed backwards, the drafts of one browser session form a chain - the
+**session**. The Drafts & Housekeeping tab lists the sessions in the draft
+table (**Show sessions**, newest activity first, searchable by app or user):
+user, app, number of steps, first and last step, duration.
+
+Open one and the viewer shows it **step by step**:
+
+- **First / Back / Next / Last**, or select any step in the list - time,
+  seconds since the step before, app, size, and notes such as *navigated to
+  ZCL_...*, *continues step 3* (browser back or a second window) or *the steps
+  before it expired*;
+- the **fields of the app** after that step - every attribute of the app
+  object and the objects it references, nested structures and table rows as
+  paths (`ZCL_ORDER-MT_ITEMS[2]-MATNR`), references as an arrow to the class;
+- **what changed** since the step it continues - new, changed (with the value
+  before) and removed, highlighted; *Only changes* (default) hides the rest,
+  *Framework objects* adds abap2UI5's own container, the search narrows by
+  field or value.
+
+From an error, **Open session** in the error detail jumps straight to the step
+the failing roundtrip started from - the screen the user was on, with the
+values the user had typed. That complements [Reproduce](#reproduce-an-error),
+which replays the event but not the values.
+
+What it is and is not:
+
+- **The state after each roundtrip, not the event.** A step is the app's
+  attributes once the roundtrip finished; the event the user pressed is not in
+  the draft (the Errors tab has it for failed roundtrips).
+- **As long as the drafts live** - 4 hours by default, see the expiry on the
+  tab. Sticky (stateful) apps write no drafts while sticky.
+- **Read as text.** The serialized state (asXML) is taken apart without
+  loading a class from it - an app class that no longer activates cannot break
+  the cockpit. Generic data references of an app are kept in the framework's
+  own objects; *Framework objects* shows them.
+- **Limits:** the newest 50,000 drafts, 100 sessions per list, the newest 500
+  steps of a session, 1,000 fields per step (narrow them with the search).
+
+**Drafts hold business data of other users.** The sessions are offered to
+administrators only (`CHANGE`), and every opened session is written to the
+change log, with the session's first draft, its app and the user as the list
+shows it. Agree it with your works council like the rest of the monitoring
+(see [Privacy](#privacy-and-the-works-council)).
 
 ## Agents
 

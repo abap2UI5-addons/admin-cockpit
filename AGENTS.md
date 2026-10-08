@@ -19,7 +19,7 @@ README.md is the user documentation; keep it in step with every change.
 
 | Path | |
 |---|---|
-| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_CK_ALR`); ABAP Unit tests in `*.clas.testclasses.abap` |
+| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_CK_ALR`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
 | `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `publish-standalone` |
