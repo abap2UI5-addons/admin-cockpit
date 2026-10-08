@@ -69,7 +69,7 @@ Once your abap2UI5 has the monitor hook, switch the abapGit repository from
 
 | Package | Content | Activates on |
 |---|---|---|
-| `src/01` | The app, every tab, the tables, settings, authorization, housekeeping, the recorder `z2ui5_cl_cockpit_rec` | every abap2UI5 release with `z2ui5_cl_ui5_view_builder` |
+| `src/01` | The app, every tab, the tables, settings, authorization, housekeeping, the recorder `z2ui5_cl_cockpit_rec`, the request recorder `z2ui5_cl_cockpit_wire` | every abap2UI5 release with `z2ui5_cl_ui5_view_builder` |
 | `src/02` | `z2ui5_cl_cockpit_monitor` - the one class that implements the core's `z2ui5_if_ui5_monitor` and forwards to the recorder | abap2UI5 with the monitor hook |
 
 The split sits exactly at the dependency: nothing in `src/01` names the
@@ -167,6 +167,7 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 | Alert: p95 from | 2000 ms | `0` switches the rule off |
 | Alert: only with at least | 20 roundtrips | per app, and over all apps |
 | Alert: window | running UTC hour plus 1 | `0` to `23` hours before the running one |
+| Recorder retention | 2 days | `0` stops the [recorder](#recorder---replay-what-the-user-saw) |
 
 ## Privacy and the works council
 
@@ -187,6 +188,8 @@ User 2, ..." unless user tracking is `NAME`, and the session list under
 today's pseudonym. The *content* of a session - the app's data after every
 step - is business data of that user: administrators only, every opened
 session in the change log (see [Sessions](#sessions---step-through-what-a-user-did)).
+The [recorder](#recorder---replay-what-the-user-saw), once added to the handler,
+stores even more: what users typed and saw, for 2 days by default.
 
 **Germany (and similar elsewhere):** recording which employee used which
 application, when and how fast, is a technical device suitable for monitoring
@@ -380,7 +383,8 @@ What it is and is not:
 
 - **The state after each roundtrip, not the event.** A step is the app's
   attributes once the roundtrip finished; the event the user pressed is not in
-  the draft (the Errors tab has it for failed roundtrips).
+  the draft (the Errors tab has it for failed roundtrips; the
+  [recorder](#recorder---replay-what-the-user-saw) adds it to every step).
 - **As long as the drafts live** - 4 hours by default, see the expiry on the
   tab. Sticky (stateful) apps write no drafts while sticky.
 - **Read as text.** The serialized state (asXML) is taken apart without
@@ -397,6 +401,58 @@ session's first draft, its app and the user as the list shows it; so is every
 search in the drafts (`DRAFTS_SEARCH`) and every failure analysis
 (`ERROR_ANALYSIS`). Agree it with your works council like the rest of the monitoring
 (see [Privacy](#privacy-and-the-works-council)).
+
+## Recorder - replay what the user saw
+
+The drafts show what an app *held* after each step. What the user *saw* and
+*did* - the screen, the button, the error box - never reaches a draft. The
+recorder takes it where it passes anyway: the HTTP handler. One line after
+the framework's own call stores the complete request and response of every
+roundtrip, untouched:
+
+```abap
+" Standard ABAP - your ICF handler
+z2ui5_cl_ui5_http_handler=>run( server ).
+z2ui5_cl_cockpit_wire=>record( server ).
+
+" ABAP Cloud - your if_http_service_extension~handle_request
+z2ui5_cl_ui5_http_handler=>run( req = request res = response ).
+z2ui5_cl_cockpit_wire=>record( req = request res = response ).
+```
+
+It needs no abap2UI5 API beyond the handler (the bodies are read as they
+went over the wire, and taken apart only when someone looks), never raises,
+records only POST roundtrips, and never commits inside a sticky app's LUW -
+those wait in the roll area like the monitor's entries.
+
+What it gives you, in the session viewer:
+
+- **"User did" per step** - the control pressed, by its label (`pressed
+  Button "Save" (SAVE)`), and the fields typed before it (`typed Input
+  "Customer" = 4712`).
+- **"Shown" per step** - the message boxes, toasts and popups the response
+  opened, error boxes highlighted.
+- **Screen** - the screen of the step rebuilt from the recorded view XML and
+  the model as the responses and inputs left it: the values in the fields,
+  the rows of the tables (50 each), the popup on top with its buttons. Every
+  event handler is emptied, a press in the copy fires nothing. *Previous
+  screen* / *Next screen* step through the session like a film, each screen
+  with what the user did on it next - or that the next click failed.
+- **Request / Response** - the raw bodies, the inputs, the view XML, and for
+  a step whose next click ended in an HTTP 500 the failed request itself.
+
+The Errors tab adds **"Messages users saw"**: the error and warning boxes and
+toasts of the last days, per app and text, how often and for how many users.
+
+**Retention:** 2 days by default (Settings, *Recorder retention*; `0` stops
+recording, the line in the handler can stay). The Installation tab shows
+whether it records and warns above 7 days. Housekeeping purges it.
+
+**Privacy:** the bodies are the business data the user typed and saw -
+everything a screen shows. Recordings are read by administrators only and only
+inside a session that is already written to the change log; the user is
+stored under the pseudonym unless user tracking is `NAME`. Keep the retention
+short and agree it with your works council like the rest of the monitoring.
 
 ## Agents
 

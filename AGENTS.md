@@ -19,7 +19,7 @@ README.md is the user documentation; keep it in step with every change.
 
 | Path | |
 |---|---|
-| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_CK_ALR`); ABAP Unit tests in `*.clas.testclasses.abap` |
+| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), the request/response recorder and the screen playback (`_wire`, table `Z2UI5_T_CK_WIR`, called from the customer's ICF handler, never from the monitor), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_CK_ALR`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
 | `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `publish-standalone` |
@@ -76,6 +76,24 @@ recorder keeps - do not loosen them:
 - **Overflow-safe**: sum columns are `DEC 15` (`INT8` does not exist below
   7.50), increments are saturated before they are written (`sum_inc`), the
   read side adds up in `p LENGTH 16` and saturates to `INT4` for display.
+
+## The request recorder (`_wire`)
+
+`z2ui5_cl_cockpit_wire=>record( )` runs in the customer's ICF handler, right
+after `z2ui5_cl_ui5_http_handler=>run( )` - every abap2UI5 app passes it. It
+keeps the monitor's rules (never raise, commit only outside a sticky LUW,
+buffer otherwise, pseudonym unless `NAME`) and adds its own:
+
+- **Store the bodies untouched, take them apart when read.** The wire format
+  (`S_FRONT`, `S_ACTION`, `T_SYSTEM`/`T_CUSTOM`, `VIEW_SLOTS`, `.eB([...])`)
+  is the framework's, not API: read it by name, tolerate what is missing,
+  never let a body that does not parse break a screen.
+- **No extension of the abap2UI5 API for it** - the handler call is all it
+  needs.
+- **The playback fires nothing**: every `=".e..."` handler in a recorded view
+  is emptied, every bound value goes in escaped (`xml_escape`, braces
+  included). Keep both when touching `screen_of`.
+- Recordings are read by administrators only, inside a logged session.
 
 ## Framework internals only by name
 

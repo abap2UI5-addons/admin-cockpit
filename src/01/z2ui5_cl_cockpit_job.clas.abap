@@ -23,6 +23,7 @@ CLASS z2ui5_cl_cockpit_job DEFINITION PUBLIC FINAL CREATE PUBLIC.
         act_deleted    TYPE i,
         aud_deleted    TYPE i,
         alr_deleted    TYPE i,
+        wir_deleted    TYPE i,
         alerts         TYPE z2ui5_cl_cockpit_alert=>ty_s_run,
         message        TYPE string,
       END OF ty_s_result.
@@ -59,7 +60,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
         result-drafts_deleted = z2ui5_cl_cockpit_draft=>delete_expired( ).
         result-message = |{ result-drafts_deleted } expired drafts deleted, | &&
                          |{ result-log_deleted } log rows, { result-agg_deleted } aggregate rows, | &&
-                         |{ result-usr_deleted } user rows, { result-act_deleted } activity rows past retention|.
+                         |{ result-usr_deleted } user rows, { result-act_deleted } activity rows, | &&
+                         |{ result-wir_deleted } recorded roundtrips past retention|.
       CATCH cx_root INTO DATA(lx).
         result-message = |Drafts not deleted: { lx->get_text( ) }|.
     ENDTRY.
@@ -100,6 +102,11 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     " and so does the alert history
     DELETE FROM z2ui5_t_ck_alr WHERE raised < @lv_aud_ts.
     result-alr_deleted = sy-dbcnt.
+    " the recorder's raw requests and responses are the biggest and the most
+    " sensitive rows - their own, short retention; 0 days deletes them all
+    DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-wire_days * 86400 ).
+    DELETE FROM z2ui5_t_ck_wir WHERE timestampl < @lv_wir_ts.
+    result-wir_deleted = sy-dbcnt.
 
   ENDMETHOD.
 

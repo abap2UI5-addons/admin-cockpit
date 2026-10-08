@@ -101,6 +101,11 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA stuck_text     TYPE string.
     DATA stuck_shown    TYPE abap_bool.
     DATA business_text  TYPE string.
+    DATA step_has_wire  TYPE abap_bool.
+    DATA s_wire         TYPE z2ui5_cl_cockpit_wire=>ty_s_detail.
+    DATA s_wire_messages TYPE z2ui5_cl_cockpit_wire=>ty_s_messages.
+    DATA wire_messages_text TYPE string.
+    DATA wire_messages_shown TYPE abap_bool.
     DATA business_shown TYPE abap_bool.
     DATA t_history      TYPE z2ui5_cl_cockpit_session=>ty_t_history.
     DATA history_title  TYPE string.
@@ -134,6 +139,16 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS popup_confirm_reproduce.
     METHODS popup_reproduce.
     METHODS popup_session.
+
+    "! The screen of the current step as the user saw it, rebuilt from the
+    "! recorder - with what the user did there and what came next.
+    METHODS popup_screen.
+
+    "! The recorded request and response of the current step.
+    "! @parameter check_failed | the failed click after the step instead
+    METHODS popup_wire
+      IMPORTING
+        check_failed TYPE abap_bool DEFAULT abap_false.
     METHODS sessions_load.
 
     "! Open a session in the step viewer - logged, administrators only.
@@ -707,6 +722,53 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{FIRST_SEEN}`
                     )->tag( `Text`
                         )->a( n = `text` v = `{LAST_SEEN}` ).
+
+    errors->ele( `Table`
+        )->a( n = `headerText`       v = client->_bind( wire_messages_text )
+        )->a( n = `items`            v = client->_bind( s_wire_messages-t_message )
+        )->a( n = `visible`          v = client->_bind( wire_messages_shown )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `30`
+        )->a( n = `noDataText`       v = `No message box, toast or popup recorded in the period.`
+        )->a( n = `class`            v = `sapUiMediumMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Count`
+                )->a( n = `width`  v = `5rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Users`
+                )->a( n = `width`  v = `5rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Shown as`
+            )->tag( `Column`
+                )->a( n = `header` v = `Text`
+                )->a( n = `width`  v = `40%`
+            )->tag( `Column`
+                )->a( n = `header` v = `Last shown (UTC)`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->a( n = `highlight` v = `{STATE}`
+
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{COUNT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{USERS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{APP}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{KIND} {TYPE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TEXT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LAST}` ).
 
     " --- Performance ----------------------------------------------------
     DATA(perf) = bar->ele( `IconTabFilter`
@@ -1772,6 +1834,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 )->a( n = `type`    v = `Number`
                 )->a( n = `enabled` v = client->_bind( s_head-can_change )
             )->tag( `Label`
+                )->a( n = `text` v = `Recorder: keep requests and responses (days, 0 = off)`
+            )->tag( `Input`
+                )->a( n = `value`   v = client->_bind( s_set-wire_days )
+                )->a( n = `type`    v = `Number`
+                )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->tag( `Label`
             )->tag( `Button`
                 )->a( n = `text`    v = `Save settings`
                 )->a( n = `type`    v = `Emphasized`
@@ -2517,6 +2585,18 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `placeholder` v = `Field or value`
             )->a( n = `width`       v = `14rem`
         )->tag( `Button`
+            )->a( n = `text`    v = `Screen`
+            )->a( n = `icon`    v = `sap-icon://display`
+            )->a( n = `enabled` v = client->_bind( step_has_wire )
+            )->a( n = `tooltip` v = `The screen of this step as the user saw it, from the recorder - step through it`
+            )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
+        )->tag( `Button`
+            )->a( n = `text`    v = `Request / Response`
+            )->a( n = `icon`    v = `sap-icon://source-code`
+            )->a( n = `enabled` v = client->_bind( step_has_wire )
+            )->a( n = `tooltip` v = `What went over the wire for this step, from the recorder`
+            )->a( n = `press`   v = client->_event( `STEP_WIRE` )
+        )->tag( `Button`
             )->a( n = `text`    v = `Export`
             )->a( n = `icon`    v = `sap-icon://download`
             )->a( n = `tooltip` v = `The whole session as a text file - every step and what changed, to attach to a ticket`
@@ -2629,8 +2709,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 )->tag( `Column`
                     )->a( n = `header` v = `App`
                 )->tag( `Column`
-                    )->a( n = `header` v = `Event`
-                    )->a( n = `width`  v = `8rem`
+                    )->a( n = `header` v = `User did`
+                )->tag( `Column`
+                    )->a( n = `header` v = `Shown`
                 )->tag( `Column`
                     )->a( n = `header` v = `Changes`
                     )->a( n = `width`  v = `5rem`
@@ -2662,7 +2743,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->tag( `Text`
                             )->a( n = `text` v = `{APP}`
                         )->tag( `Text`
-                            )->a( n = `text` v = `{EVENT}`
+                            )->a( n = `text` v = `{DID}`
+                        )->tag( `ObjectStatus`
+                            )->a( n = `text`  v = `{SHOWN}`
+                            )->a( n = `state` v = `{SHOWN_STATE}`
                         )->tag( `Text`
                             )->a( n = `text` v = `{CHANGES}`
                         )->tag( `Text`
@@ -2731,85 +2815,286 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD sessions_load.
+  METHOD popup_screen.
 
-    s_sessions = z2ui5_cl_cockpit_session=>get_sessions( search       = session_search
-                                                         check_errors = session_errors ).
-    sessions_shown = abap_true.
-    IF s_sessions-check_readable = abap_false.
-      sessions_text = |The draft table could not be read: { s_sessions-error }|.
+    DATA lt_id TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+    DATA ls_screen TYPE z2ui5_cl_cockpit_wire=>ty_s_screen.
+    DATA lv_next TYPE string.
+    DATA lv_popup TYPE string.
+    DATA lv_buttons TYPE string.
+
+    IF t_steps IS INITIAL.
       RETURN.
     ENDIF.
-    sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }| &&
+    DATA(ls_step) = t_steps[ step_index ].
+
+    " the recordings on the way to this step - not those of a branch beside it
+    IF ls_step-wire_id IS INITIAL.
+      ls_screen-error = `This step was not recorded - the recorder was off, or it began later.`.
+    ELSE.
+      DATA(lv_at) = step_index.
+      WHILE lv_at > 0.
+        DATA(ls_on) = t_steps[ lv_at ].
+        IF ls_on-wire_id IS NOT INITIAL.
+          INSERT ls_on-wire_id INTO lt_id INDEX 1.
+        ENDIF.
+        lv_at = COND #( WHEN ls_on-follows < lv_at THEN ls_on-follows ELSE 0 ).
+      ENDWHILE.
+      ls_screen = z2ui5_cl_cockpit_wire=>get_screen( lt_id ).
+    ENDIF.
+
+    " what the user did on this screen is what led to the step after it
+    LOOP AT t_steps INTO DATA(ls_after) WHERE follows = step_index. "#EC CI_SORTSEQ
+      lv_next = ls_after-did.
+      EXIT.
+    ENDLOOP.
+
+    DATA(lv_text) = |Step { step_index } of { lines( t_steps ) }, { ls_step-time } UTC.|.
+    IF ls_step-did IS NOT INITIAL.
+      lv_text = |{ lv_text } To get here the user { ls_step-did }.|.
+    ENDIF.
+    IF ls_step-shown IS NOT INITIAL.
+      lv_text = |{ lv_text } Shown: { ls_step-shown }.|.
+    ENDIF.
+    IF lv_next IS NOT INITIAL.
+      lv_text = |{ lv_text } On this screen the user then { lv_next }.|.
+    ELSEIF ls_step-wire_fail_id IS NOT INITIAL.
+      lv_text = |{ lv_text } The next click failed - its request is under Request / Response.|.
+    ELSEIF step_index = lines( t_steps ).
+      lv_text = |{ lv_text } The session ends here.|.
+    ENDIF.
+    DATA(lv_type) = COND string( WHEN ls_step-shown_state = `Error` OR ls_step-wire_fail_id IS NOT INITIAL
+                                 THEN `Error`
+                                 WHEN ls_step-shown_state = `Warning` THEN `Warning`
+                                 ELSE `Information` ).
+
+    " written by hand: the recorded view comes with namespaces of its own,
+    " the frame uses prefixes it cannot have taken
+    DATA(lv_xml) = |<ckc:FragmentDefinition xmlns:ckc="sap.ui.core" xmlns:ckm="sap.m"{ ls_screen-xmlns }>| &&
+                   |<ckm:Dialog title="{ z2ui5_cl_cockpit_wire=>xml_escape(
+                                             |Screen of step { step_index } - { ls_step-app }| ) }"| &&
+                   | contentWidth="95%" contentHeight="90%" resizable="true" draggable="true">| &&
+                   |<ckm:content>| &&
+                   |<ckm:MessageStrip text="{ z2ui5_cl_cockpit_wire=>xml_escape( lv_text ) }" type="{ lv_type }"| &&
+                   | showIcon="true" class="sapUiSmallMargin"/>|.
+
+    IF ls_screen-error IS NOT INITIAL.
+      lv_xml = |{ lv_xml }<ckm:MessageStrip text="{ z2ui5_cl_cockpit_wire=>xml_escape( ls_screen-error ) }"| &&
+               | type="Warning" showIcon="true" class="sapUiSmallMargin"/>|.
+    ELSE.
+      IF ls_screen-popup IS NOT INITIAL.
+        z2ui5_cl_cockpit_wire=>popup_parts( EXPORTING popup   = ls_screen-popup
+                                            IMPORTING content = lv_popup
+                                                      buttons = lv_buttons ).
+        lv_xml = |{ lv_xml }<ckm:Panel headerText="{ z2ui5_cl_cockpit_wire=>xml_escape(
+                                                         |Popup on top: { ls_screen-popup_title }| ) }"| &&
+                 | class="sapUiSmallMargin"><ckm:content>{ lv_popup }|.
+        IF lv_buttons IS NOT INITIAL.
+          lv_xml = |{ lv_xml }<ckm:OverflowToolbar><ckm:content><ckm:ToolbarSpacer/>{ lv_buttons }| &&
+                   |</ckm:content></ckm:OverflowToolbar>|.
+        ENDIF.
+        lv_xml = |{ lv_xml }</ckm:content></ckm:Panel>|.
+      ENDIF.
+      lv_xml = |{ lv_xml }<ckm:ScrollContainer height="65vh" width="100%" vertical="true">| &&
+               |{ ls_screen-content }</ckm:ScrollContainer>|.
+    ENDIF.
+
+    lv_xml = |{ lv_xml }</ckm:content><ckm:buttons>| &&
+             |<ckm:Button text="Previous screen" icon="sap-icon://navigation-left-arrow"| &&
+             | enabled="{ COND #( WHEN step_index > 1 THEN `true` ELSE `false` ) }"| &&
+             | press="{ client->_event( `SCREEN_PREV` ) }"/>| &&
+             |<ckm:Button text="Next screen" icon="sap-icon://navigation-right-arrow" iconFirst="false"| &&
+             | enabled="{ COND #( WHEN step_index < lines( t_steps ) THEN `true` ELSE `false` ) }"| &&
+             | press="{ client->_event( `SCREEN_NEXT` ) }"/>| &&
+             |<ckm:Button text="Request / Response" icon="sap-icon://source-code"| &&
+             | enabled="{ COND #( WHEN ls_step-wire_id IS NOT INITIAL OR ls_step-wire_fail_id IS NOT INITIAL
+                                  THEN `true` ELSE `false` ) }"| &&
+             | press="{ client->_event( `STEP_WIRE` ) }"/>| &&
+             |<ckm:Button text="Back to the steps" type="Emphasized"| &&
+             | press="{ client->_event( `SCREEN_BACK` ) }"/>| &&
+             |</ckm:buttons></ckm:Dialog></ckc:FragmentDefinition>|.
+
+    client->popup_display( lv_xml ).
+
+  ENDMETHOD.
+
+  METHOD popup_wire.
+
+    IF t_steps IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(ls_step) = t_steps[ step_index ].
+    DATA(lv_id) = COND string( WHEN check_failed = abap_true OR ls_step-wire_id IS INITIAL
+                               THEN ls_step-wire_fail_id
+                               ELSE ls_step-wire_id ).
+    s_wire = z2ui5_cl_cockpit_wire=>get_detail( lv_id ).
+
+    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+        )->ele( n = `FragmentDefinition` ns = `core`
+            )->a( n = `xmlns`      v = `sap.m`
+            )->a( n = `xmlns:core` v = `sap.ui.core` ).
+
+    DATA(dialog) = popup->ele( `Dialog`
+            )->a( n = `title`         t = |{ COND #( WHEN lv_id = ls_step-wire_fail_id THEN `Failed click after step`
+                                                ELSE `Request and response of step` ) } { step_index }|
+            )->a( n = `contentWidth`  v = `90%`
+            )->a( n = `contentHeight` v = `85%`
+            )->a( n = `resizable`     v = `true`
+            )->a( n = `draggable`     v = `true` ).
+
+        DATA(content) = dialog->ele( `content`
+            )->ele( `VBox`
+                )->a( n = `class` v = `sapUiSmallMargin`
+                )->ele( `items` ).
+
+        IF s_wire-error IS NOT INITIAL.
+          content->tag( `MessageStrip`
+                    )->a( n = `text`     v = client->_bind( s_wire-error )
+                    )->a( n = `type`     v = `Error`
+                    )->a( n = `showIcon` v = `true` ).
+              ELSE.
+                content->tag( `MessageStrip`
+                    )->a( n = `text`     t = |{ s_wire-time } UTC - { s_wire-app } - event { s_wire-event } - | &&
+                                   |HTTP { s_wire-http_status }|
+                    )->a( n = `type`     v = COND string( WHEN s_wire-http_status >= 500 THEN `Error` ELSE `Information` )
+                    )->a( n = `showIcon` v = `true` ).
+              ENDIF.
+
+              content->tag( `Label`
+                    )->a( n = `text` v = `What the user saw`
+                    )->tag( `TextArea`
+                        )->a( n = `value`    v = client->_bind( s_wire-shown )
+                        )->a( n = `editable` v = `false`
+                        )->a( n = `width`    v = `100%`
+                        )->a( n = `rows`     v = `2`
+                    )->tag( `Label`
+                        )->a( n = `text` v = `What the user typed and sent`
+                    )->tag( `TextArea`
+                        )->a( n = `value`    v = client->_bind( s_wire-input )
+                        )->a( n = `editable` v = `false`
+                        )->a( n = `width`    v = `100%`
+                        )->a( n = `rows`     v = `4`
+                    )->tag( `Label`
+                        )->a( n = `text` v = `View XML of the response`
+                    )->tag( `TextArea`
+                        )->a( n = `value`    v = client->_bind( s_wire-view_xml )
+                        )->a( n = `editable` v = `false`
+                        )->a( n = `width`    v = `100%`
+                        )->a( n = `rows`     v = `6`
+                    )->tag( `Label`
+                        )->a( n = `text` v = `Request`
+                    )->tag( `TextArea`
+                        )->a( n = `value`    v = client->_bind( s_wire-request )
+                        )->a( n = `editable` v = `false`
+                        )->a( n = `width`    v = `100%`
+                        )->a( n = `rows`     v = `6`
+                    )->tag( `Label`
+                        )->a( n = `text` v = `Response`
+                    )->tag( `TextArea`
+                        )->a( n = `value`    v = client->_bind( s_wire-response )
+                        )->a( n = `editable` v = `false`
+                        )->a( n = `width`    v = `100%`
+                        )->a( n = `rows`     v = `10` ).
+
+                    dialog->ele( `buttons`
+                    )->tag( `Button`
+                        )->a( n = `text`    v = `Failed click after this step`
+                        )->a( n = `icon`    v = `sap-icon://error`
+                        )->a( n = `visible` b = xsdbool( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id )
+                        )->a( n = `press`   v = client->_event( `WIRE_FAILED` )
+                    )->tag( `Button`
+                        )->a( n = `text`    v = `Screen`
+                        )->a( n = `icon`    v = `sap-icon://display`
+                        )->a( n = `enabled` b = xsdbool( ls_step-wire_id IS NOT INITIAL )
+                        )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
+                    )->tag( `Button`
+                        )->a( n = `text`  v = `Back to the steps`
+                        )->a( n = `type`  v = `Emphasized`
+                        )->a( n = `press` v = client->_event( `SCREEN_BACK` ) ).
+
+                client->popup_display( popup->stringify( ) ).
+
+              ENDMETHOD.
+
+              METHOD sessions_load.
+
+                s_sessions = z2ui5_cl_cockpit_session=>get_sessions( search       = session_search
+                                                                     check_errors = session_errors ).
+                sessions_shown = abap_true.
+                IF s_sessions-check_readable = abap_false.
+                  sessions_text = |The draft table could not be read: { s_sessions-error }|.
+                  RETURN.
+                ENDIF.
+                sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }| &&
                     |{ COND #( WHEN session_errors = abap_true THEN ` with a failed roundtrip` ) }, newest | &&
                     |activity first{ COND #( WHEN session_search IS NOT INITIAL
                                              THEN |, matching "{ session_search }"| ) }| &&
                     |{ COND #( WHEN s_sessions-check_capped = abap_true
                                THEN | - read from the newest { z2ui5_cl_cockpit_session=>c_max_nodes } drafts| ) }|.
 
-  ENDMETHOD.
+              ENDMETHOD.
 
-  METHOD session_open.
+              METHOD session_open.
 
-    DATA lv_index TYPE i.
+                DATA lv_index TYPE i.
 
-    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( id ).
-    IF ls_steps-error IS NOT INITIAL.
-      client->message_box_display( text = |The session could not be read: { ls_steps-error }|
-                                   type = `error` ).
-      RETURN.
-    ENDIF.
-    IF ls_steps-t_step IS INITIAL.
-      client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
-      RETURN.
-    ENDIF.
+                DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( id ).
+                IF ls_steps-error IS NOT INITIAL.
+                  client->message_box_display( text = |The session could not be read: { ls_steps-error }|
+                                               type = `error` ).
+                  RETURN.
+                ENDIF.
+                IF ls_steps-t_step IS INITIAL.
+                  client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
+                  RETURN.
+                ENDIF.
 
-    t_steps = ls_steps-t_step.
-    s_session = VALUE #( s_sessions-t_session[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
-    IF s_session IS INITIAL.
-      s_session = VALUE #( id    = id
-                           user  = COND #( WHEN user IS NOT INITIAL THEN user ELSE `(unknown)` )
-                           app   = t_steps[ lines( t_steps ) ]-app
-                           steps = lines( t_steps ) ).
-    ENDIF.
+                t_steps = ls_steps-t_step.
+                s_session = VALUE #( s_sessions-t_session[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
+                IF s_session IS INITIAL.
+                  s_session = VALUE #( id    = id
+                                       user  = COND #( WHEN user IS NOT INITIAL THEN user ELSE `(unknown)` )
+                                       app   = t_steps[ lines( t_steps ) ]-app
+                                       steps = lines( t_steps ) ).
+                ENDIF.
 
-    " the change log first, committed - the session shows other users' data
-    z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-session
-                                text   = |session { id } opened: { lines( t_steps ) } steps, { s_session-app }, | &&
+                " the change log first, committed - the session shows other users' data
+                z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-session
+                                            text   = |session { id } opened: { lines( t_steps ) } steps, { s_session-app }, | &&
                                          |user { s_session-user }| ).
-    COMMIT WORK.
+                COMMIT WORK.
 
-    lv_index = lines( t_steps ).
-    IF draft IS NOT INITIAL.
-      LOOP AT t_steps INTO DATA(ls_step) WHERE id = draft. "#EC CI_SORTSEQ
-        lv_index = ls_step-step.
-      ENDLOOP.
-    ENDIF.
-    step_search = search.
-    IF search IS NOT INITIAL.
-      step_changes = abap_false.
-    ENDIF.
-    CLEAR step_base.
-    CLEAR t_history.
-    CLEAR history_shown.
-    growth_check( ).
-    stuck_check( ).
-    CLEAR business_text.
-    LOOP AT ls_steps-t_business INTO DATA(ls_business).
-      IF sy-tabix > 8.
-        business_text = |{ business_text } (+{ lines( ls_steps-t_business ) - 8 } more)|.
-        EXIT.
-      ENDIF.
-      business_text = |{ business_text }{ COND #( WHEN business_text IS NOT INITIAL THEN `, ` ) }| &&
+                lv_index = lines( t_steps ).
+                IF draft IS NOT INITIAL.
+                  LOOP AT t_steps INTO DATA(ls_step) WHERE id = draft. "#EC CI_SORTSEQ
+                    lv_index = ls_step-step.
+                  ENDLOOP.
+                ENDIF.
+                step_search = search.
+                IF search IS NOT INITIAL.
+                  step_changes = abap_false.
+                ENDIF.
+                CLEAR step_base.
+                CLEAR t_history.
+                CLEAR history_shown.
+                growth_check( ).
+                stuck_check( ).
+                CLEAR business_text.
+                LOOP AT ls_steps-t_business INTO DATA(ls_business).
+                  IF sy-tabix > 8.
+                    business_text = |{ business_text } (+{ lines( ls_steps-t_business ) - 8 } more)|.
+                    EXIT.
+                  ENDIF.
+                  business_text = |{ business_text }{ COND #( WHEN business_text IS NOT INITIAL THEN `, ` ) }| &&
                       |{ ls_business-object } { ls_business-value } (step { ls_business-step })|.
-    ENDLOOP.
-    business_shown = xsdbool( business_text IS NOT INITIAL ).
-    IF business_shown = abap_true.
-      business_text = |Business objects in this session: { business_text }|.
-    ENDIF.
-    step_show( lv_index ).
-    IF ls_steps-check_capped = abap_true.
-      step_info = |Only the newest { z2ui5_cl_cockpit_session=>c_max_steps } steps are shown. { step_info }|.
+                ENDLOOP.
+                business_shown = xsdbool( business_text IS NOT INITIAL ).
+                IF business_shown = abap_true.
+                  business_text = |Business objects in this session: { business_text }|.
+                ENDIF.
+                step_show( lv_index ).
+                IF ls_steps-check_capped = abap_true.
+                  step_info = |Only the newest { z2ui5_cl_cockpit_session=>c_max_steps } steps are shown. { step_info }|.
     ENDIF.
     popup_session( ).
 
@@ -2917,6 +3202,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     step_text = |Step { step_index } of { lines( t_steps ) } - { ls_step-time } UTC|.
     step_can_back = xsdbool( step_index > 1 ).
     step_can_next = xsdbool( step_index < lines( t_steps ) ).
+    step_has_wire = xsdbool( ls_step-wire_id IS NOT INITIAL OR ls_step-wire_fail_id IS NOT INITIAL ).
 
     IF s_step-error IS NOT INITIAL.
       step_strip = `Error`.
@@ -2935,6 +3221,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ENDIF.
     IF ls_step-note IS NOT INITIAL.
       step_info = |{ step_info } ({ ls_step-note })|.
+    ENDIF.
+    IF ls_step-did IS NOT INITIAL.
+      step_info = |{ step_info } User: { ls_step-did }.|.
+    ENDIF.
+    IF ls_step-shown IS NOT INITIAL.
+      step_info = |{ step_info } Shown: { ls_step-shown }.|.
+      IF ls_step-shown_state = `Error`.
+        step_strip = `Warning`.
+      ENDIF.
     ENDIF.
     IF ls_step-monitor IS NOT INITIAL.
       step_info = |{ step_info } Monitor: { ls_step-monitor }.|.
@@ -3330,6 +3625,26 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               load_tab( ).
             ENDIF.
 
+          WHEN `STEP_SCREEN` OR `SCREEN_PREV` OR `SCREEN_NEXT` OR `SCREEN_BACK` OR `STEP_WIRE` OR `WIRE_FAILED`.
+            IF check_change( ) = abap_true.
+              CASE client->get_event( ).
+                WHEN `STEP_SCREEN`.
+                  popup_screen( ).
+                WHEN `SCREEN_PREV`.
+                  step_show( step_index - 1 ).
+                  popup_screen( ).
+                WHEN `SCREEN_NEXT`.
+                  step_show( step_index + 1 ).
+                  popup_screen( ).
+                WHEN `STEP_WIRE`.
+                  popup_wire( ).
+                WHEN `WIRE_FAILED`.
+                  popup_wire( abap_true ).
+                WHEN OTHERS.
+                  popup_session( ).
+              ENDCASE.
+            ENDIF.
+
           WHEN `STEP_FIRST` OR `STEP_BACK` OR `STEP_NEXT` OR `STEP_LAST` OR `STEP_GOTO` OR `STEP_REFRESH`
               OR `STEP_PIN` OR `FIELD_HISTORY` OR `HISTORY_CLOSE`.
             IF check_change( ) = abap_true.
@@ -3408,6 +3723,19 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                        |{ z2ui5_cl_cockpit_setup=>get( )-unused_days } days|.
       WHEN `ERRORS`.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
+        " the texts users saw - administrators only, they hold business data
+        wire_messages_shown = s_head-can_change.
+        IF wire_messages_shown = abap_true.
+          s_wire_messages = z2ui5_cl_cockpit_wire=>get_messages( lv_days ).
+          wire_messages_text = COND #(
+              WHEN s_wire_messages-error IS NOT INITIAL
+              THEN |Messages users saw - the recordings could not be read: { s_wire_messages-error }|
+              WHEN s_wire_messages-records = 0
+              THEN `Messages users saw - nothing recorded. Add z2ui5_cl_cockpit_wire=>record( server ) after ` &&
+                   `abap2UI5 in your ICF handler to record every roundtrip (README, Recorder).`
+              ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&
+                   |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) }| ).
+        ENDIF.
       WHEN `PERF`.
         t_hints = z2ui5_cl_cockpit_stats=>get_hints( lv_days ).
         t_slow  = z2ui5_cl_cockpit_stats=>get_slowest( lv_days ).

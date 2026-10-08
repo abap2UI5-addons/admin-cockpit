@@ -608,6 +608,7 @@ CLASS ltcl_session_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION
     METHODS history_of_a_field FOR TESTING.
     METHODS search_in_drafts FOR TESTING.
     METHODS failures_and_app_objects FOR TESTING.
+    METHODS playback_from_recordings FOR TESTING.
 
     METHODS order
       IMPORTING
@@ -673,6 +674,8 @@ CLASS ltcl_session_db IMPLEMENTATION.
     DELETE FROM (lv_tab) WHERE id LIKE @lv_pattern.
     DATA(lv_app) = CONV z2ui5_t_ck_log-app( c_app ).
     DELETE FROM z2ui5_t_ck_log WHERE app = @lv_app.
+    DATA(lv_wire_app) = CONV z2ui5_t_ck_wir-app( c_app ).
+    DELETE FROM z2ui5_t_ck_wir WHERE app = @lv_wire_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
 
@@ -812,6 +815,62 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                                        path    = `ZCL_ORDER-NO_SUCH_FIELD` ).
     cl_abap_unit_assert=>assert_equals( exp = `(not there)`
                                         act = lt_history[ 3 ]-value ).
+
+  ENDMETHOD.
+
+  METHOD playback_from_recordings.
+
+    " the recorder saw step 2 display the screen and step 3 come from a
+    " press on Save with a customer typed - and answer with an error
+    DATA(lt_wire) = VALUE z2ui5_cl_cockpit_session=>ty_t_id( ).
+    DATA(ls_wire) = VALUE z2ui5_t_ck_wir(
+        id            = `ZZCKUTWS2`
+        timestampl    = `20991231100005.0`
+        utc_day       = `20991231`
+        app           = c_app
+        draft_id      = `ZZCKUT2`
+        draft_id_prev = `ZZCKUT1`
+        http_status   = 200
+        req_body      = `{"S_FRONT":{"ID":"ZZCKUT1"}}`
+        res_body      = `{"S_FRONT":{"ID":"ZZCKUT2","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":{"T_SYSTEM":` &&
+                        `[["VIEW_SLOTS","display","MAIN","<mvc:View xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\">` &&
+                        `<Page title=\"Order\"><Label text=\"Customer\"/><Input value=\"{/MV_CUSTOMER}\"/>` &&
+                        `<Button text=\"Save\" press=\".eB(['SAVE'])\"/></Page></mvc:View>"]]}},` &&
+                        `"MODEL":{"MV_CUSTOMER":"4711"}}` ).
+    INSERT z2ui5_t_ck_wir FROM @ls_wire.
+    APPEND ls_wire-id TO lt_wire.
+    ls_wire = VALUE #( id            = `ZZCKUTWS3`
+                       timestampl    = `20991231100105.0`
+                       utc_day       = `20991231`
+                       app           = c_app
+                       event         = `SAVE`
+                       draft_id      = `ZZCKUT3`
+                       draft_id_prev = `ZZCKUT2`
+                       http_status   = 200
+                       req_body      = `{"S_FRONT":{"ID":"ZZCKUT2","EVENT":"SAVE"},"MODEL":{"MV_CUSTOMER":"4712"}}`
+                       res_body      = `{"S_FRONT":{"ID":"ZZCKUT3","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":` &&
+                                       `{"T_CUSTOM":[["MESSAGE_BOX","error","Customer 4712 is blocked"]]}}}` ).
+    INSERT z2ui5_t_ck_wir FROM @ls_wire.
+    APPEND ls_wire-id TO lt_wire.
+
+    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `ZZCKUTWS3`
+                                        act = ls_steps-t_step[ 3 ]-wire_id ).
+    cl_abap_unit_assert=>assert_equals( exp = `pressed Button "Save" (SAVE), typed Input "Customer" = 4712`
+                                        act = ls_steps-t_step[ 3 ]-did ).
+    cl_abap_unit_assert=>assert_equals( exp = `error box: Customer 4712 is blocked`
+                                        act = ls_steps-t_step[ 3 ]-shown ).
+    cl_abap_unit_assert=>assert_equals( exp = `Error`
+                                        act = ls_steps-t_step[ 3 ]-shown_state ).
+
+    " the screen of step 3: the view of step 2 with the customer the user typed
+    DATA(ls_screen) = z2ui5_cl_cockpit_wire=>get_screen( lt_wire ).
+    cl_abap_unit_assert=>assert_initial( ls_screen-error ).
+    cl_abap_unit_assert=>assert_equals( exp = `Order`
+                                        act = ls_screen-title ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*<Input value="4712"/>*<Button text="Save" press=""/>*`
+                                         act = ls_screen-content ).
 
   ENDMETHOD.
 

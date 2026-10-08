@@ -121,6 +121,14 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " table) that were not there in the step before, and their highlight
         messages       TYPE string,
         messages_state TYPE string,
+        " from the recorder (z2ui5_cl_cockpit_wire), when it is active: what
+        " the user pressed and typed for this step, what the response showed,
+        " the recording that wrote the step and one that failed from it
+        did            TYPE string,
+        shown          TYPE string,
+        shown_state    TYPE string,
+        wire_id        TYPE string,
+        wire_fail_id   TYPE string,
         " the highlight of the row: Information for the step shown
         state   TYPE string,
       END OF ty_s_step.
@@ -636,6 +644,23 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
+    "! What the recorder has for the steps: per step what the user pressed
+    "! and typed - read against the screen the step continues - and what the
+    "! response showed.
+    CLASS-METHODS fill_wire
+      CHANGING
+        ct_step TYPE ty_t_step.
+
+    "! The user's part of a roundtrip as one line: the control pressed and
+    "! the fields typed, named after the controls of the screen.
+    CLASS-METHODS did_of
+      IMPORTING
+        screen        TYPE string
+        event         TYPE string
+        request       TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
+
     "! Add a monitor note to a step, an error outranks a slow roundtrip.
     CLASS-METHODS monitor_add
       IMPORTING
@@ -854,6 +879,11 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         fill_monitor( CHANGING ct_step = result-t_step ).
       CATCH cx_root ##NO_HANDLER.
         " the monitor's log is an extra - the steps stand without it
+    ENDTRY.
+    TRY.
+        fill_wire( CHANGING ct_step = result-t_step ).
+      CATCH cx_root ##NO_HANDLER.
+        " so are the recordings
     ENDTRY.
 
   ENDMETHOD.
@@ -2279,6 +2309,111 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                      CHANGING  cs_step = <step> ).
       ENDIF.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD fill_wire.
+
+    TYPES:
+      BEGIN OF ty_s_screen,
+        step TYPE i,
+        xml  TYPE string,
+      END OF ty_s_screen.
+    DATA lt_id TYPE ty_t_id.
+    DATA lt_screen TYPE HASHED TABLE OF ty_s_screen WITH UNIQUE KEY step.
+    DATA lv_screen TYPE string.
+    DATA lv_request TYPE string.
+    DATA lv_response TYPE string.
+
+    LOOP AT ct_step INTO DATA(ls_step).
+      APPEND ls_step-id TO lt_id.
+    ENDLOOP.
+    DATA(lt_record) = z2ui5_cl_cockpit_wire=>get_records( lt_id ).
+    IF lt_record IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    LOOP AT ct_step ASSIGNING FIELD-SYMBOL(<step>).
+      <step>-shown_state = `None`.
+      " the screen the user saw before this step: the one of the step it continues
+      CLEAR lv_screen.
+      IF <step>-follows > 0.
+        READ TABLE lt_screen INTO DATA(ls_screen) WITH TABLE KEY step = <step>-follows.
+        IF sy-subrc = 0.
+          lv_screen = ls_screen-xml.
+        ENDIF.
+      ENDIF.
+
+      READ TABLE lt_record INTO DATA(ls_record) WITH KEY draft_id = <step>-id. "#EC CI_SORTSEQ
+      IF sy-subrc = 0.
+        <step>-wire_id = ls_record-id.
+        z2ui5_cl_cockpit_wire=>get_bodies( EXPORTING id       = ls_record-id
+                                           IMPORTING request  = lv_request
+                                                     response = lv_response ).
+        <step>-did = did_of( screen  = lv_screen
+                             event   = ls_record-event
+                             request = lv_request ).
+        DATA(lt_shown) = z2ui5_cl_cockpit_wire=>shown_of( lv_response ).
+        <step>-shown = z2ui5_cl_cockpit_wire=>shown_text( lt_shown ).
+        LOOP AT lt_shown INTO DATA(ls_shown) WHERE kind = z2ui5_cl_cockpit_wire=>cs_kind-box. "#EC CI_SORTSEQ
+          DATA(lv_type) = to_lower( ls_shown-type ).
+          <step>-shown_state = SWITCH #( lv_type
+                                         WHEN `error` THEN `Error`
+                                         WHEN `warning` THEN `Warning`
+                                         ELSE <step>-shown_state ).
+        ENDLOOP.
+        LOOP AT z2ui5_cl_cockpit_wire=>views_of( lv_response ) INTO DATA(ls_view) WHERE n = `MAIN`. "#EC CI_SORTSEQ
+          lv_screen = ls_view-v.
+        ENDLOOP.
+      ENDIF.
+      INSERT VALUE #( step = <step>-step
+                      xml  = lv_screen ) INTO TABLE lt_screen.
+
+      " a roundtrip that started here and failed wrote no step - its request
+      " is the user's last attempt
+      LOOP AT lt_record INTO ls_record WHERE draft_id_prev = <step>-id AND http_status >= 500. "#EC CI_SORTSEQ
+        <step>-wire_fail_id = ls_record-id.
+        z2ui5_cl_cockpit_wire=>get_bodies( EXPORTING id      = ls_record-id
+                                           IMPORTING request = lv_request ).
+        <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&
+                      |next click failed: { did_of( screen  = lv_screen
+                                                    event   = ls_record-event
+                                                    request = lv_request ) }|.
+      ENDLOOP.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD did_of.
+
+    DATA lv_typed TYPE string.
+    DATA lv_count TYPE i.
+
+    IF event IS NOT INITIAL.
+      DATA(lv_control) = z2ui5_cl_cockpit_wire=>control_of( xml   = screen
+                                                           event = event ).
+      result = COND #( WHEN lv_control IS NOT INITIAL THEN |pressed { lv_control } ({ event })|
+                       ELSE |event { event }| ).
+    ENDIF.
+    LOOP AT z2ui5_cl_cockpit_wire=>input_of( request ) INTO DATA(ls_input).
+      IF ls_input-path CP `event argument*`.
+        CONTINUE.
+      ENDIF.
+      lv_count = lv_count + 1.
+      IF lv_count > 3.
+        CONTINUE.
+      ENDIF.
+      DATA(lv_field) = z2ui5_cl_cockpit_wire=>field_control_of( xml  = screen
+                                                               path = ls_input-path ).
+      lv_typed = |{ lv_typed }{ COND #( WHEN lv_typed IS NOT INITIAL THEN `, ` ) }| &&
+                 |{ COND #( WHEN lv_field IS NOT INITIAL THEN lv_field ELSE ls_input-path ) } = { cut( ls_input-value ) }|.
+    ENDLOOP.
+    IF lv_count > 3.
+      lv_typed = |{ lv_typed } (+{ lv_count - 3 } more)|.
+    ENDIF.
+    IF lv_typed IS NOT INITIAL.
+      result = |{ result }{ COND #( WHEN result IS NOT INITIAL THEN `, ` ) }typed { lv_typed }|.
+    ENDIF.
 
   ENDMETHOD.
 
