@@ -545,16 +545,22 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       END OF ty_s_users.
     DATA lt_users TYPE STANDARD TABLE OF ty_s_users WITH EMPTY KEY.
     DATA lt_sum TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY utc_day.
+    DATA ls_acc TYPE ty_s_sum.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
+    " a line of a sorted table is never passed to add_sum( ) by field symbol:
+    " its key is write-protected, and a CHANGING parameter bound to it is the
+    " runtime error CX_SY_DYN_CALL_ILLEGAL_TYPE - read, add, modify instead
     LOOP AT select_sums( lv_from ) INTO DATA(ls_row).
-      READ TABLE lt_sum WITH TABLE KEY utc_day = ls_row-utc_day ASSIGNING FIELD-SYMBOL(<sum>).
+      READ TABLE lt_sum WITH TABLE KEY utc_day = ls_row-utc_day INTO ls_acc.
       IF sy-subrc <> 0.
-        INSERT VALUE #( utc_day = ls_row-utc_day ) INTO TABLE lt_sum ASSIGNING <sum>.
+        ls_acc = VALUE #( utc_day = ls_row-utc_day ).
+        INSERT ls_acc INTO TABLE lt_sum.
       ENDIF.
       add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = <sum> ).
+               CHANGING  cs_sum = ls_acc ).
+      MODIFY TABLE lt_sum FROM ls_acc.
     ENDLOOP.
 
     SELECT utc_day, COUNT( DISTINCT user_key ) AS cnt FROM z2ui5_t_ck_usr
@@ -608,21 +614,24 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       END OF ty_s_users.
     DATA lt_users TYPE STANDARD TABLE OF ty_s_users WITH EMPTY KEY.
     DATA lt_sum TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
+    DATA ls_acc TYPE ty_s_sum.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
     LOOP AT select_sums( lv_from ) INTO DATA(ls_row).
-      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app ASSIGNING FIELD-SYMBOL(<sum>).
+      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app INTO ls_acc.
       IF sy-subrc <> 0.
-        INSERT VALUE #( app = ls_row-app ) INTO TABLE lt_sum ASSIGNING <sum>.
+        ls_acc = VALUE #( app = ls_row-app ).
+        INSERT ls_acc INTO TABLE lt_sum.
       ENDIF.
       " the newest day and hour of the group, for "last used"
-      IF ls_row-utc_day > <sum>-utc_day OR ( ls_row-utc_day = <sum>-utc_day AND ls_row-utc_hour > <sum>-utc_hour ).
-        <sum>-utc_day  = ls_row-utc_day.
-        <sum>-utc_hour = ls_row-utc_hour.
+      IF ls_row-utc_day > ls_acc-utc_day OR ( ls_row-utc_day = ls_acc-utc_day AND ls_row-utc_hour > ls_acc-utc_hour ).
+        ls_acc-utc_day  = ls_row-utc_day.
+        ls_acc-utc_hour = ls_row-utc_hour.
       ENDIF.
       add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = <sum> ).
+               CHANGING  cs_sum = ls_acc ).
+      MODIFY TABLE lt_sum FROM ls_acc.
     ENDLOOP.
 
     SELECT utc_day, app, COUNT( * ) AS cnt FROM z2ui5_t_ck_usr
@@ -662,21 +671,24 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
   METHOD get_app_events.
 
     DATA lt_sum TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY event.
+    DATA ls_acc TYPE ty_s_sum.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
     LOOP AT select_sums( from_day = lv_from
                          app      = app ) INTO DATA(ls_row).
-      READ TABLE lt_sum WITH TABLE KEY event = ls_row-event ASSIGNING FIELD-SYMBOL(<sum>).
+      READ TABLE lt_sum WITH TABLE KEY event = ls_row-event INTO ls_acc.
       IF sy-subrc <> 0.
-        INSERT VALUE #( event = ls_row-event ) INTO TABLE lt_sum ASSIGNING <sum>.
+        ls_acc = VALUE #( event = ls_row-event ).
+        INSERT ls_acc INTO TABLE lt_sum.
       ENDIF.
-      IF ls_row-utc_day > <sum>-utc_day OR ( ls_row-utc_day = <sum>-utc_day AND ls_row-utc_hour > <sum>-utc_hour ).
-        <sum>-utc_day  = ls_row-utc_day.
-        <sum>-utc_hour = ls_row-utc_hour.
+      IF ls_row-utc_day > ls_acc-utc_day OR ( ls_row-utc_day = ls_acc-utc_day AND ls_row-utc_hour > ls_acc-utc_hour ).
+        ls_acc-utc_day  = ls_row-utc_day.
+        ls_acc-utc_hour = ls_row-utc_hour.
       ENDIF.
       add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = <sum> ).
+               CHANGING  cs_sum = ls_acc ).
+      MODIFY TABLE lt_sum FROM ls_acc.
     ENDLOOP.
 
     LOOP AT lt_sum INTO DATA(ls_sum).
@@ -935,24 +947,31 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     DATA lt_new TYPE ty_t_sum_app.
     DATA lt_old TYPE ty_t_sum_app.
+    DATA ls_acc TYPE ty_s_sum.
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     " growth: the model maximum of the newer half against the older half
     DATA(lv_half) = z2ui5_cl_cockpit_setup=>day_minus( days DIV 2 ).
 
     LOOP AT select_sums( lv_from ) INTO DATA(ls_row).
       IF ls_row-utc_day > lv_half.
-        READ TABLE lt_new WITH TABLE KEY app = ls_row-app ASSIGNING FIELD-SYMBOL(<sum>).
+        READ TABLE lt_new WITH TABLE KEY app = ls_row-app INTO ls_acc.
         IF sy-subrc <> 0.
-          INSERT VALUE #( app = ls_row-app ) INTO TABLE lt_new ASSIGNING <sum>.
+          ls_acc = VALUE #( app = ls_row-app ).
+          INSERT ls_acc INTO TABLE lt_new.
         ENDIF.
+        add_sum( EXPORTING is_row = ls_row
+                 CHANGING  cs_sum = ls_acc ).
+        MODIFY TABLE lt_new FROM ls_acc.
       ELSE.
-        READ TABLE lt_old WITH TABLE KEY app = ls_row-app ASSIGNING <sum>.
+        READ TABLE lt_old WITH TABLE KEY app = ls_row-app INTO ls_acc.
         IF sy-subrc <> 0.
-          INSERT VALUE #( app = ls_row-app ) INTO TABLE lt_old ASSIGNING <sum>.
+          ls_acc = VALUE #( app = ls_row-app ).
+          INSERT ls_acc INTO TABLE lt_old.
         ENDIF.
+        add_sum( EXPORTING is_row = ls_row
+                 CHANGING  cs_sum = ls_acc ).
+        MODIFY TABLE lt_old FROM ls_acc.
       ENDIF.
-      add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = <sum> ).
     ENDLOOP.
 
     result = hints_of( it_new   = lt_new
@@ -1142,6 +1161,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA lt_rows TYPE ty_t_db_sum.
     DATA ls_all TYPE ty_s_sum.
     DATA lt_sum TYPE ty_t_sum_app.
+    DATA ls_acc TYPE ty_s_sum.
 
     DATA(lv_from_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( hours * 3600 ).
     DATA(lv_from_day) = z2ui5_cl_cockpit_setup=>day_of( lv_from_ts ).
@@ -1163,12 +1183,14 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       IF |{ ls_row-utc_day }{ ls_row-utc_hour }| < lv_from_key.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app ASSIGNING FIELD-SYMBOL(<sum>).
+      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app INTO ls_acc.
       IF sy-subrc <> 0.
-        INSERT VALUE #( app = ls_row-app ) INTO TABLE lt_sum ASSIGNING <sum>.
+        ls_acc = VALUE #( app = ls_row-app ).
+        INSERT ls_acc INTO TABLE lt_sum.
       ENDIF.
       add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = <sum> ).
+               CHANGING  cs_sum = ls_acc ).
+      MODIFY TABLE lt_sum FROM ls_acc.
       add_sum( EXPORTING is_row = ls_row
                CHANGING  cs_sum = ls_all ).
     ENDLOOP.
