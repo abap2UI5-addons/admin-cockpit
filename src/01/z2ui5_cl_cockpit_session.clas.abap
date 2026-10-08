@@ -131,6 +131,13 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         wire_fail_id   TYPE string,
         " the event of the failed click after this step
         wire_fail_event TYPE string,
+        " what the step cost, from the recorder (run( ) only): the server's
+        " time for the roundtrip that wrote it, the time the user waited for
+        " it in the browser (sent with the next request)
+        ms_server      TYPE i,
+        ms_browser     TYPE i,
+        ms_text        TYPE string,
+        ms_state       TYPE string,
         " the highlight of the row: Information for the step shown
         state   TYPE string,
       END OF ty_s_step.
@@ -587,6 +594,13 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         ts_to         TYPE timestampl
       RETURNING
         VALUE(result) TYPE i.
+
+    "! A duration for a person: 850 ms, 1.2 s.
+    CLASS-METHODS ms_text
+      IMPORTING
+        ms            TYPE i
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! The app a draft belongs to, read from the draft table - empty when
     "! the draft is gone. Never raises.
@@ -1948,7 +1962,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                        " fill_wire leaves these untouched
                                        monitor_state  = `None`
                                        shown_state    = `None`
-                                       messages_state = `None` ).
+                                       messages_state = `None`
+                                       ms_state       = `None` ).
       INSERT VALUE #( id   = ls_node-id
                       step = ls_step-step ) INTO TABLE lt_index.
 
@@ -2368,6 +2383,18 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         z2ui5_cl_cockpit_wire=>get_bodies( EXPORTING id       = ls_record-id
                                            IMPORTING request  = lv_request
                                                      response = lv_response ).
+        <step>-ms_server = ls_record-ms_total.
+        " the browser sends the time it waited for the roundtrip before -
+        " the one that wrote the step this one continues
+        DATA(lv_browser) = z2ui5_cl_cockpit_wire=>roundtrip_of( request     = lv_request
+                                                               response    = ``
+                                                               http_status = 200 )-ms_client_prev.
+        IF lv_browser > 0 AND <step>-follows > 0.
+          READ TABLE ct_step ASSIGNING FIELD-SYMBOL(<before>) INDEX <step>-follows.
+          IF sy-subrc = 0.
+            <before>-ms_browser = lv_browser.
+          ENDIF.
+        ENDIF.
         <step>-did = did_of( screen  = lv_screen
                              event   = ls_record-event
                              request = lv_request ).
@@ -2400,6 +2427,28 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                                     request = lv_request ) }|.
       ENDLOOP.
     ENDLOOP.
+
+    " slow as the settings define it - on the server, or for the user
+    DATA(lv_slow) = z2ui5_cl_cockpit_setup=>get( )-slow_ms.
+    LOOP AT ct_step ASSIGNING <step> WHERE ms_server > 0 OR ms_browser > 0. "#EC CI_SORTSEQ
+      <step>-ms_text = |{ ms_text( <step>-ms_server ) } server| &&
+                       |{ COND #( WHEN <step>-ms_browser > 0
+                                  THEN |, { ms_text( <step>-ms_browser ) } waited| ) }|.
+      <step>-ms_state = COND #( WHEN lv_slow > 0 AND ( <step>-ms_server >= lv_slow OR <step>-ms_browser >= lv_slow )
+                                THEN `Warning`
+                                ELSE `None` ).
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD ms_text.
+
+    IF ms < 1000.
+      result = |{ ms } ms|.
+    ELSE.
+      " one decimal, by hand - no decimals formatting on every release
+      result = |{ ms DIV 1000 }.{ ( ms MOD 1000 ) DIV 100 } s|.
+    ENDIF.
 
   ENDMETHOD.
 

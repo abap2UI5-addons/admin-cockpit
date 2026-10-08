@@ -30,6 +30,7 @@ CLASS ltcl_wire DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     METHODS roundtrip_from_bodies FOR TESTING RAISING cx_static_check.
     METHODS roundtrip_failed FOR TESTING RAISING cx_static_check.
     METHODS milliseconds FOR TESTING RAISING cx_static_check.
+    METHODS inputs_before_errors FOR TESTING RAISING cx_static_check.
     METHODS variants_counted FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
@@ -266,6 +267,62 @@ CLASS ltcl_wire IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD inputs_before_errors.
+
+    DATA(lv_box) = `{"S_FRONT":{"ID":"N","APP":"ZAPP","PROTOCOL":2,"S_ACTION":{"T_CUSTOM":` &&
+                   `[["MESSAGE_BOX","error","Date invalid",{}]]}},"MODEL":{}}`.
+    DATA(lv_ok) = `{"S_FRONT":{"ID":"N","APP":"ZAPP","PROTOCOL":2},"MODEL":{}}`.
+
+    " newest first; every component written out - see variants_counted
+    DATA(lt_input) = z2ui5_cl_cockpit_wire=>input_errors_of( VALUE #(
+        ( app         = `ZAPP`
+          request     = `{"S_FRONT":{"ID":"A","EVENT":"SAVE"},"MODEL":{"XX":{"MS_HEAD":{"DATE":"31.02.2026"},` &&
+                        `"MT_ITEM":[{"QTY":"0"}]}}}`
+          response    = lv_box
+          http_status = 200 )
+        ( app         = `ZAPP`
+          request     = `{"S_FRONT":{"ID":"B","EVENT":"SAVE"},"MODEL":{"XX":{"MS_HEAD":{"DATE":"01.03.2026"}}}}`
+          response    = lv_ok
+          http_status = 200 )
+        ( app         = `ZAPP`
+          request     = `{"S_FRONT":{"ID":"C","EVENT":"SAVE"},"MODEL":{"XX":{"MS_HEAD":{"DATE":"30.02."}}}}`
+          response    = lv_box
+          http_status = 200 )
+        ( app         = `ZAPP`
+          request     = `{"S_FRONT":{"ID":"D","EVENT":"SAVE"},"MODEL":{"XX":{"MT_ITEM":[{"QTY":"5"},{"QTY":"x"}]}}}`
+          response    = `Internal Server Error`
+          http_status = 500 ) ) ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( lt_input ) ).
+
+    " the rows of a table are one field - typed three times, failed three times
+    DATA(ls_qty) = lt_input[ 1 ].
+    cl_abap_unit_assert=>assert_equals( exp = `MT_ITEM/*/QTY`
+                                        act = ls_qty-field ).
+    cl_abap_unit_assert=>assert_equals( exp = 3
+                                        act = ls_qty-errors ).
+    cl_abap_unit_assert=>assert_equals( exp = `100 %`
+                                        act = ls_qty-rate ).
+    " the newest message
+    cl_abap_unit_assert=>assert_equals( exp = `Date invalid`
+                                        act = ls_qty-message ).
+
+    DATA(ls_date) = lt_input[ field = `MS_HEAD/DATE` ].
+    cl_abap_unit_assert=>assert_equals( exp = 3
+                                        act = ls_date-typed ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = ls_date-errors ).
+    cl_abap_unit_assert=>assert_equals( exp = `66 %`
+                                        act = ls_date-rate ).
+    cl_abap_unit_assert=>assert_equals( exp = `Error`
+                                        act = ls_date-state ).
+    " only the values typed when it failed
+    cl_abap_unit_assert=>assert_equals( exp = `"31.02.2026", "30.02."`
+                                        act = ls_date-samples ).
+
+  ENDMETHOD.
+
   METHOD milliseconds.
 
     cl_abap_unit_assert=>assert_equals(
@@ -391,6 +448,9 @@ CLASS ltcl_wire IMPLEMENTATION.
                                         act = lt_variant[ 1 ]-users ).
     cl_abap_unit_assert=>assert_equals( exp = `D4`
                                         act = lt_variant[ 1 ]-example ).
+    " 2 of 4 runs
+    cl_abap_unit_assert=>assert_equals( exp = `50 %`
+                                        act = lt_variant[ 1 ]-share ).
 
     DATA(ls_retried) = lt_variant[ path = `ZAPP: (start) -> CREATE -> SAVE (failed) -> SAVE` ].
     cl_abap_unit_assert=>assert_equals( exp = 0

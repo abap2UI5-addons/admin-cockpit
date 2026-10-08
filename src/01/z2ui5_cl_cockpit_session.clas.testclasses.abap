@@ -44,6 +44,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
   PRIVATE SECTION.
 
     METHODS flatten_app_only FOR TESTING.
+    METHODS ms_as_text FOR TESTING.
     METHODS flatten_all FOR TESTING.
     METHODS flatten_same_class_twice FOR TESTING.
     METHODS flatten_round_trip FOR TESTING.
@@ -128,6 +129,17 @@ CLASS ltcl_session IMPLEMENTATION.
       result = ls_value-value.
       RETURN.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD ms_as_text.
+
+    cl_abap_unit_assert=>assert_equals( exp = `850 ms`
+                                        act = z2ui5_cl_cockpit_session=>ms_text( 850 ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `1.2 s`
+                                        act = z2ui5_cl_cockpit_session=>ms_text( 1250 ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `12.0 s`
+                                        act = z2ui5_cl_cockpit_session=>ms_text( 12040 ) ).
 
   ENDMETHOD.
 

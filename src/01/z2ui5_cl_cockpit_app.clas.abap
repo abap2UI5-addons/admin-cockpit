@@ -107,6 +107,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA wire_messages_text TYPE string.
     DATA wire_messages_shown TYPE abap_bool.
     DATA wire_message_search TYPE string.
+    DATA s_wire_inputs  TYPE z2ui5_cl_cockpit_wire=>ty_s_inputs.
+    DATA wire_inputs_text TYPE string.
     DATA s_variants     TYPE z2ui5_cl_cockpit_wire=>ty_s_variants.
     DATA variants_text  TYPE string.
     DATA variants_title TYPE string.
@@ -799,6 +801,59 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{TEXT}`
                     )->tag( `Text`
                         )->a( n = `text` v = `{LAST}` ).
+
+    errors->ele( `Table`
+        )->a( n = `headerText`       v = client->_bind( wire_inputs_text )
+        )->a( n = `items`            v = client->_bind( s_wire_inputs-t_input )
+        )->a( n = `visible`          v = client->_bind( wire_messages_shown )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `20`
+        )->a( n = `noDataText`       v = `No input followed by an error in the period - or nothing recorded.`
+        )->a( n = `class`            v = `sapUiMediumMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Field`
+            )->tag( `Column`
+                )->a( n = `header` v = `Errors`
+                )->a( n = `width`  v = `5rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Typed`
+                )->a( n = `width`  v = `5rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Rate`
+                )->a( n = `width`  v = `5rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Last message`
+                )->a( n = `width`  v = `30%`
+            )->tag( `Column`
+                )->a( n = `header` v = `Values typed when it failed`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->a( n = `highlight` v = `{STATE}`
+
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{APP}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{FIELD}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{ERRORS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TYPED}`
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{RATE}`
+                        )->a( n = `state` v = `{STATE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{MESSAGE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{SAMPLES}` ).
 
     " --- Performance ----------------------------------------------------
     DATA(perf) = bar->ele( `IconTabFilter`
@@ -2759,6 +2814,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->a( n = `header` v = `KB`
                     )->a( n = `width`  v = `4rem`
                 )->tag( `Column`
+                    )->a( n = `header` v = `Time`
+                )->tag( `Column`
                     )->a( n = `header` v = `Monitor`
                 )->tag( `Column`
                     )->a( n = `header` v = `Messages in the app`
@@ -2791,6 +2848,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                             )->a( n = `text` v = `{CHANGES}`
                         )->tag( `Text`
                             )->a( n = `text` v = `{KB}`
+                        )->tag( `ObjectStatus`
+                            )->a( n = `text`  v = `{MS_TEXT}`
+                            )->a( n = `state` v = `{MS_STATE}`
                         )->tag( `ObjectStatus`
                             )->a( n = `text`  v = `{MONITOR}`
                             )->a( n = `state` v = `{MONITOR_STATE}`
@@ -2899,6 +2959,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ENDIF.
     IF ls_step-shown IS NOT INITIAL.
       lv_text = |{ lv_text } Shown: { ls_step-shown }.|.
+    ENDIF.
+    IF ls_step-ms_text IS NOT INITIAL.
+      lv_text = |{ lv_text } Time: { ls_step-ms_text }.|.
     ENDIF.
     IF lv_next IS NOT INITIAL.
       lv_text = |{ lv_text } On this screen the user then { lv_next }.|.
@@ -3128,7 +3191,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ELSE.
                 content->tag( `MessageStrip`
                     )->a( n = `text`     t = |{ s_wire-time } UTC - { s_wire-app } - event { s_wire-event } - | &&
-                                   |HTTP { s_wire-http_status }|
+                                   |HTTP { s_wire-http_status }| &&
+                                   |{ COND #( WHEN s_wire-ms_total > 0 THEN | - { s_wire-ms_total } ms on the server| ) }|
                     )->a( n = `type`     v = COND string( WHEN s_wire-http_status >= 500 THEN `Error` ELSE `Information` )
                     )->a( n = `showIcon` v = `true` ).
               ENDIF.
@@ -3397,6 +3461,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ENDIF.
     IF ls_step-did IS NOT INITIAL.
       step_info = |{ step_info } User: { ls_step-did }.|.
+    ENDIF.
+    IF ls_step-ms_text IS NOT INITIAL.
+      step_info = |{ step_info } Time: { ls_step-ms_text }.|.
     ENDIF.
     IF ls_step-shown IS NOT INITIAL.
       step_info = |{ step_info } Shown: { ls_step-shown }.|.
@@ -3933,6 +4000,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
                                                          OR app CS wire_message_search ).
           ENDIF.
+          s_wire_inputs = z2ui5_cl_cockpit_wire=>get_input_errors( lv_days ).
+          wire_inputs_text = COND #(
+              WHEN s_wire_inputs-error IS NOT INITIAL
+              THEN |Inputs right before an error - the recordings could not be read: { s_wire_inputs-error }|
+              ELSE |Inputs right before an error - the fields users typed in a roundtrip that answered with an | &&
+                   |error box or failed, and how often that happened when they typed them, of | &&
+                   |{ s_wire_inputs-records } recorded roundtrips{ COND #( WHEN s_wire_inputs-check_capped = abap_true
+                                                                          THEN ` (the newest)` ) }| ).
         ENDIF.
       WHEN `PERF`.
         t_hints = z2ui5_cl_cockpit_stats=>get_hints( lv_days ).
