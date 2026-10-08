@@ -85,6 +85,9 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         last      TYPE string,
         duration  TYPE string,
         note      TYPE string,
+        " signs that the user struggled, from the recorder - signals_of
+        signals      TYPE string,
+        signal_state TYPE string,
       END OF ty_s_session.
     TYPES ty_t_session TYPE STANDARD TABLE OF ty_s_session WITH EMPTY KEY.
 
@@ -102,6 +105,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         step    TYPE i,
         id      TYPE string,
         time    TYPE string,
+        timestampl TYPE timestampl,
         delta   TYPE string,
         app     TYPE string,
         kb      TYPE i,
@@ -142,6 +146,27 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         state   TYPE string,
       END OF ty_s_step.
     TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH EMPTY KEY.
+
+    TYPES:
+      "! One click of a session as signals_of reads it.
+      BEGIN OF ty_s_signal,
+        timestampl  TYPE timestampl,
+        event       TYPE string,
+        http_status TYPE i,
+        " how long the user waited for this roundtrip in the browser
+        ms_browser  TYPE i,
+        " the error box it answered with
+        error_text  TYPE string,
+      END OF ty_s_signal.
+    TYPES ty_t_signal TYPE STANDARD TABLE OF ty_s_signal WITH EMPTY KEY.
+
+    TYPES:
+      "! Signs that a user struggled - a score, the reasons, a ValueState.
+      BEGIN OF ty_s_signals,
+        score TYPE i,
+        text  TYPE string,
+        state TYPE string,
+      END OF ty_s_signals.
 
     TYPES:
       "! A business object a session worked on, found by its field name.
@@ -461,6 +486,34 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_t_growth.
 
+    "! Signs that a user struggled, from the clicks of a session in order:
+    "! the same button three times within seconds, the same error box again,
+    "! a failed click, the same button again after a long wait, a session
+    "! that ended on an error. Each adds to the score; state Error from 5.
+    "! @parameter it_signal | the clicks, oldest first
+    CLASS-METHODS signals_of
+      IMPORTING
+        it_signal     TYPE ty_t_signal
+      RETURNING
+        VALUE(result) TYPE ty_s_signals.
+
+    "! signals_of over the steps of a session - with what the recorder knows
+    "! of them (events, error boxes, waits, failed clicks).
+    CLASS-METHODS signals_of_steps
+      IMPORTING
+        it_step       TYPE ty_t_step
+      RETURNING
+        VALUE(result) TYPE ty_s_signals.
+
+    "! The session told as a story, one line per step: when, in which app,
+    "! what the user did, what was shown, how long it took - text for a
+    "! ticket. Steps without a recording tell their event.
+    CLASS-METHODS story_of
+      IMPORTING
+        it_step       TYPE ty_t_step
+      RETURNING
+        VALUE(result) TYPE string.
+
     "! The tables of two sets of fields and their rows - a table is a path
     "! up to a [n], a nested table counts per row of its parent. Only those
     "! that grew, the most grown first.
@@ -765,11 +818,30 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         errors  TYPE i,
       END OF ty_s_agg.
     TYPES ty_id TYPE c LENGTH 32.
+    TYPES:
+      BEGIN OF ty_s_wire_row,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        event         TYPE c LENGTH 40,
+        http_status   TYPE i,
+        timestampl    TYPE timestampl,
+      END OF ty_s_wire_row.
+    TYPES:
+      BEGIN OF ty_s_wire,
+        root        TYPE c LENGTH 32,
+        timestampl  TYPE timestampl,
+        event       TYPE string,
+        http_status TYPE i,
+      END OF ty_s_wire.
     DATA lt_agg TYPE HASHED TABLE OF ty_s_agg WITH UNIQUE KEY root.
     DATA lt_sorted TYPE STANDARD TABLE OF ty_s_agg WITH EMPTY KEY.
     DATA lt_node TYPE ty_t_node.
     DATA lt_failed TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
     DATA lv_oldest TYPE timestampl.
+    DATA lt_wire_row TYPE STANDARD TABLE OF ty_s_wire_row WITH EMPTY KEY.
+    DATA lt_wire TYPE SORTED TABLE OF ty_s_wire WITH NON-UNIQUE KEY root timestampl.
+    DATA lt_signal TYPE ty_t_signal.
+    DATA lv_key TYPE c LENGTH 32.
 
     TRY.
         lt_node = read_nodes( ).
@@ -830,6 +902,31 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
+    " the clicks the recorder kept since the oldest draft - ids and events,
+    " no body - each for the session of the draft it started from
+    TRY.
+        " ORDER BY as in z2ui5_cl_cockpit_wire=>get_variants - without it the
+        " 7.02 downport leaves this SELECT half converted
+        SELECT draft_id, draft_id_prev, event, http_status, timestampl FROM z2ui5_t_ck_wir
+          WHERE timestampl >= @lv_oldest
+          ORDER BY timestampl DESCENDING
+          INTO CORRESPONDING FIELDS OF TABLE @lt_wire_row
+          UP TO 20000 ROWS.
+      CATCH cx_root ##NO_HANDLER.
+        " no recorder - no signals
+    ENDTRY.
+    LOOP AT lt_wire_row INTO DATA(ls_wire_row).
+      lv_key = COND #( WHEN ls_wire_row-draft_id_prev IS NOT INITIAL THEN ls_wire_row-draft_id_prev
+                       ELSE ls_wire_row-draft_id ).
+      READ TABLE lt_root INTO ls_root WITH TABLE KEY id = lv_key.
+      IF sy-subrc = 0.
+        INSERT VALUE #( root        = ls_root-root
+                        timestampl  = ls_wire_row-timestampl
+                        event       = ls_wire_row-event
+                        http_status = ls_wire_row-http_status ) INTO TABLE lt_wire.
+      ENDIF.
+    ENDLOOP.
+
     lt_sorted = lt_agg.
     IF active_minutes > 0.
       DATA(lv_since) = z2ui5_cl_cockpit_setup=>now_minus_seconds( active_minutes * 60 ).
@@ -855,6 +952,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                              steps    = ls_agg-steps
                                              errors   = ls_agg-errors
                                              state    = COND #( WHEN ls_agg-errors > 0 THEN `Error` ELSE `None` )
+                                             signal_state = `None`
                                              first    = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-first )
                                              last     = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-last )
                                              duration = duration_text( seconds_between( ts_from = ls_agg-first
@@ -870,6 +968,15 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF ls_agg-id_prev IS NOT INITIAL.
         ls_session-note = `earlier steps expired`.
       ENDIF.
+      CLEAR lt_signal.
+      LOOP AT lt_wire INTO DATA(ls_wire) WHERE root = ls_agg-root.
+        APPEND VALUE #( timestampl  = ls_wire-timestampl
+                        event       = ls_wire-event
+                        http_status = ls_wire-http_status ) TO lt_signal.
+      ENDLOOP.
+      DATA(ls_signals) = signals_of( lt_signal ).
+      ls_session-signals      = ls_signals-text.
+      ls_session-signal_state = ls_signals-state.
 
       IF search IS NOT INITIAL
           AND NOT ( ls_session-app CS search OR ls_session-user CS search ).
@@ -1372,6 +1479,146 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
     result = growth_of( it_before = flatten( lv_before )
                         it_after  = flatten( lv_after ) ).
+
+  ENDMETHOD.
+
+  METHOD signals_of.
+
+    TYPES:
+      BEGIN OF ty_s_count,
+        text  TYPE string,
+        count TYPE i,
+      END OF ty_s_count.
+    DATA lt_error TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY text.
+    DATA lv_run TYPE i.
+    DATA lv_run_from TYPE timestampl.
+    DATA lv_failed TYPE i.
+    DATA lv_rage TYPE string.
+    DATA lv_again TYPE string.
+    DATA ls_prev TYPE ty_s_signal.
+    DATA lt_reason TYPE string_table.
+
+    LOOP AT it_signal INTO DATA(ls_signal).
+      DATA(lv_index) = sy-tabix.
+
+      " the same button again and again, each within 10 seconds
+      IF lv_index > 1 AND ls_signal-event IS NOT INITIAL AND ls_signal-event = ls_prev-event
+          AND seconds_between( ts_from = ls_prev-timestampl
+                               ts_to   = ls_signal-timestampl ) <= 10.
+        lv_run = lv_run + 1.
+        " the run as it grows - the longest one stays
+        IF lv_run >= 3.
+          lv_rage = |pressed { ls_signal-event } { lv_run } times in | &&
+                    |{ seconds_between( ts_from = lv_run_from
+                                        ts_to   = ls_signal-timestampl ) } s|.
+        ENDIF.
+      ELSE.
+        lv_run = 1.
+        lv_run_from = ls_signal-timestampl.
+      ENDIF.
+
+      " the same button again right after a long wait - impatience
+      IF lv_index > 1 AND lv_again IS INITIAL AND ls_signal-event IS NOT INITIAL
+          AND ls_signal-event = ls_prev-event AND ls_prev-ms_browser >= 5000.
+        lv_again = |pressed { ls_signal-event } again after waiting { ls_prev-ms_browser DIV 1000 } s|.
+      ENDIF.
+
+      IF ls_signal-http_status >= 500.
+        lv_failed = lv_failed + 1.
+      ENDIF.
+      IF ls_signal-error_text IS NOT INITIAL.
+        INSERT VALUE #( text = ls_signal-error_text ) INTO TABLE lt_error.
+        READ TABLE lt_error ASSIGNING FIELD-SYMBOL(<error>) WITH TABLE KEY text = ls_signal-error_text.
+        <error>-count = <error>-count + 1.
+      ENDIF.
+      ls_prev = ls_signal.
+    ENDLOOP.
+
+    IF lv_rage IS NOT INITIAL.
+      APPEND lv_rage TO lt_reason.
+      result-score = result-score + 3.
+    ENDIF.
+    LOOP AT lt_error INTO DATA(ls_error) WHERE count >= 2.
+      APPEND |error "{ ls_error-text }" { ls_error-count } times| TO lt_reason.
+      result-score = result-score + 2.
+    ENDLOOP.
+    IF lv_failed > 0.
+      APPEND |{ lv_failed } failed click{ COND #( WHEN lv_failed > 1 THEN `s` ) }| TO lt_reason.
+      result-score = result-score + 2 * lv_failed.
+    ENDIF.
+    IF lv_again IS NOT INITIAL.
+      APPEND lv_again TO lt_reason.
+      result-score = result-score + 1.
+    ENDIF.
+    IF ls_prev-http_status >= 500 OR ls_prev-error_text IS NOT INITIAL.
+      APPEND `ended on an error` TO lt_reason.
+      result-score = result-score + 3.
+    ENDIF.
+
+    LOOP AT lt_reason INTO DATA(lv_reason).
+      result-text = |{ result-text }{ COND #( WHEN result-text IS NOT INITIAL THEN `; ` ) }{ lv_reason }|.
+    ENDLOOP.
+    result-state = COND #( WHEN result-score >= 5 THEN `Error`
+                           WHEN result-score > 0 THEN `Warning`
+                           ELSE `None` ).
+
+  ENDMETHOD.
+
+  METHOD signals_of_steps.
+
+    DATA lt_signal TYPE ty_t_signal.
+
+    LOOP AT it_step INTO DATA(ls_step).
+      IF sy-tabix > 1 OR ls_step-wire_id IS NOT INITIAL.
+        APPEND VALUE #( timestampl = ls_step-timestampl
+                        event      = ls_step-event
+                        ms_browser = ls_step-ms_browser
+                        error_text = COND #( WHEN ls_step-shown_state = `Error` THEN ls_step-shown ) ) TO lt_signal.
+      ENDIF.
+      " the click that failed after it wrote no step of its own
+      IF ls_step-wire_fail_id IS NOT INITIAL.
+        APPEND VALUE #( timestampl  = ls_step-timestampl
+                        event       = ls_step-wire_fail_event
+                        http_status = 500 ) TO lt_signal.
+      ENDIF.
+    ENDLOOP.
+    result = signals_of( lt_signal ).
+
+  ENDMETHOD.
+
+  METHOD story_of.
+
+    DATA lv_app TYPE string.
+    DATA(lv_nl) = cl_abap_char_utilities=>newline.
+
+    LOOP AT it_step INTO DATA(ls_step).
+      DATA(lv_index) = sy-tabix.
+      DATA(lv_time) = ls_step-time.
+      IF strlen( lv_time ) >= 19.
+        lv_time = substring( val = lv_time
+                             off = 11
+                             len = 8 ).
+      ENDIF.
+      DATA(lv_line) = |{ lv_time }  |.
+      IF ls_step-app <> lv_app.
+        lv_line = |{ lv_line }[{ ls_step-app }] |.
+        lv_app = ls_step-app.
+      ENDIF.
+      lv_line = lv_line && COND string( WHEN ls_step-did IS NOT INITIAL THEN ls_step-did
+                                        WHEN ls_step-event IS NOT INITIAL THEN |event { ls_step-event }|
+                                        WHEN lv_index = 1 THEN `started`
+                                        ELSE `(no event recorded)` ).
+      IF ls_step-shown IS NOT INITIAL.
+        lv_line = |{ lv_line } -> { ls_step-shown }|.
+      ENDIF.
+      IF ls_step-ms_text IS NOT INITIAL.
+        lv_line = |{ lv_line } ({ ls_step-ms_text })|.
+      ENDIF.
+      IF ls_step-note IS NOT INITIAL.
+        lv_line = |{ lv_line } - { ls_step-note }|.
+      ENDIF.
+      result = |{ result }{ lv_line }{ lv_nl }|.
+    ENDLOOP.
 
   ENDMETHOD.
 
@@ -1956,6 +2203,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       DATA(ls_step) = VALUE ty_s_step( step  = sy-tabix
                                        id    = ls_node-id
                                        time          = z2ui5_cl_cockpit_setup=>ts_text( ls_node-timestampl )
+                                       timestampl    = ls_node-timestampl
                                        state         = `None`
                                        " never empty: UI5 rejects "" as a ValueState
                                        " and terminates the app - with no recording

@@ -45,6 +45,8 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
 
     METHODS flatten_app_only FOR TESTING.
     METHODS ms_as_text FOR TESTING.
+    METHODS signs_of_trouble FOR TESTING.
+    METHODS story_told FOR TESTING.
     METHODS flatten_all FOR TESTING.
     METHODS flatten_same_class_twice FOR TESTING.
     METHODS flatten_round_trip FOR TESTING.
@@ -129,6 +131,57 @@ CLASS ltcl_session IMPLEMENTATION.
       result = ls_value-value.
       RETURN.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD signs_of_trouble.
+
+    " every component written out - the downport the unit build runs carries
+    " an omitted one over from the row before (see the wire tests)
+    DATA(ls_signals) = z2ui5_cl_cockpit_session=>signals_of( VALUE #(
+        ( timestampl = '20261008100000' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `Date invalid` )
+        ( timestampl = '20261008100003' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `Date invalid` )
+        ( timestampl = '20261008100006' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `` )
+        ( timestampl = '20261008100100' event = `NEXT` http_status = 0 ms_browser = 6000 error_text = `` )
+        ( timestampl = '20261008100110' event = `NEXT` http_status = 0 ms_browser = 0 error_text = `` )
+        ( timestampl = '20261008100200' event = `POST` http_status = 500 ms_browser = 0 error_text = `` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = `pressed SAVE 3 times in 6 s; error "Date invalid" 2 times; 1 failed click; ` &&
+              `pressed NEXT again after waiting 6 s; ended on an error`
+        act = ls_signals-text ).
+    cl_abap_unit_assert=>assert_equals( exp = 11
+                                        act = ls_signals-score ).
+    cl_abap_unit_assert=>assert_equals( exp = `Error`
+                                        act = ls_signals-state ).
+
+    " a quiet session: different buttons, no error
+    ls_signals = z2ui5_cl_cockpit_session=>signals_of( VALUE #(
+        ( timestampl = '20261008100000' event = `SEARCH` http_status = 0 ms_browser = 0 error_text = `` )
+        ( timestampl = '20261008100002' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `` ) ) ).
+    cl_abap_unit_assert=>assert_initial( ls_signals-text ).
+    cl_abap_unit_assert=>assert_equals( exp = `None`
+                                        act = ls_signals-state ).
+
+  ENDMETHOD.
+
+  METHOD story_told.
+
+    DATA(lv_nl) = cl_abap_char_utilities=>newline.
+    DATA(lv_story) = z2ui5_cl_cockpit_session=>story_of( VALUE #(
+        ( step = 1 time = `2026-10-08 10:02:11` app = `ZORDER` did = `` event = `` shown = ``
+          ms_text = `` note = `` )
+        ( step = 2 time = `2026-10-08 10:02:40` app = `ZORDER` did = `pressed Button "Save" (SAVE)`
+          event = `SAVE` shown = `error box: Date invalid` ms_text = `1.2 s server, 6.2 s waited` note = `` )
+        ( step = 3 time = `2026-10-08 10:03:20` app = `ZDELIVERY` did = `` event = `GO` shown = ``
+          ms_text = `` note = `next click failed: event SHIP` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = |10:02:11  [ZORDER] started{ lv_nl }| &&
+              |10:02:40  pressed Button "Save" (SAVE) -> error box: Date invalid | &&
+              |(1.2 s server, 6.2 s waited){ lv_nl }| &&
+              |10:03:20  [ZDELIVERY] event GO - next click failed: event SHIP{ lv_nl }|
+        act = lv_story ).
 
   ENDMETHOD.
 

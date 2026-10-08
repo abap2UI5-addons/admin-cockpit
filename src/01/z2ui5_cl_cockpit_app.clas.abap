@@ -108,6 +108,9 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA wire_messages_shown TYPE abap_bool.
     DATA wire_message_search TYPE string.
     DATA s_wire_inputs  TYPE z2ui5_cl_cockpit_wire=>ty_s_inputs.
+    DATA trouble_text   TYPE string.
+    DATA trouble_shown  TYPE abap_bool.
+    DATA story_text     TYPE string.
     DATA wire_inputs_text TYPE string.
     DATA s_variants     TYPE z2ui5_cl_cockpit_wire=>ty_s_variants.
     DATA variants_text  TYPE string.
@@ -157,6 +160,9 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! @parameter check_failed | the failed click after the step instead
     "! The process variants of variants_app, from the recordings.
     METHODS popup_variants.
+
+    "! The open session told as a story - text for a ticket, to copy.
+    METHODS popup_story.
 
     "! Open the session a draft belongs to at that draft - administrators
     "! only, logged by session_open.
@@ -1109,6 +1115,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->tag( `Column`
                 )->a( n = `header` v = `Duration`
             )->tag( `Column`
+                )->a( n = `header` v = `Signs of trouble`
+            )->tag( `Column`
                 )->a( n = `header` v = `Note`
 
         )->end(
@@ -1134,6 +1142,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{LAST}`
                     )->tag( `Text`
                         )->a( n = `text` v = `{DURATION}`
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{SIGNALS}`
+                        )->a( n = `state` v = `{SIGNAL_STATE}`
                     )->tag( `Text`
                         )->a( n = `text` v = `{NOTE}` ).
 
@@ -1528,6 +1539,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 )->a( n = `header` v = `Last step (UTC)`
             )->tag( `Column`
                 )->a( n = `header` v = `Duration`
+            )->tag( `Column`
+                )->a( n = `header` v = `Signs of trouble`
 
         )->end(
         )->ele( `items`
@@ -1547,7 +1560,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->tag( `Text`
                         )->a( n = `text` v = `{LAST}`
                     )->tag( `Text`
-                        )->a( n = `text` v = `{DURATION}` ).
+                        )->a( n = `text` v = `{DURATION}`
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{SIGNALS}`
+                        )->a( n = `state` v = `{SIGNAL_STATE}` ).
 
     live->ele( `OverflowToolbar`
         )->a( n = `visible` v = client->_bind( s_live-check_lock )
@@ -2692,6 +2708,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `tooltip` v = `What went over the wire for this step, from the recorder`
             )->a( n = `press`   v = client->_event( `STEP_WIRE` )
         )->tag( `Button`
+            )->a( n = `text`    v = `Story`
+            )->a( n = `icon`    v = `sap-icon://course-book`
+            )->a( n = `tooltip` v = `The session as a story - what the user did and saw, step by step, to copy into a ticket`
+            )->a( n = `press`   v = client->_event( `SESSION_STORY` )
+        )->tag( `Button`
             )->a( n = `text`    v = `Export`
             )->a( n = `icon`    v = `sap-icon://download`
             )->a( n = `tooltip` v = `The whole session as a text file - every step and what changed, to attach to a ticket`
@@ -2708,6 +2729,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `type`     v = `Information`
         )->a( n = `showIcon` v = `true`
         )->a( n = `visible`  v = client->_bind( business_shown )
+        )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
+
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( trouble_text )
+        )->a( n = `type`     v = `Error`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( trouble_shown )
         )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
 
     content->tag( `MessageStrip`
@@ -3154,6 +3182,50 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD popup_story.
+
+    story_text = z2ui5_cl_cockpit_session=>story_of( t_steps ).
+    IF trouble_shown = abap_true.
+      story_text = |{ trouble_text }{ cl_abap_char_utilities=>newline }{ cl_abap_char_utilities=>newline }{ story_text }|.
+    ENDIF.
+    story_text = |Session of { s_session-user } - { s_session-app }{ cl_abap_char_utilities=>newline }| &&
+                 |{ cl_abap_char_utilities=>newline }{ story_text }|.
+
+    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+        )->ele( n = `FragmentDefinition` ns = `core`
+            )->a( n = `xmlns`      v = `sap.m`
+            )->a( n = `xmlns:core` v = `sap.ui.core` ).
+
+    DATA(dialog) = popup->ele( `Dialog`
+        )->a( n = `title`         t = |The story of the session - { lines( t_steps ) } steps|
+        )->a( n = `contentWidth`  v = `80%`
+        )->a( n = `contentHeight` v = `75%`
+        )->a( n = `resizable`     v = `true`
+        )->a( n = `draggable`     v = `true` ).
+
+    dialog->ele( `content`
+        )->tag( `TextArea`
+            )->a( n = `value`    v = client->_bind( story_text )
+            )->a( n = `editable` v = `false`
+            )->a( n = `width`    v = `100%`
+            )->a( n = `rows`     v = `25`
+            )->a( n = `class`    v = `sapUiSmallMargin` ).
+
+    dialog->ele( `buttons`
+        )->tag( `Button`
+            )->a( n = `text`  v = `Copy`
+            )->a( n = `icon`  v = `sap-icon://copy`
+            )->a( n = `press` v = client->_event_client( val   = z2ui5_if_client=>cs_event-clipboard_copy
+                                                         t_arg = VALUE #( ( |${ client->_bind( story_text ) }| ) ) )
+        )->tag( `Button`
+            )->a( n = `text`  v = `Back to the steps`
+            )->a( n = `type`  v = `Emphasized`
+            )->a( n = `press` v = client->_event( `SCREEN_BACK` ) ).
+
+    client->popup_display( popup->stringify( ) ).
+
+  ENDMETHOD.
+
   METHOD popup_wire.
 
     IF t_steps IS INITIAL.
@@ -3316,6 +3388,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 CLEAR history_shown.
                 growth_check( ).
                 stuck_check( ).
+                DATA(ls_signals) = z2ui5_cl_cockpit_session=>signals_of_steps( t_steps ).
+                trouble_text  = |Signs of trouble: { ls_signals-text }.|.
+                trouble_shown = xsdbool( ls_signals-text IS NOT INITIAL ).
                 CLEAR business_text.
                 LOOP AT ls_steps-t_business INTO DATA(ls_business).
                   IF sy-tabix > 8.
@@ -3882,6 +3957,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               session_search = detail_app.
               sessions_shown = abap_true.
               load_tab( ).
+            ENDIF.
+
+          WHEN `SESSION_STORY`.
+            IF check_change( ) = abap_true.
+              popup_story( ).
             ENDIF.
 
           WHEN `STEP_SCREEN` OR `SCREEN_PREV` OR `SCREEN_NEXT` OR `SCREEN_BACK` OR `STEP_WIRE` OR `WIRE_FAILED`.
