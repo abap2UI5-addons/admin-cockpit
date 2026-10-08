@@ -53,6 +53,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS steps_in_order FOR TESTING.
     METHODS decode_entities FOR TESTING.
     METHODS app_is_first_own_object FOR TESTING.
+    METHODS base64_of_utf8 FOR TESTING.
     METHODS seconds_across_midnight FOR TESTING.
 
     METHODS draft
@@ -365,6 +366,18 @@ CLASS ltcl_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD base64_of_utf8.
+
+    cl_abap_unit_assert=>assert_equals( exp = `YWJj`
+                                        act = z2ui5_cl_cockpit_session=>to_base64( `abc` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `YWI=`
+                                        act = z2ui5_cl_cockpit_session=>to_base64( `ab` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `YQ==`
+                                        act = z2ui5_cl_cockpit_session=>to_base64( `a` ) ).
+    cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_session=>to_base64( `` ) ).
+
+  ENDMETHOD.
+
   METHOD seconds_across_midnight.
 
     cl_abap_unit_assert=>assert_equals( exp = 70
@@ -385,6 +398,7 @@ CLASS ltcl_session_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION
   PRIVATE SECTION.
 
     CONSTANTS c_table TYPE string VALUE `Z2UI5_T_01`.
+    CONSTANTS c_app   TYPE string VALUE `ZZ_COCKPIT_UNIT_TEST`.
 
     TYPES:
       BEGIN OF ty_s_draft,
@@ -404,6 +418,8 @@ CLASS ltcl_session_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION
     METHODS session_listed FOR TESTING.
     METHODS steps_and_changes FOR TESTING.
     METHODS session_of_a_draft FOR TESTING.
+    METHODS monitor_marks_steps FOR TESTING.
+    METHODS export_as_text FOR TESTING.
 
     METHODS order
       IMPORTING
@@ -435,6 +451,29 @@ CLASS ltcl_session_db IMPLEMENTATION.
       INSERT (lv_tab) FROM @ls_draft.
     ENDLOOP.
 
+    " what the monitor logged: the slow roundtrip that wrote step 3, and a
+    " failed one that started from step 2
+    DATA(ls_log) = VALUE z2ui5_t_ck_log( id            = `ZZCKUTLOG1`
+                                         timestampl    = `20991231100105.0`
+                                         utc_day       = `20991231`
+                                         app           = c_app
+                                         event         = `SAVE`
+                                         draft_id      = `ZZCKUT3`
+                                         draft_id_prev = `ZZCKUT2`
+                                         check_slow    = abap_true
+                                         ms_total      = 2500 ).
+    INSERT z2ui5_t_ck_log FROM @ls_log.
+    ls_log = VALUE #( id            = `ZZCKUTLOG2`
+                      timestampl    = `20991231100030.0`
+                      utc_day       = `20991231`
+                      app           = c_app
+                      event         = `POST`
+                      draft_id_prev = `ZZCKUT2`
+                      check_error   = abap_true
+                      error_class   = `CX_SY_ZERODIVIDE`
+                      error_head    = `Division by zero` ).
+    INSERT z2ui5_t_ck_log FROM @ls_log.
+
   ENDMETHOD.
 
   METHOD teardown.
@@ -444,6 +483,8 @@ CLASS ltcl_session_db IMPLEMENTATION.
     lv_tab = c_table.
     lv_pattern = `ZZCKUT%`.
     DELETE FROM (lv_tab) WHERE id LIKE @lv_pattern.
+    DATA(lv_app) = CONV z2ui5_t_ck_log-app( c_app ).
+    DELETE FROM z2ui5_t_ck_log WHERE app = @lv_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
 
@@ -477,6 +518,15 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                         act = ls_session-user ).
     cl_abap_unit_assert=>assert_equals( exp = `1 min 5 s`
                                         act = ls_session-duration ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = ls_session-errors ).
+    cl_abap_unit_assert=>assert_equals( exp = `Error`
+                                        act = ls_session-state ).
+
+    ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1
+                                                      check_errors = abap_true ).
+    cl_abap_unit_assert=>assert_equals( exp = `ZZCKUT1`
+                                        act = ls_list-t_session[ 1 ]-id ).
 
     ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1
                                                       search       = `no such app` ).
@@ -514,6 +564,42 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
     ls_view = z2ui5_cl_cockpit_session=>get_view( `ZZCKUT_GONE` ).
     cl_abap_unit_assert=>assert_not_initial( ls_view-error ).
+
+  ENDMETHOD.
+
+  METHOD monitor_marks_steps.
+
+    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `None`
+                                        act = ls_steps-t_step[ 1 ]-monitor_state ).
+    cl_abap_unit_assert=>assert_equals( exp = `Error`
+                                        act = ls_steps-t_step[ 2 ]-monitor_state ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*CX_SY_ZERODIVIDE*event POST*`
+                                         act = ls_steps-t_step[ 2 ]-monitor ).
+    cl_abap_unit_assert=>assert_equals( exp = `Warning`
+                                        act = ls_steps-t_step[ 3 ]-monitor_state ).
+    cl_abap_unit_assert=>assert_equals( exp = `SAVE`
+                                        act = ls_steps-t_step[ 3 ]-event ).
+    cl_abap_unit_assert=>assert_equals( exp = `slow: 2500 ms`
+                                        act = ls_steps-t_step[ 3 ]-monitor ).
+
+  ENDMETHOD.
+
+  METHOD export_as_text.
+
+    DATA(lv_text) = z2ui5_cl_cockpit_session=>export( id   = `ZZCKUT1`
+                                                     user = `ZZ_COCKPIT_UT` ).
+
+    cl_abap_unit_assert=>assert_char_cp( exp = `abap2UI5 session ZZCKUT1*user: ZZ_COCKPIT_UT*3 steps*`
+                                         act = lv_text ).
+    " the first step in full, then only what changed
+    cl_abap_unit_assert=>assert_char_cp( exp = `*== Step 1*ZCL_ORDER-MV_MODE = edit*== Step 2*`
+                                         act = lv_text ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*== Step 3*event SAVE*slow: 2500 ms*changed  ZCL_ORDER-MV_CUSTOMER = 4712*(before: 4711)*`
+                                         act = lv_text ).
+    cl_abap_unit_assert=>assert_char_np( exp = `*== Step 3*MV_MODE*`
+                                         act = lv_text ).
 
   ENDMETHOD.
 

@@ -37,6 +37,7 @@ CLASS z2ui5_cl_cockpit_auth DEFINITION PUBLIC FINAL CREATE PUBLIC.
         repro    TYPE string VALUE `ERROR_REPRODUCE`,
         alert    TYPE string VALUE `ALERT_TEST`,
         session  TYPE string VALUE `SESSION_VIEW`,
+        exported TYPE string VALUE `SESSION_EXPORT`,
       END OF cs_log.
 
     TYPES:

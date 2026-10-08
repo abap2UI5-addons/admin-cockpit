@@ -62,6 +62,10 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         user      TYPE string,
         app       TYPE string,
         steps     TYPE i,
+        " failed roundtrips the monitor logged in the session, and the
+        " highlight of the row: Error when there is one
+        errors    TYPE i,
+        state     TYPE string,
         first     TYPE string,
         last      TYPE string,
         duration  TYPE string,
@@ -90,6 +94,11 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " user went back in the browser or worked in a second window
         follows TYPE i,
         note    TYPE string,
+        " what the roundtrip monitor logged: the event that led to this
+        " step (slow roundtrips), the failure of the next one (errors)
+        event         TYPE string,
+        monitor       TYPE string,
+        monitor_state TYPE string,
         " the highlight of the row: Information for the step shown
         state   TYPE string,
       END OF ty_s_step.
@@ -135,12 +144,16 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The sessions in the draft table, newest activity first. Never
     "! raises - check_readable / error say whether the table could be read.
-    "! @parameter max_sessions | the most sessions listed
-    "! @parameter search       | only sessions whose app or user contains it
+    "! @parameter max_sessions   | the most sessions listed
+    "! @parameter search         | only sessions whose app or user contains it
+    "! @parameter active_minutes | only sessions with a step in the last minutes, 0 for all
+    "! @parameter check_errors   | only sessions in which the monitor logged a failed roundtrip
     CLASS-METHODS get_sessions
       IMPORTING
-        max_sessions  TYPE i DEFAULT 100
-        search        TYPE clike OPTIONAL
+        max_sessions   TYPE i DEFAULT 100
+        search         TYPE clike OPTIONAL
+        active_minutes TYPE i DEFAULT 0
+        check_errors   TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE ty_s_list.
 
@@ -175,6 +188,25 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         search        TYPE clike OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_s_view.
+
+    "! A session as text, to attach to a ticket: every field of its first
+    "! step, then per step what changed, with event and monitor notes.
+    "! Never raises - a session that cannot be read says so in the text.
+    "! @parameter id   | the session - its first draft
+    "! @parameter user | how the user is shown in the header
+    CLASS-METHODS export
+      IMPORTING
+        id            TYPE clike
+        user          TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! A text as UTF-8, base64 encoded - the payload of a data: URL.
+    CLASS-METHODS to_base64
+      IMPORTING
+        val           TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! The session of every draft - the first draft of its chain. A chain
     "! ends at a draft without predecessor or whose predecessor is gone.
@@ -283,6 +315,22 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
+    "! What the roundtrip monitor logged about the steps - only errors and
+    "! slow roundtrips are in its log.
+    CLASS-METHODS fill_monitor
+      CHANGING
+        ct_step TYPE ty_t_step
+      RAISING
+        cx_static_check.
+
+    "! Add a monitor note to a step, an error outranks a slow roundtrip.
+    CLASS-METHODS monitor_add
+      IMPORTING
+        text  TYPE string
+        state TYPE string
+      CHANGING
+        cs_step TYPE ty_s_step.
+
     CLASS-METHODS user_text
       IMPORTING
         uname         TYPE clike
@@ -330,10 +378,14 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         first   TYPE timestampl,
         last    TYPE timestampl,
         last_id TYPE c LENGTH 32,
+        errors  TYPE i,
       END OF ty_s_agg.
+    TYPES ty_id TYPE c LENGTH 32.
     DATA lt_agg TYPE HASHED TABLE OF ty_s_agg WITH UNIQUE KEY root.
     DATA lt_sorted TYPE STANDARD TABLE OF ty_s_agg WITH EMPTY KEY.
     DATA lt_node TYPE ty_t_node.
+    DATA lt_failed TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
+    DATA lv_oldest TYPE timestampl.
 
     TRY.
         lt_node = read_nodes( ).
@@ -368,9 +420,40 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         <agg>-last    = ls_node-timestampl.
         <agg>-last_id = ls_node-id.
       ENDIF.
+      IF lv_oldest IS INITIAL OR ls_node-timestampl < lv_oldest.
+        lv_oldest = ls_node-timestampl.
+      ENDIF.
+    ENDLOOP.
+
+    " the failed roundtrips the monitor logged since the oldest draft, each
+    " counted for the session of the draft it started from
+    TRY.
+        SELECT draft_id_prev FROM z2ui5_t_ck_log
+          WHERE check_error = @abap_true
+            AND timestampl >= @lv_oldest
+          INTO TABLE @lt_failed.
+      CATCH cx_root ##NO_HANDLER.
+        " no monitor log - no error counts
+    ENDTRY.
+    LOOP AT lt_failed INTO DATA(lv_failed).
+      READ TABLE lt_root INTO ls_root WITH TABLE KEY id = lv_failed.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_agg ASSIGNING <agg> WITH TABLE KEY root = ls_root-root.
+      IF sy-subrc = 0.
+        <agg>-errors = <agg>-errors + 1.
+      ENDIF.
     ENDLOOP.
 
     lt_sorted = lt_agg.
+    IF active_minutes > 0.
+      DATA(lv_since) = z2ui5_cl_cockpit_setup=>now_minus_seconds( active_minutes * 60 ).
+      DELETE lt_sorted WHERE last < lv_since.
+    ENDIF.
+    IF check_errors = abap_true.
+      DELETE lt_sorted WHERE errors = 0.
+    ENDIF.
     SORT lt_sorted BY last DESCENDING root ASCENDING.
     result-sessions = lines( lt_sorted ).
 
@@ -386,6 +469,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       DATA(ls_session) = VALUE ty_s_session( id       = ls_agg-root
                                              user     = user_text( ls_agg-uname )
                                              steps    = ls_agg-steps
+                                             errors   = ls_agg-errors
+                                             state    = COND #( WHEN ls_agg-errors > 0 THEN `Error` ELSE `None` )
                                              first    = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-first )
                                              last     = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-last )
                                              duration = duration_text( seconds_between( ts_from = ls_agg-first
@@ -428,6 +513,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         fill_steps( CHANGING ct_step = result-t_step ).
       CATCH cx_root INTO DATA(lx).
         result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    TRY.
+        fill_monitor( CHANGING ct_step = result-t_step ).
+      CATCH cx_root ##NO_HANDLER.
+        " the monitor's log is an extra - the steps stand without it
     ENDTRY.
 
   ENDMETHOD.
@@ -501,6 +592,170 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ls_field-prev  = cut( ls_field-prev ).
       APPEND ls_field TO result-t_field.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD export.
+
+    DATA lt_lines TYPE string_table.
+    DATA lt_old TYPE ty_t_value.
+    DATA lv_prev TYPE string.
+
+    DATA(ls_steps) = get_steps( id ).
+    DATA(lv_nl) = cl_abap_char_utilities=>newline.
+    APPEND |abap2UI5 session { id }| TO lt_lines.
+    APPEND |exported { z2ui5_cl_cockpit_setup=>ts_text( z2ui5_cl_cockpit_setup=>now( ) ) } UTC by { sy-uname }| TO lt_lines.
+    IF user IS NOT INITIAL.
+      APPEND |user: { user }| TO lt_lines.
+    ENDIF.
+    IF ls_steps-error IS NOT INITIAL.
+      APPEND |The session could not be read: { ls_steps-error }| TO lt_lines.
+    ENDIF.
+    APPEND |{ lines( ls_steps-t_step ) } steps{ COND #( WHEN ls_steps-check_capped = abap_true
+                                                         THEN | (the newest { c_max_steps })| ) }| TO lt_lines.
+
+    LOOP AT ls_steps-t_step INTO DATA(ls_step).
+      APPEND `` TO lt_lines.
+      APPEND |== Step { ls_step-step } - { ls_step-time } UTC{ COND #( WHEN ls_step-delta IS NOT INITIAL
+                                                                      THEN | ({ ls_step-delta })| ) }| &&
+             | - { ls_step-app }{ COND #( WHEN ls_step-event IS NOT INITIAL THEN | - event { ls_step-event }| ) }| TO lt_lines.
+      IF ls_step-note IS NOT INITIAL.
+        APPEND |   { ls_step-note }| TO lt_lines.
+      ENDIF.
+      IF ls_step-monitor IS NOT INITIAL.
+        APPEND |   monitor: { ls_step-monitor }| TO lt_lines.
+      ENDIF.
+
+      CLEAR lt_old.
+      CLEAR lv_prev.
+      IF ls_step-follows > 0.
+        lv_prev = ls_steps-t_step[ ls_step-follows ]-id.
+      ENDIF.
+      TRY.
+          DATA(lv_xml) = read_data( ls_step-id ).
+          IF lv_prev IS NOT INITIAL.
+            lt_old = flatten( read_data( lv_prev ) ).
+          ENDIF.
+        CATCH cx_root INTO DATA(lx).
+          APPEND |   not readable: { lx->get_text( ) }| TO lt_lines.
+          CONTINUE.
+      ENDTRY.
+      IF lv_xml IS INITIAL.
+        APPEND `   the draft is gone` TO lt_lines.
+        CONTINUE.
+      ENDIF.
+
+      DATA(lt_field) = diff( it_new      = flatten( lv_xml )
+                             it_old      = lt_old
+                             check_first = xsdbool( lv_prev IS INITIAL ) ).
+      DATA(lv_changes) = 0.
+      LOOP AT lt_field INTO DATA(ls_field).
+        CASE ls_field-change.
+          WHEN cs_change-changed.
+            APPEND |   changed  { ls_field-path } = { cut( ls_field-value ) }   (before: { cut( ls_field-prev ) })| TO lt_lines.
+          WHEN cs_change-new.
+            APPEND |   new      { ls_field-path } = { cut( ls_field-value ) }| TO lt_lines.
+          WHEN cs_change-removed.
+            APPEND |   removed  { ls_field-path }   (was: { cut( ls_field-prev ) })| TO lt_lines.
+          WHEN OTHERS.
+            IF lv_prev IS INITIAL.
+              APPEND |   { ls_field-path } = { cut( ls_field-value ) }| TO lt_lines.
+            ENDIF.
+            CONTINUE.
+        ENDCASE.
+        lv_changes = lv_changes + 1.
+      ENDLOOP.
+      IF lv_prev IS NOT INITIAL AND lv_changes = 0.
+        APPEND `   no field changed` TO lt_lines.
+      ENDIF.
+    ENDLOOP.
+
+    result = concat_lines_of( table = lt_lines
+                              sep   = lv_nl ).
+
+  ENDMETHOD.
+
+  METHOD to_base64.
+
+    CONSTANTS lc_alphabet TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`.
+    DATA lt_part TYPE string_table.
+    DATA lv_utf8 TYPE xstring.
+    DATA lv_byte TYPE x LENGTH 1.
+    DATA lv_off TYPE i.
+    DATA lv_rest TYPE i.
+    DATA lv_value TYPE i.
+    DATA lv_triple TYPE i.
+    DATA lv_part TYPE string.
+    DATA lo_conv TYPE REF TO object.
+    DATA lv_class TYPE c LENGTH 30.
+
+    " UTF-8 through whichever converter the release has - by name, as the
+    " modern one is missing on 7.02 and the classic one is not released in
+    " ABAP Cloud
+    TRY.
+        lv_class = `CL_ABAP_CONV_CODEPAGE`.
+        CALL METHOD (lv_class)=>create_out
+          RECEIVING
+            instance = lo_conv.
+        CALL METHOD lo_conv->(`IF_ABAP_CONV_OUT~CONVERT`)
+          EXPORTING
+            source = val
+          RECEIVING
+            result = lv_utf8.
+      CATCH cx_root.
+        TRY.
+            lv_class = `CL_ABAP_CONV_OUT_CE`.
+            CALL METHOD (lv_class)=>create
+              EXPORTING
+                encoding = `UTF-8`
+              RECEIVING
+                conv     = lo_conv.
+            CALL METHOD lo_conv->(`CONVERT`)
+              EXPORTING
+                data   = val
+              IMPORTING
+                buffer = lv_utf8.
+          CATCH cx_root.
+            RETURN.
+        ENDTRY.
+    ENDTRY.
+
+    DATA(lv_len) = xstrlen( lv_utf8 ).
+    WHILE lv_off < lv_len.
+      lv_rest = lv_len - lv_off.
+      lv_triple = 0.
+      DO 3 TIMES.
+        lv_triple = lv_triple * 256.
+        IF sy-index <= lv_rest.
+          lv_byte = lv_utf8+lv_off(1).
+          lv_value = lv_byte.
+          lv_triple = lv_triple + lv_value.
+          lv_off = lv_off + 1.
+        ENDIF.
+      ENDDO.
+      lv_part = substring( val = lc_alphabet
+                           off = lv_triple DIV 262144
+                           len = 1 ) &&
+                substring( val = lc_alphabet
+                           off = ( lv_triple DIV 4096 ) MOD 64
+                           len = 1 ).
+      IF lv_rest > 1.
+        lv_part = lv_part && substring( val = lc_alphabet
+                                        off = ( lv_triple DIV 64 ) MOD 64
+                                        len = 1 ).
+      ELSE.
+        lv_part = lv_part && `=`.
+      ENDIF.
+      IF lv_rest > 2.
+        lv_part = lv_part && substring( val = lc_alphabet
+                                        off = lv_triple MOD 64
+                                        len = 1 ).
+      ELSE.
+        lv_part = lv_part && `=`.
+      ENDIF.
+      APPEND lv_part TO lt_part.
+    ENDWHILE.
+    result = concat_lines_of( lt_part ).
 
   ENDMETHOD.
 
@@ -586,8 +841,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     LOOP AT lt_mine INTO ls_node.
       DATA(ls_step) = VALUE ty_s_step( step  = sy-tabix
                                        id    = ls_node-id
-                                       time  = z2ui5_cl_cockpit_setup=>ts_text( ls_node-timestampl )
-                                       state = `None` ).
+                                       time          = z2ui5_cl_cockpit_setup=>ts_text( ls_node-timestampl )
+                                       state         = `None`
+                                       monitor_state = `None` ).
       INSERT VALUE #( id   = ls_node-id
                       step = ls_step-step ) INTO TABLE lt_index.
 
@@ -662,6 +918,77 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         lv_app = <step>-app.
       ENDIF.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD fill_monitor.
+
+    TYPES ty_id TYPE c LENGTH 32.
+    TYPES ty_r_id TYPE RANGE OF ty_id.
+    TYPES:
+      BEGIN OF ty_s_log,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        event         TYPE c LENGTH 40,
+        check_error   TYPE abap_bool,
+        check_slow    TYPE abap_bool,
+        ms_total      TYPE i,
+        error_class   TYPE c LENGTH 30,
+        error_head    TYPE c LENGTH 200,
+      END OF ty_s_log.
+    DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
+    DATA lt_range TYPE ty_r_id.
+    DATA lv_done TYPE i.
+
+    LOOP AT ct_step INTO DATA(ls_step).
+      lv_done = lv_done + 1.
+      APPEND VALUE #( sign   = `I`
+                      option = `EQ`
+                      low    = ls_step-id ) TO lt_range.
+      IF lines( lt_range ) < 50 AND lv_done < lines( ct_step ).
+        CONTINUE.
+      ENDIF.
+      SELECT draft_id, draft_id_prev, event, check_error, check_slow, ms_total, error_class, error_head
+        FROM z2ui5_t_ck_log
+        WHERE draft_id IN @lt_range
+           OR draft_id_prev IN @lt_range
+        APPENDING CORRESPONDING FIELDS OF TABLE @lt_log.
+      CLEAR lt_range.
+    ENDLOOP.
+
+    LOOP AT lt_log INTO DATA(ls_log).
+      IF ls_log-check_error = abap_true.
+        " the roundtrip started from this step and failed - its own draft,
+        " if it wrote one, is not where the user saw the screen
+        READ TABLE ct_step ASSIGNING FIELD-SYMBOL(<step>) WITH KEY id = ls_log-draft_id_prev. "#EC CI_SORTSEQ
+        IF sy-subrc = 0.
+          monitor_add( EXPORTING text  = |next roundtrip failed: { ls_log-error_class } { ls_log-error_head } | &&
+                                         |(event { ls_log-event })|
+                                 state = `Error`
+                       CHANGING  cs_step = <step> ).
+        ENDIF.
+        CONTINUE.
+      ENDIF.
+      READ TABLE ct_step ASSIGNING <step> WITH KEY id = ls_log-draft_id. "#EC CI_SORTSEQ
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      <step>-event = ls_log-event.
+      IF ls_log-check_slow = abap_true.
+        monitor_add( EXPORTING text  = |slow: { ls_log-ms_total } ms|
+                               state = `Warning`
+                     CHANGING  cs_step = <step> ).
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD monitor_add.
+
+    cs_step-monitor = |{ cs_step-monitor }{ COND #( WHEN cs_step-monitor IS NOT INITIAL THEN `; ` ) }{ text }|.
+    IF cs_step-monitor_state <> `Error`.
+      cs_step-monitor_state = state.
+    ENDIF.
 
   ENDMETHOD.
 

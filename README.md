@@ -11,14 +11,14 @@ app, installed with abapGit next to abap2UI5.
 | Tab | What it shows | Needs |
 |---|---|---|
 | **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
-| **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
+| **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events and its sessions in the draft table. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
 | **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
 | **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
 | **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
-| **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
+| **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, the **sessions active right now** - open one to see what the user is doing - and a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
 | **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/agent)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
-| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened sessions, test notifications) | - |
+| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, test notifications) | - |
 
 The tabs marked *-* work **without any logging** - install, open, read the
 traffic light. That is the quick win.
@@ -290,7 +290,11 @@ draft and names the draft it started from (`ID_PREV`), across app navigations
 too. Followed backwards, the drafts of one browser session form a chain - the
 **session**. The Drafts & Housekeeping tab lists the sessions in the draft
 table (**Show sessions**, newest activity first, searchable by app or user):
-user, app, number of steps, first and last step, duration.
+user, app, number of steps, **failed roundtrips** the monitor logged in the
+session (*With errors only* keeps just those), first and last step, duration.
+The same list, limited to the last 5 minutes, is on the **Live** tab - who is
+working right now, and on what - and the app detail of the **Apps** tab opens
+it filtered to that app.
 
 Open one and the viewer shows it **step by step**:
 
@@ -298,6 +302,11 @@ Open one and the viewer shows it **step by step**:
   seconds since the step before, app, size, and notes such as *navigated to
   ZCL_...*, *continues step 3* (browser back or a second window) or *the steps
   before it expired*;
+- what the **roundtrip monitor** logged about a step, when it is active: the
+  roundtrip that started from this step and **failed** (exception class,
+  first line, event - the row is red), and the slow roundtrip that wrote it
+  (event, milliseconds). The monitor logs only failed and slow roundtrips, so
+  the event of an ordinary step stays empty;
 - the **fields of the app** after that step - every attribute of the app
   object and the objects it references, nested structures and table rows as
   paths (`ZCL_ORDER-MT_ITEMS[2]-MATNR`), references as an arrow to the class;
@@ -305,6 +314,11 @@ Open one and the viewer shows it **step by step**:
   before) and removed, highlighted; *Only changes* (default) hides the rest,
   *Framework objects* adds abap2UI5's own container, the search narrows by
   field or value.
+
+**Export** writes the whole session into a text file - every field of the
+first step, then per step what changed, with events and monitor notes - to
+attach to a ticket for the app's developer. Every export is written to the
+change log.
 
 From an error, **Open session** in the error detail jumps straight to the step
 the failing roundtrip started from - the screen the user was on, with the
@@ -326,9 +340,9 @@ What it is and is not:
   steps of a session, 1,000 fields per step (narrow them with the search).
 
 **Drafts hold business data of other users.** The sessions are offered to
-administrators only (`CHANGE`), and every opened session is written to the
-change log, with the session's first draft, its app and the user as the list
-shows it. Agree it with your works council like the rest of the monitoring
+administrators only (`CHANGE`), and every opened or exported session is
+written to the change log (`SESSION_VIEW`, `SESSION_EXPORT`), with the
+session's first draft, its app and the user as the list shows it. Agree it with your works council like the rest of the monitoring
 (see [Privacy](#privacy-and-the-works-council)).
 
 ## Agents
