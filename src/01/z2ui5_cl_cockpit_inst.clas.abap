@@ -536,11 +536,16 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                           WHEN lv_recorded = 0 THEN |no recording today, kept { ls_set-wire_days } days|
                                           ELSE |{ lv_recorded } today, kept { ls_set-wire_days } days| )
                          text   = `Stores the complete request and response of each roundtrip - the values users ` &&
-                                  `typed, the messages and screens they saw - for the screen playback in the ` &&
-                                  `session viewer. Records only where the line below is added to the ICF handler.`
-                         fix    = `After z2ui5_cl_ui5_http_handler=>run( server ) add ` &&
-                                  `z2ui5_cl_cockpit_wire=>record( server ) - on ABAP Cloud record( req = request ` &&
-                                  `res = response ). Settings tab: retention in days, 0 switches it off; keep it short.`
+                                  `typed, the messages and screens they saw - for the screen playback, the process ` &&
+                                  `variants and the messages users saw. Records only once one line is added to ` &&
+                                  `your own HTTP handler class.`
+                         fix    = `SICF, the service of your installation (e.g. /sap/bc/z2ui5), tab Handler List: ` &&
+                                  `in that class, method if_http_extension~handle_request, right after ` &&
+                                  `z2ui5_cl_ui5_http_handler=>run( server ) (older: z2ui5_cl_http_handler=>run) ` &&
+                                  `add z2ui5_cl_cockpit_wire=>record( server ). ABAP Cloud: the handler class of ` &&
+                                  `your HTTP service, if_http_service_extension~handle_request, record( req = ` &&
+                                  `request res = response ). Only once the cockpit is active - the line runs in ` &&
+                                  `every app. Settings tab: retention in days, 0 switches it off; keep it short.`
                CHANGING  checks = checks ).
 
   ENDMETHOD.

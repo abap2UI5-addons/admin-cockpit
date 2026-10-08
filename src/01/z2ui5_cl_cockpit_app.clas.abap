@@ -2916,8 +2916,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                  ELSE `Information` ).
 
     " the pressed control stands out - a class mark_pressed gave it
-    DATA(lv_style) = `<div><style>.` && z2ui5_cl_cockpit_wire=>c_pressed && ` \{outline: 3px solid #e9730c !important; ` &&
-                     `outline-offset: 2px; box-shadow: 0 0 0 6px rgba(233,115,12,0.3) !important;\}</style></div>`.
+    DATA(lv_style) = z2ui5_cl_cockpit_wire=>c_pressed_style.
 
     " written by hand: the recorded view comes with namespaces of its own,
     " the frame uses prefixes it cannot have taken
@@ -2983,7 +2982,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         THEN |The recordings could not be read: { s_variants-error }|
         WHEN s_variants-records = 0
         THEN `Nothing recorded in the period. Add z2ui5_cl_cockpit_wire=>record( server ) after abap2UI5 in your ` &&
-             `ICF handler - every roundtrip then counts (README, Recorder).`
+             `HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, says where exactly.`
         WHEN s_variants-t_variant IS INITIAL
         THEN |No run passed { variants_app } in { s_variants-records } recorded roundtrips.|
         ELSE |{ s_variants-runs } runs in { lines( s_variants-t_variant ) } variants, from { s_variants-records } | &&
@@ -3925,7 +3924,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               THEN |Messages users saw - the recordings could not be read: { s_wire_messages-error }|
               WHEN s_wire_messages-records = 0
               THEN `Messages users saw - nothing recorded. Add z2ui5_cl_cockpit_wire=>record( server ) after ` &&
-                   `abap2UI5 in your ICF handler to record every roundtrip (README, Recorder).`
+                   `abap2UI5 in your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, ` &&
+                   `says where exactly.`
               ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&
                    |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) } - | &&
                    |select one for the session where it was shown last| ).

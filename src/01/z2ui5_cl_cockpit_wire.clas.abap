@@ -6,8 +6,9 @@
 "! XML and the model) - unparsed, so every later question can be asked of
 "! old recordings too, and a screen can be set up again from them.
 "!
-"! Opt-in by one line in the ICF handler class of the installation, right
-"! after abap2UI5 ran:
+"! Opt-in by one line in the HTTP handler class of the installation (SICF,
+"! the service's Handler List; not a class of the abap2UI5 repository),
+"! method if_http_extension~handle_request, right after abap2UI5 ran:
 "!   z2ui5_cl_ui5_http_handler=&gt;run( server ).
 "!   z2ui5_cl_cockpit_wire=&gt;record( server ).
 "! (ABAP Cloud: record( req = request res = response ).) Like the monitor it
@@ -123,6 +124,9 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The class a pressed control gets in a rebuilt screen.
     CONSTANTS c_pressed TYPE string VALUE `ckPressed`.
+    "! The CSS that makes it stand out, for a core:HTML - plain braces, the
+    "! attribute it goes into is escaped with xml_escape( ) once.
+    CONSTANTS c_pressed_style TYPE string VALUE `<div><style>.ckPressed {outline: 3px solid #e9730c !important; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(233,115,12,0.3) !important;}</style></div>`.
 
     TYPES:
       "! A process variant: one way through the apps, the events in order.
@@ -1267,7 +1271,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         LOOP AT it_model INTO ls_model WHERE path CP lv_pattern. "#EC CI_SORTSEQ
           DATA(lv_col) = substring( val = ls_model-path
                                     off = strlen( lv_prefix ) ).
-          REPLACE ALL OCCURRENCES OF |\{{ lv_col }\}| IN lv_copy WITH xml_escape( ls_model-value ).
+          lv_copy = replace( val  = lv_copy
+                             sub  = |\{{ lv_col }\}|
+                             with = xml_escape( ls_model-value )
+                             occ  = 0 ).
         ENDLOOP.
         lv_out = lv_out && lv_copy.
       ENDDO.
@@ -1284,7 +1291,11 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     " the absolute bindings {/PATH} by their value
     LOOP AT it_model INTO ls_model.
-      REPLACE ALL OCCURRENCES OF |\{/{ ls_model-path }\}| IN lv_content WITH xml_escape( ls_model-value ).
+      " replace( ) - see xml_escape, the value carries \{ and maybe a $
+      lv_content = replace( val  = lv_content
+                            sub  = |\{/{ ls_model-path }\}|
+                            with = xml_escape( ls_model-value )
+                            occ  = 0 ).
     ENDLOOP.
 
     result-content = lv_content.
@@ -1775,14 +1786,41 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD xml_escape.
 
-    result = val.
-    REPLACE ALL OCCURRENCES OF `&` IN result WITH `&amp;`.
-    REPLACE ALL OCCURRENCES OF `<` IN result WITH `&lt;`.
-    REPLACE ALL OCCURRENCES OF `>` IN result WITH `&gt;`.
-    REPLACE ALL OCCURRENCES OF `"` IN result WITH `&quot;`.
-    " a brace would be read as a binding by UI5
-    REPLACE ALL OCCURRENCES OF `{` IN result WITH `\{`.
-    REPLACE ALL OCCURRENCES OF `}` IN result WITH `\}`.
+    " replace( ), not REPLACE ... WITH: the transpiled REPLACE reads its
+    " WITH text like a regex replacement and drops the backslash of \{
+    " (abap2UI5 backlog runtime-replace-with-literal) - the unit tests would
+    " not see what the system does. The backslash first: UI5 unescapes \\ to
+    " one, and a backslash in front of an escaped brace would otherwise turn
+    " it back into a binding
+    result = replace( val  = val
+                      sub  = `\`
+                      with = `\\`
+                      occ  = 0 ).
+    result = replace( val  = result
+                      sub  = `&`
+                      with = `&amp;`
+                      occ  = 0 ).
+    result = replace( val  = result
+                      sub  = `<`
+                      with = `&lt;`
+                      occ  = 0 ).
+    result = replace( val  = result
+                      sub  = `>`
+                      with = `&gt;`
+                      occ  = 0 ).
+    result = replace( val  = result
+                      sub  = `"`
+                      with = `&quot;`
+                      occ  = 0 ).
+    " the braces last - they would start a binding
+    result = replace( val  = result
+                      sub  = `{`
+                      with = `\{`
+                      occ  = 0 ).
+    result = replace( val  = result
+                      sub  = `}`
+                      with = `\}`
+                      occ  = 0 ).
 
   ENDMETHOD.
 
