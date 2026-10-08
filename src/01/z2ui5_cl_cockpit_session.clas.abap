@@ -29,6 +29,10 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS c_max_fields TYPE i VALUE 1000.
     " a longer value is shown cut, with its length
     CONSTANTS c_max_value  TYPE i VALUE 300.
+    " the most hits a search in the drafts lists
+    CONSTANTS c_max_hits   TYPE i VALUE 200.
+    " a shorter search term would match nearly every draft
+    CONSTANTS c_min_search TYPE i VALUE 3.
 
     CONSTANTS:
       BEGIN OF cs_change,
@@ -142,6 +146,65 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         t_field      TYPE ty_t_field,
       END OF ty_s_view.
 
+    TYPES:
+      "! The value of one field in every step of a session.
+      BEGIN OF ty_s_history,
+        step   TYPE i,
+        time   TYPE string,
+        value  TYPE string,
+        change TYPE string,
+        state  TYPE string,
+      END OF ty_s_history.
+    TYPES ty_t_history TYPE STANDARD TABLE OF ty_s_history WITH EMPTY KEY.
+
+    TYPES:
+      "! A field of a draft that contains a searched value.
+      BEGIN OF ty_s_hit,
+        nr      TYPE i,
+        session TYPE string,
+        id      TYPE string,
+        time    TYPE string,
+        user    TYPE string,
+        app     TYPE string,
+        path    TYPE string,
+        value   TYPE string,
+      END OF ty_s_hit.
+    TYPES ty_t_hit TYPE STANDARD TABLE OF ty_s_hit WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_find,
+        error        TYPE string,
+        drafts       TYPE i,
+        matched      TYPE i,
+        check_capped TYPE abap_bool,
+        t_hit        TYPE ty_t_hit,
+      END OF ty_s_find.
+
+    TYPES:
+      "! A navigation between two apps - or the start of a session in one.
+      BEGIN OF ty_s_flow,
+        source TYPE string,
+        target TYPE string,
+        count  TYPE i,
+      END OF ty_s_flow.
+    TYPES ty_t_flow TYPE STANDARD TABLE OF ty_s_flow WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_flows,
+        error   TYPE string,
+        drafts  TYPE i,
+        t_flow  TYPE ty_t_flow,
+      END OF ty_s_flows.
+
+    TYPES:
+      "! A draft, its predecessor and its app - the input of flows_of.
+      BEGIN OF ty_s_link,
+        id      TYPE c LENGTH 32,
+        id_prev TYPE c LENGTH 32,
+        app     TYPE string,
+      END OF ty_s_link.
+    TYPES ty_t_link TYPE STANDARD TABLE OF ty_s_link WITH EMPTY KEY.
+
     "! The sessions in the draft table, newest activity first. Never
     "! raises - check_readable / error say whether the table could be read.
     "! @parameter max_sessions   | the most sessions listed
@@ -200,6 +263,44 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         user          TYPE clike OPTIONAL
       RETURNING
         VALUE(result) TYPE string.
+
+    "! The value of one field in every step of a session, oldest first;
+    "! a step whose value differs from the step before is marked. Never
+    "! raises - a step that cannot be read is skipped.
+    "! @parameter it_step   | the steps of the session, as get_steps returns them
+    "! @parameter path      | the field, as flatten names it
+    "! @parameter check_all | also the objects of the framework itself
+    CLASS-METHODS get_history
+      IMPORTING
+        it_step       TYPE ty_t_step
+        path          TYPE string
+        check_all     TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(result) TYPE ty_t_history.
+
+    "! The fields of all drafts that contain a value - an order number, a
+    "! customer, a text the user typed - with their session and step. Never
+    "! raises. The search ignores case and needs c_min_search characters.
+    CLASS-METHODS search_drafts
+      IMPORTING
+        search        TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_s_find.
+
+    "! How users move between apps: per pair of apps the navigations in the
+    "! draft table, and per app the sessions that start in it. Never raises.
+    CLASS-METHODS get_flows
+      RETURNING
+        VALUE(result) TYPE ty_s_flows.
+
+    "! The navigations of a set of drafts - a draft whose app differs from
+    "! its predecessor's - and the session starts, source "(start)". Sorted
+    "! by count, the most frequent first.
+    CLASS-METHODS flows_of
+      IMPORTING
+        it_link       TYPE ty_t_link
+      RETURNING
+        VALUE(result) TYPE ty_t_flow.
 
     "! A text as UTF-8, base64 encoded - the payload of a data: URL.
     CLASS-METHODS to_base64
@@ -672,6 +773,241 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     result = concat_lines_of( table = lt_lines
                               sep   = lv_nl ).
+
+  ENDMETHOD.
+
+  METHOD get_history.
+
+    DATA lv_last TYPE string.
+
+    LOOP AT it_step INTO DATA(ls_step).
+      TRY.
+          DATA(lv_xml) = read_data( ls_step-id ).
+        CATCH cx_root.
+          CONTINUE.
+      ENDTRY.
+      IF lv_xml IS INITIAL.
+        CONTINUE.
+      ENDIF.
+
+      DATA(ls_history) = VALUE ty_s_history( step  = ls_step-step
+                                             time  = ls_step-time
+                                             value = `(not there)`
+                                             state = `None` ).
+      LOOP AT flatten( xml       = lv_xml
+                       check_all = check_all ) INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
+        ls_history-value = ls_value-value.
+        EXIT.
+      ENDLOOP.
+      IF result IS NOT INITIAL AND ls_history-value <> lv_last.
+        ls_history-change = cs_change-changed.
+        ls_history-state  = `Warning`.
+      ENDIF.
+      lv_last = ls_history-value.
+      ls_history-value = cut( ls_history-value ).
+      APPEND ls_history TO result.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD search_drafts.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        id   TYPE c LENGTH 32,
+        data TYPE string,
+      END OF ty_s_row.
+    TYPES:
+      BEGIN OF ty_s_meta,
+        id         TYPE c LENGTH 32,
+        uname      TYPE c LENGTH 32,
+        timestampl TYPE timestampl,
+      END OF ty_s_meta.
+    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
+    DATA lt_node TYPE ty_t_node.
+    DATA lv_last TYPE c LENGTH 32.
+    DATA lv_tab TYPE string.
+    DATA lv_search TYPE string.
+
+    lv_search = condense( search ).
+    IF strlen( lv_search ) < c_min_search.
+      result-error = |Enter at least { c_min_search } characters.|.
+      RETURN.
+    ENDIF.
+
+    TRY.
+        lt_node = read_nodes( ).
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    DATA(lt_root) = roots_of( lt_node ).
+    LOOP AT lt_node INTO DATA(ls_node).
+      INSERT VALUE #( id         = ls_node-id
+                      uname      = ls_node-uname
+                      timestampl = ls_node-timestampl ) INTO TABLE lt_meta.
+    ENDLOOP.
+
+    " the serialized text escapes <, > and &, so a term with one of them
+    " is only found in the decoded fields - every draft is taken apart then
+    DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
+    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    DO.
+      CLEAR lt_rows.
+      TRY.
+          SELECT id, data FROM (lv_tab)
+            WHERE id > @lv_last
+            ORDER BY id
+            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+            UP TO 200 ROWS.
+        CATCH cx_root INTO lx.
+          result-error = lx->get_text( ).
+          RETURN.
+      ENDTRY.
+      IF lt_rows IS INITIAL.
+        EXIT.
+      ENDIF.
+
+      LOOP AT lt_rows INTO DATA(ls_row).
+        lv_last = ls_row-id.
+        result-drafts = result-drafts + 1.
+        IF lv_prefilter = abap_true AND ls_row-data NS lv_search.
+          CONTINUE.
+        ENDIF.
+        DATA(lv_matched) = abap_false.
+        LOOP AT flatten( ls_row-data ) INTO DATA(ls_value).
+          IF ls_value-value NS lv_search.
+            CONTINUE.
+          ENDIF.
+          lv_matched = abap_true.
+          IF lines( result-t_hit ) >= c_max_hits.
+            result-check_capped = abap_true.
+            EXIT.
+          ENDIF.
+          READ TABLE lt_meta INTO DATA(ls_meta) WITH TABLE KEY id = ls_row-id.
+          READ TABLE lt_root INTO DATA(ls_root) WITH TABLE KEY id = ls_row-id.
+          APPEND VALUE #( nr      = lines( result-t_hit ) + 1
+                          session = COND #( WHEN ls_root-root IS NOT INITIAL THEN ls_root-root ELSE ls_row-id )
+                          id      = ls_row-id
+                          time    = z2ui5_cl_cockpit_setup=>ts_text( ls_meta-timestampl )
+                          user    = user_text( ls_meta-uname )
+                          app     = app_of( ls_row-data )
+                          path    = ls_value-path
+                          value   = cut( ls_value-value ) ) TO result-t_hit.
+          CLEAR ls_meta.
+          CLEAR ls_root.
+        ENDLOOP.
+        IF lv_matched = abap_true.
+          result-matched = result-matched + 1.
+        ENDIF.
+      ENDLOOP.
+
+      IF result-drafts >= c_max_nodes.
+        result-check_capped = abap_true.
+        EXIT.
+      ENDIF.
+    ENDDO.
+
+  ENDMETHOD.
+
+  METHOD get_flows.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        id      TYPE c LENGTH 32,
+        id_prev TYPE c LENGTH 32,
+        data    TYPE string,
+      END OF ty_s_row.
+    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_link TYPE ty_t_link.
+    DATA lv_last TYPE c LENGTH 32.
+    DATA lv_tab TYPE string.
+
+    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    DO.
+      CLEAR lt_rows.
+      TRY.
+          SELECT id, id_prev, data FROM (lv_tab)
+            WHERE id > @lv_last
+            ORDER BY id
+            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+            UP TO 200 ROWS.
+        CATCH cx_root INTO DATA(lx).
+          result-error = lx->get_text( ).
+          RETURN.
+      ENDTRY.
+      IF lt_rows IS INITIAL.
+        EXIT.
+      ENDIF.
+      LOOP AT lt_rows INTO DATA(ls_row).
+        lv_last = ls_row-id.
+        APPEND VALUE #( id      = ls_row-id
+                        id_prev = ls_row-id_prev
+                        app     = app_of( ls_row-data ) ) TO lt_link.
+      ENDLOOP.
+      IF lines( lt_link ) >= c_max_nodes.
+        EXIT.
+      ENDIF.
+    ENDDO.
+
+    result-drafts = lines( lt_link ).
+    result-t_flow = flows_of( lt_link ).
+
+  ENDMETHOD.
+
+  METHOD flows_of.
+
+    TYPES:
+      BEGIN OF ty_s_app,
+        id  TYPE c LENGTH 32,
+        app TYPE string,
+      END OF ty_s_app.
+    TYPES:
+      BEGIN OF ty_s_count,
+        source TYPE string,
+        target TYPE string,
+        count  TYPE i,
+      END OF ty_s_count.
+    DATA lt_app TYPE HASHED TABLE OF ty_s_app WITH UNIQUE KEY id.
+    DATA lt_count TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY source target.
+    DATA lv_source TYPE string.
+
+    LOOP AT it_link INTO DATA(ls_link).
+      INSERT VALUE #( id  = ls_link-id
+                      app = COND #( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ) )
+             INTO TABLE lt_app.
+    ENDLOOP.
+
+    LOOP AT it_link INTO ls_link.
+      DATA(lv_target) = COND string( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ).
+      IF ls_link-id_prev IS INITIAL.
+        lv_source = `(start)`.
+      ELSE.
+        READ TABLE lt_app INTO DATA(ls_prev) WITH TABLE KEY id = ls_link-id_prev.
+        IF sy-subrc <> 0.
+          " the predecessor expired - neither a start nor a known navigation
+          CONTINUE.
+        ENDIF.
+        IF ls_prev-app = lv_target.
+          CONTINUE.
+        ENDIF.
+        lv_source = ls_prev-app.
+      ENDIF.
+      READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY source = lv_source target = lv_target.
+      IF sy-subrc <> 0.
+        INSERT VALUE #( source = lv_source
+                        target = lv_target ) INTO TABLE lt_count ASSIGNING <count>.
+      ENDIF.
+      <count>-count = <count>-count + 1.
+    ENDLOOP.
+
+    LOOP AT lt_count INTO DATA(ls_count).
+      APPEND VALUE #( source = ls_count-source
+                      target = ls_count-target
+                      count  = ls_count-count ) TO result.
+    ENDLOOP.
+    SORT result BY count DESCENDING source ASCENDING target ASCENDING.
 
   ENDMETHOD.
 

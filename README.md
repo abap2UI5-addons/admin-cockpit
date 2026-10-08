@@ -14,11 +14,11 @@ app, installed with abapGit next to abap2UI5.
 | **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events and its sessions in the draft table. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
 | **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
-| **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
+| **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); **find a value** (an order number, a customer) in all drafts; the **navigation** between apps; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
 | **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
 | **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, the **sessions active right now** - open one to see what the user is doing - and a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
 | **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/agent)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
-| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, test notifications) | - |
+| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, draft searches, test notifications) | - |
 
 The tabs marked *-* work **without any logging** - install, open, read the
 traffic light. That is the quick win.
@@ -313,7 +313,24 @@ Open one and the viewer shows it **step by step**:
 - **what changed** since the step it continues - new, changed (with the value
   before) and removed, highlighted; *Only changes* (default) hides the rest,
   *Framework objects* adds abap2UI5's own container, the search narrows by
-  field or value.
+  field or value;
+- **Compare with this step** pins a step: every other step is then compared
+  with it instead of with the step before - what differs between the screen
+  that worked and the one that failed;
+- select a field for its **history** - its value in every step of the
+  session, the steps where it changed highlighted, each one a jump target:
+  *when did the quantity become 0?*
+
+**Find a value in all drafts** answers the question a support call starts
+with - *"I had a problem with order 4711"*: it searches every field of every
+draft (case-insensitive, at least 3 characters) and lists user, time, app,
+field and value; a hit opens its session at that step, the fields filtered to
+the value. Every search is written to the change log (`DRAFTS_SEARCH`), with
+the term.
+
+**Analyze navigation** counts how users move between apps: per pair of apps
+the navigations in the draft table, and per app the sessions that start in it
+(`(start)`). Only class names are read, no content.
 
 **Export** writes the whole session into a text file - every field of the
 first step, then per step what changed, with events and monitor notes - to
@@ -342,7 +359,8 @@ What it is and is not:
 **Drafts hold business data of other users.** The sessions are offered to
 administrators only (`CHANGE`), and every opened or exported session is
 written to the change log (`SESSION_VIEW`, `SESSION_EXPORT`), with the
-session's first draft, its app and the user as the list shows it. Agree it with your works council like the rest of the monitoring
+session's first draft, its app and the user as the list shows it; so is every
+search in the drafts (`DRAFTS_SEARCH`). Agree it with your works council like the rest of the monitoring
 (see [Privacy](#privacy-and-the-works-council)).
 
 ## Agents

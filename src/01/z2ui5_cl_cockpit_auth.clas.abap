@@ -38,6 +38,7 @@ CLASS z2ui5_cl_cockpit_auth DEFINITION PUBLIC FINAL CREATE PUBLIC.
         alert    TYPE string VALUE `ALERT_TEST`,
         session  TYPE string VALUE `SESSION_VIEW`,
         exported TYPE string VALUE `SESSION_EXPORT`,
+        searched TYPE string VALUE `DRAFTS_SEARCH`,
       END OF cs_log.
 
     TYPES:

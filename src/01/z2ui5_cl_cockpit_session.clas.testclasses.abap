@@ -54,6 +54,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS decode_entities FOR TESTING.
     METHODS app_is_first_own_object FOR TESTING.
     METHODS base64_of_utf8 FOR TESTING.
+    METHODS flows_between_apps FOR TESTING.
     METHODS seconds_across_midnight FOR TESTING.
 
     METHODS draft
@@ -366,6 +367,26 @@ CLASS ltcl_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD flows_between_apps.
+
+    " two sessions: X -> X -> Y -> X and one starting in Y; E's predecessor
+    " is gone, so it is neither a start nor a navigation
+    DATA(lt_flow) = z2ui5_cl_cockpit_session=>flows_of( VALUE #( ( id = `A` app = `X` )
+                                                                 ( id = `B` id_prev = `A` app = `X` )
+                                                                 ( id = `C` id_prev = `B` app = `Y` )
+                                                                 ( id = `D` id_prev = `C` app = `X` )
+                                                                 ( id = `E` id_prev = `GONE` app = `Z` )
+                                                                 ( id = `F` id_prev = `` app = `Y` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_flow( ( source = `(start)` target = `X` count = 1 )
+                                                         ( source = `(start)` target = `Y` count = 1 )
+                                                         ( source = `X` target = `Y` count = 1 )
+                                                         ( source = `Y` target = `X` count = 1 ) )
+        act = lt_flow ).
+
+  ENDMETHOD.
+
   METHOD base64_of_utf8.
 
     cl_abap_unit_assert=>assert_equals( exp = `YWJj`
@@ -420,6 +441,8 @@ CLASS ltcl_session_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION
     METHODS session_of_a_draft FOR TESTING.
     METHODS monitor_marks_steps FOR TESTING.
     METHODS export_as_text FOR TESTING.
+    METHODS history_of_a_field FOR TESTING.
+    METHODS search_in_drafts FOR TESTING.
 
     METHODS order
       IMPORTING
@@ -583,6 +606,55 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                         act = ls_steps-t_step[ 3 ]-event ).
     cl_abap_unit_assert=>assert_equals( exp = `slow: 2500 ms`
                                         act = ls_steps-t_step[ 3 ]-monitor ).
+
+  ENDMETHOD.
+
+  METHOD history_of_a_field.
+
+    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+    DATA(lt_history) = z2ui5_cl_cockpit_session=>get_history( it_step = ls_steps-t_step
+                                                             path    = `ZCL_ORDER-MV_CUSTOMER` ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 3
+                                        act = lines( lt_history ) ).
+    cl_abap_unit_assert=>assert_equals( exp = VALUE z2ui5_cl_cockpit_session=>ty_s_history( step  = 1
+                                                                                            time  = `2099-12-31 10:00:00`
+                                                                                            state = `None` )
+                                        act = lt_history[ 1 ] ).
+    cl_abap_unit_assert=>assert_equals( exp = `4711`
+                                        act = lt_history[ 2 ]-value ).
+    cl_abap_unit_assert=>assert_equals( exp = `Warning`
+                                        act = lt_history[ 2 ]-state ).
+    cl_abap_unit_assert=>assert_equals( exp = `4712`
+                                        act = lt_history[ 3 ]-value ).
+
+    lt_history = z2ui5_cl_cockpit_session=>get_history( it_step = ls_steps-t_step
+                                                       path    = `ZCL_ORDER-NO_SUCH_FIELD` ).
+    cl_abap_unit_assert=>assert_equals( exp = `(not there)`
+                                        act = lt_history[ 3 ]-value ).
+
+  ENDMETHOD.
+
+  METHOD search_in_drafts.
+
+    DATA lv_found TYPE abap_bool.
+
+    DATA(ls_find) = z2ui5_cl_cockpit_session=>search_drafts( `4711` ).
+
+    cl_abap_unit_assert=>assert_initial( ls_find-error ).
+    LOOP AT ls_find-t_hit INTO DATA(ls_hit) WHERE id = `ZZCKUT2`. "#EC CI_SORTSEQ
+      cl_abap_unit_assert=>assert_equals( exp = `ZZCKUT1`
+                                          act = ls_hit-session ).
+      cl_abap_unit_assert=>assert_equals( exp = `ZCL_ORDER-MV_CUSTOMER`
+                                          act = ls_hit-path ).
+      cl_abap_unit_assert=>assert_equals( exp = `ZCL_ORDER`
+                                          act = ls_hit-app ).
+      lv_found = abap_true.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_true( lv_found ).
+
+    ls_find = z2ui5_cl_cockpit_session=>search_drafts( `47` ).
+    cl_abap_unit_assert=>assert_not_initial( ls_find-error ).
 
   ENDMETHOD.
 

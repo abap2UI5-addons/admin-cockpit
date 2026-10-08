@@ -85,6 +85,17 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA step_search    TYPE string.
     DATA session_enabled TYPE abap_bool.
     DATA session_from_error TYPE abap_bool.
+    DATA step_pin_text  TYPE string.
+    DATA t_history      TYPE z2ui5_cl_cockpit_session=>ty_t_history.
+    DATA history_title  TYPE string.
+    DATA history_shown  TYPE abap_bool.
+    DATA draft_search   TYPE string.
+    DATA s_find         TYPE z2ui5_cl_cockpit_session=>ty_s_find.
+    DATA find_text      TYPE string.
+    DATA find_shown     TYPE abap_bool.
+    DATA s_flows        TYPE z2ui5_cl_cockpit_session=>ty_s_flows.
+    DATA flows_text     TYPE string.
+    DATA flows_shown    TYPE abap_bool.
 
   PROTECTED SECTION.
     DATA client     TYPE REF TO z2ui5_if_client.
@@ -92,6 +103,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA s_occ      TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
     DATA s_session  TYPE z2ui5_cl_cockpit_session=>ty_s_session.
     DATA step_index TYPE i.
+    " the step every other one is compared with, 0 for the step it continues
+    DATA step_base  TYPE i.
 
     METHODS view_display.
     METHODS view_no_auth.
@@ -110,12 +123,14 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! Open a session in the step viewer - logged, administrators only.
     "! @parameter id    | the session, its first draft
     "! @parameter draft | the step to show first, the newest when empty
-    "! @parameter user  | how the user is shown when the list has not got it
+    "! @parameter user   | how the user is shown when the list has not got it
+    "! @parameter search | a value to filter the fields with - all fields, not only changes
     METHODS session_open
       IMPORTING
-        id    TYPE clike
-        draft TYPE clike OPTIONAL
-        user  TYPE clike OPTIONAL.
+        id     TYPE clike
+        draft  TYPE clike OPTIONAL
+        user   TYPE clike OPTIONAL
+        search TYPE clike OPTIONAL.
 
     "! Show a step of the open session, compared with the step it continues.
     METHODS step_show
@@ -811,6 +826,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `icon`  v = `sap-icon://pie-chart`
             )->a( n = `press` v = client->_event( `DRAFTS_ANALYZE` )
         )->tag( `Button`
+            )->a( n = `text`  v = `Analyze navigation`
+            )->a( n = `icon`  v = `sap-icon://split`
+            )->a( n = `press` v = client->_event( `DRAFTS_FLOWS` )
+        )->tag( `Button`
             )->a( n = `text`    v = `Clean up cockpit log (retention)`
             )->a( n = `icon`    v = `sap-icon://broken-link`
             )->a( n = `enabled` v = client->_bind( s_head-can_change )
@@ -910,6 +929,95 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{DURATION}`
                     )->tag( `Text`
                         )->a( n = `text` v = `{NOTE}` ).
+
+    drafts->ele( `OverflowToolbar`
+
+        )->tag( `Title`
+            )->a( n = `text` v = `Find a value in all drafts`
+        )->tag( `ToolbarSpacer`
+        )->tag( `Input`
+            )->a( n = `value`       v = client->_bind( draft_search )
+            )->a( n = `placeholder` v = `an order number, a customer, a text the user typed`
+            )->a( n = `width`       v = `22rem`
+            )->a( n = `submit`      v = client->_event( `DRAFTS_FIND` )
+            )->a( n = `enabled`     v = client->_bind( s_head-can_change )
+        )->tag( `Button`
+            )->a( n = `text`    v = `Find`
+            )->a( n = `icon`    v = `sap-icon://search`
+            )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->a( n = `press`   v = client->_event( `DRAFTS_FIND` ) ).
+
+    drafts->ele( `Table`
+        )->a( n = `headerText`       v = client->_bind( find_text )
+        )->a( n = `items`            v = client->_bind( s_find-t_hit )
+        )->a( n = `visible`          v = client->_bind( find_shown )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `20`
+        )->a( n = `noDataText`       v = `Not found in any draft.`
+        )->a( n = `class`            v = `sapUiMediumMarginBottom`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `User`
+            )->tag( `Column`
+                )->a( n = `header` v = `Step written (UTC)`
+            )->tag( `Column`
+                )->a( n = `header` v = `App`
+            )->tag( `Column`
+                )->a( n = `header` v = `Field`
+            )->tag( `Column`
+                )->a( n = `header` v = `Value`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->a( n = `type`  v = `Active`
+                )->a( n = `press` v = client->_event( val = `FIND_OPEN` arg = `${NR}` )
+
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{USER}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TIME}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{APP}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{PATH}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALUE}` ).
+
+    drafts->ele( `Table`
+        )->a( n = `headerText`       v = client->_bind( flows_text )
+        )->a( n = `items`            v = client->_bind( s_flows-t_flow )
+        )->a( n = `visible`          v = client->_bind( flows_shown )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `20`
+        )->a( n = `noDataText`       v = `No navigation and no session start in the draft table.`
+        )->a( n = `class`            v = `sapUiMediumMarginBottom`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `From`
+            )->tag( `Column`
+                )->a( n = `header` v = `To`
+            )->tag( `Column`
+                )->a( n = `header` v = `Times`
+                )->a( n = `width`  v = `8rem`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{SOURCE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TARGET}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{COUNT}` ).
 
     drafts->ele( `Table`
         )->a( n = `headerText`       v = `Drafts per user (pseudonymized unless user tracking is NAME)`
@@ -2217,6 +2325,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `tooltip` v = `Last step`
             )->a( n = `enabled` v = client->_bind( step_can_next )
             )->a( n = `press`   v = client->_event( `STEP_LAST` )
+        )->tag( `Button`
+            )->a( n = `text`    v = client->_bind( step_pin_text )
+            )->a( n = `icon`    v = `sap-icon://pushpin-off`
+            )->a( n = `tooltip` v = `Compare every other step with this one instead of with the step before it`
+            )->a( n = `press`   v = client->_event( `STEP_PIN` )
         )->tag( `ToolbarSpacer`
         )->tag( `CheckBox`
             )->a( n = `text`     v = `Only changes`
@@ -2242,6 +2355,64 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `type`     v = client->_bind( step_strip )
         )->a( n = `showIcon` v = `true`
         )->a( n = `class`    v = `sapUiSmallMarginTopBottom` ).
+
+    content->ele( `VBox`
+        )->a( n = `visible` v = client->_bind( history_shown )
+        )->a( n = `class`   v = `sapUiSmallMarginBottom`
+
+        )->ele( `items`
+
+            )->ele( `OverflowToolbar`
+
+                )->tag( `Title`
+                    )->a( n = `text` v = client->_bind( history_title )
+                )->tag( `ToolbarSpacer`
+                )->tag( `Button`
+                    )->a( n = `icon`    v = `sap-icon://decline`
+                    )->a( n = `tooltip` v = `Close the history`
+                    )->a( n = `press`   v = client->_event( `HISTORY_CLOSE` )
+
+            )->end(
+            )->ele( `ScrollContainer`
+                )->a( n = `height`     v = `10rem`
+                )->a( n = `vertical`   v = `true`
+                )->a( n = `horizontal` v = `false`
+
+                )->ele( `Table`
+                    )->a( n = `items` v = client->_bind( t_history )
+
+                    )->ele( `columns`
+
+                        )->tag( `Column`
+                            )->a( n = `header` v = `Step`
+                            )->a( n = `width`  v = `4rem`
+                        )->tag( `Column`
+                            )->a( n = `header` v = `Time (UTC)`
+                            )->a( n = `width`  v = `11rem`
+                        )->tag( `Column`
+                            )->a( n = `header` v = `Value`
+                        )->tag( `Column`
+                            )->a( n = `header` v = `Change`
+                            )->a( n = `width`  v = `7rem`
+
+                    )->end(
+                    )->ele( `items`
+                        )->ele( `ColumnListItem`
+                            )->a( n = `type`      v = `Active`
+                            )->a( n = `highlight` v = `{STATE}`
+                            )->a( n = `press`     v = client->_event( val = `STEP_GOTO` arg = `${STEP}` )
+
+                            )->ele( `cells`
+
+                                )->tag( `Text`
+                                    )->a( n = `text` v = `{STEP}`
+                                )->tag( `Text`
+                                    )->a( n = `text` v = `{TIME}`
+                                )->tag( `Text`
+                                    )->a( n = `text` v = `{VALUE}`
+                                )->tag( `ObjectStatus`
+                                    )->a( n = `text`  v = `{CHANGE}`
+                                    )->a( n = `state` v = `{STATE}` ).
 
     content->ele( `ScrollContainer`
         )->a( n = `height`     v = `12rem`
@@ -2303,7 +2474,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                             )->a( n = `text` v = `{NOTE}` ).
 
     content->ele( `Table`
-        )->a( n = `headerText`       v = `Fields of the app after this step`
+        )->a( n = `headerText`       v = `Fields of the app after this step - select one for its value in every step`
         )->a( n = `items`            v = client->_bind( s_step-t_field )
         )->a( n = `noDataText`       v = `No field - or none that matches the filter.`
         )->a( n = `growing`          v = `true`
@@ -2326,7 +2497,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->end(
         )->ele( `items`
             )->ele( `ColumnListItem`
+                )->a( n = `type`      v = `Active`
                 )->a( n = `highlight` v = `{STATE}`
+                )->a( n = `press`     v = client->_event( val = `FIELD_HISTORY` arg = `${PATH}` )
 
                 )->ele( `cells`
 
@@ -2409,7 +2582,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         lv_index = ls_step-step.
       ENDLOOP.
     ENDIF.
-    CLEAR step_search.
+    step_search = search.
+    IF search IS NOT INITIAL.
+      step_changes = abap_false.
+    ENDIF.
+    CLEAR step_base.
+    CLEAR t_history.
+    CLEAR history_shown.
     step_show( lv_index ).
     IF ls_steps-check_capped = abap_true.
       step_info = |Only the newest { z2ui5_cl_cockpit_session=>c_max_steps } steps are shown. { step_info }|.
@@ -2436,9 +2615,16 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       <step>-state = COND #( WHEN <step>-step = step_index THEN `Information` ELSE `None` ).
     ENDLOOP.
     DATA(ls_step) = t_steps[ step_index ].
-    IF ls_step-follows > 0.
-      lv_prev = t_steps[ ls_step-follows ]-id.
+    DATA(lv_base) = ls_step-follows.
+    IF step_base > 0 AND step_base <> step_index AND step_base <= lines( t_steps ).
+      lv_base = step_base.
     ENDIF.
+    IF lv_base > 0.
+      lv_prev = t_steps[ lv_base ]-id.
+    ENDIF.
+    step_pin_text = COND #( WHEN step_base = 0 THEN `Compare with this step`
+                            WHEN step_base = step_index THEN |Unpin step { step_base }|
+                            ELSE |Compare with this step (now: step { step_base })| ).
 
     " the first step has nothing to compare with - all of it, whatever the filter
     s_step = z2ui5_cl_cockpit_session=>get_view( id            = ls_step-id
@@ -2462,10 +2648,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       step_info = |{ s_step-app }: { s_step-fields } fields - the state after the first roundtrip of this session | &&
                   |that is still in the draft table.|.
     ELSE.
-      step_info = |{ s_step-app }: { s_step-changes } of { s_step-fields } fields changed since step | &&
-                  |{ ls_step-follows }{ COND #( WHEN ls_step-delta IS NOT INITIAL
-                                                THEN |, { ls_step-delta } later| ) }. The values the user typed | &&
-                  |and what the event did to them.|.
+      step_info = |{ s_step-app }: { s_step-changes } of { s_step-fields } fields differ from step | &&
+                  |{ lv_base }{ COND #( WHEN lv_base <> ls_step-follows THEN ` (pinned for comparison)`
+                                        WHEN ls_step-delta IS NOT INITIAL THEN |, { ls_step-delta } earlier| ) }. | &&
+                  |The values the user typed and what the event did to them.|.
     ENDIF.
     IF ls_step-note IS NOT INITIAL.
       step_info = |{ step_info } ({ ls_step-note })|.
@@ -2713,6 +2899,45 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                    ( |session_{ to_lower( s_session-app ) }_{ z2ui5_cl_cockpit_setup=>day_minus( 0 ) }.txt| ) ) ).
             ENDIF.
 
+          WHEN `DRAFTS_FIND`.
+            IF check_change( ) = abap_true.
+              " the change log first, committed - the search reads other users' data
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-searched
+                                          text   = |drafts searched for "{ draft_search }"| ).
+              COMMIT WORK.
+              s_find = z2ui5_cl_cockpit_session=>search_drafts( draft_search ).
+              find_shown = abap_true.
+              IF s_find-error IS NOT INITIAL.
+                find_text = s_find-error.
+              ELSE.
+                find_text = |"{ draft_search }" - { lines( s_find-t_hit ) } field(s) in { s_find-matched } of | &&
+                            |{ s_find-drafts } drafts{ COND #( WHEN s_find-check_capped = abap_true
+                                                              THEN ` - the first hits only` ) }. Select one to open | &&
+                            |its session at that step.|.
+              ENDIF.
+            ENDIF.
+
+          WHEN `FIND_OPEN`.
+            IF check_change( ) = abap_true.
+              DATA(lv_nr) = CONV i( client->get_event_arg( ) ).
+              DATA(ls_hit) = VALUE #( s_find-t_hit[ nr = lv_nr ] OPTIONAL ). "#EC CI_SORTSEQ
+              IF ls_hit IS NOT INITIAL.
+                session_from_error = abap_false.
+                session_open( id     = ls_hit-session
+                              draft  = ls_hit-id
+                              user   = ls_hit-user
+                              search = draft_search ).
+              ENDIF.
+            ENDIF.
+
+          WHEN `DRAFTS_FLOWS`.
+            s_flows = z2ui5_cl_cockpit_session=>get_flows( ).
+            flows_shown = abap_true.
+            flows_text = COND #( WHEN s_flows-error IS NOT INITIAL
+                                 THEN |The draft table could not be read: { s_flows-error }|
+                                 ELSE |Navigation between apps and session starts, from { s_flows-drafts } drafts - | &&
+                                      |"(start)" is a session's first app| ).
+
           WHEN `APP_SESSIONS`.
             IF check_change( ) = abap_true.
               client->popup_destroy( ).
@@ -2722,9 +2947,27 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               load_tab( ).
             ENDIF.
 
-          WHEN `STEP_FIRST` OR `STEP_BACK` OR `STEP_NEXT` OR `STEP_LAST` OR `STEP_GOTO` OR `STEP_REFRESH`.
+          WHEN `STEP_FIRST` OR `STEP_BACK` OR `STEP_NEXT` OR `STEP_LAST` OR `STEP_GOTO` OR `STEP_REFRESH`
+              OR `STEP_PIN` OR `FIELD_HISTORY` OR `HISTORY_CLOSE`.
             IF check_change( ) = abap_true.
               CASE client->get_event( ).
+                WHEN `STEP_PIN`.
+                  step_base = COND #( WHEN step_base = step_index THEN 0 ELSE step_index ).
+                  step_show( step_index ).
+                WHEN `FIELD_HISTORY`.
+                  DATA(lv_path) = client->get_event_arg( ).
+                  t_history = z2ui5_cl_cockpit_session=>get_history( it_step   = t_steps
+                                                                     path      = lv_path
+                                                                     check_all = step_all ).
+                  DATA(lv_changes) = 0.
+                  LOOP AT t_history TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
+                    lv_changes = lv_changes + 1.
+                  ENDLOOP.
+                  history_title = |{ lv_path } - { lv_changes } change(s) in { lines( t_history ) } steps|.
+                  history_shown = abap_true.
+                WHEN `HISTORY_CLOSE`.
+                  CLEAR t_history.
+                  CLEAR history_shown.
                 WHEN `STEP_FIRST`.
                   step_show( 1 ).
                 WHEN `STEP_BACK`.
