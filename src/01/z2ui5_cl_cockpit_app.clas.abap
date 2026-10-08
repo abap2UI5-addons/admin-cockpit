@@ -63,6 +63,13 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA t_occurrences TYPE z2ui5_cl_cockpit_stats=>ty_t_occurrence.
     DATA error_text    TYPE string.
     DATA error_outcome TYPE string.
+    DATA s_failures    TYPE z2ui5_cl_cockpit_session=>ty_s_failures.
+    DATA failures_text TYPE string.
+    DATA failures_strip TYPE string.
+    DATA failures_shown TYPE abap_bool.
+    DATA s_app_objects TYPE z2ui5_cl_cockpit_session=>ty_s_app_objects.
+    DATA app_objects_text TYPE string.
+    DATA app_objects_shown TYPE abap_bool.
     DATA repro_enabled TYPE abap_bool.
     DATA repro_hint    TYPE string.
     DATA s_repro       TYPE z2ui5_cl_cockpit_repro=>ty_s_result.
@@ -161,6 +168,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! What the users did after each occurrence - continued, stopped here -
     "! into t_occurrences and error_outcome. Reads no draft content.
     METHODS outcomes_fill.
+
+    "! What the failing cases of the open error group have in common -
+    "! into s_failures and failures_text.
+    METHODS failures_analyze.
     METHODS load_head.
     METHODS load_tab.
     METHODS check_change
@@ -2008,59 +2019,97 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `contentWidth` v = `80%`
         )->a( n = `resizable`    v = `true` ).
 
-    dialog->ele( `content`
-        )->ele( `Table`
-            )->a( n = `items` v = client->_bind( t_events )
+    DATA(app_content) = dialog->ele( `content` ).
 
-            )->ele( `columns`
+    app_content->ele( `Table`
+        )->a( n = `items` v = client->_bind( t_events )
 
-                )->tag( `Column`
-                    )->a( n = `header` v = `Event`
-                )->tag( `Column`
-                    )->a( n = `header` v = `Roundtrips`
-                )->tag( `Column`
-                    )->a( n = `header` v = `Avg ms`
-                )->tag( `Column`
-                    )->a( n = `header` v = `p95 ms`
-                )->tag( `Column`
-                    )->a( n = `header` v = `Max ms`
-                )->tag( `Column`
-                    )->a( n = `header` v = `Errors`
-                )->tag( `Column`
-                    )->a( n = `header` v = `Avg KB`
-                )->tag( `Column`
-                    )->a( n = `header` v = `Last used`
+        )->ele( `columns`
 
-            )->end(
-            )->ele( `items`
-                )->ele( `ColumnListItem`
-                    )->ele( `cells`
+            )->tag( `Column`
+                )->a( n = `header` v = `Event`
+            )->tag( `Column`
+                )->a( n = `header` v = `Roundtrips`
+            )->tag( `Column`
+                )->a( n = `header` v = `Avg ms`
+            )->tag( `Column`
+                )->a( n = `header` v = `p95 ms`
+            )->tag( `Column`
+                )->a( n = `header` v = `Max ms`
+            )->tag( `Column`
+                )->a( n = `header` v = `Errors`
+            )->tag( `Column`
+                )->a( n = `header` v = `Avg KB`
+            )->tag( `Column`
+                )->a( n = `header` v = `Last used`
 
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{EVENT}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{ROUNDTRIPS}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{AVG_MS}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{P95_MS}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{MAX_MS}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{ERRORS}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{KB_RES_AVG}`
-                        )->tag( `Text`
-                            )->a( n = `text` v = `{LAST_USED}` ).
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
 
-    dialog->ele( `beginButton`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{EVENT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{ROUNDTRIPS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{AVG_MS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{P95_MS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{MAX_MS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{ERRORS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{KB_RES_AVG}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LAST_USED}` ).
+
+    app_content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( app_objects_text )
+        )->a( n = `type`     v = `Information`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( app_objects_shown )
+        )->a( n = `class`    v = `sapUiSmallMarginTop` ).
+
+    app_content->ele( `Table`
+        )->a( n = `items`   v = client->_bind( s_app_objects-t_object )
+        )->a( n = `visible` v = client->_bind( app_objects_shown )
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Business object`
+            )->tag( `Column`
+                )->a( n = `header` v = `In drafts`
+            )->tag( `Column`
+                )->a( n = `header` v = `For example in field`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{OBJECT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{DRAFTS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{FIELD}` ).
+
+    " buttons, not beginButton / endButton - a Dialog ignores those two once
+    " buttons is set, and the footer has three here
+    dialog->ele( `buttons`
+        )->tag( `Button`
+            )->a( n = `text`    v = `Business objects`
+            )->a( n = `icon`    v = `sap-icon://customer-and-supplier`
+            )->a( n = `tooltip` v = `The business objects this app works with, from its drafts - types only, no values`
+            )->a( n = `press`   v = client->_event( `APP_OBJECTS` )
         )->tag( `Button`
             )->a( n = `text`    v = `Sessions of this app`
             )->a( n = `icon`    v = `sap-icon://history`
             )->a( n = `enabled` v = client->_bind( s_head-can_change )
-            )->a( n = `press`   v = client->_event( `APP_SESSIONS` ) ).
-
-    dialog->ele( `endButton`
+            )->a( n = `press`   v = client->_event( `APP_SESSIONS` )
         )->tag( `Button`
             )->a( n = `text`  v = `Close`
             )->a( n = `press` v = client->follow_up_action( z2ui5_if_client=>cs_event-popup_close ) ).
@@ -2178,7 +2227,75 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `icon`    v = `sap-icon://history`
             )->a( n = `enabled` v = client->_bind( session_enabled )
             )->a( n = `tooltip` v = `The steps of the user up to this error, from the draft table - administrators only`
-            )->a( n = `press`   v = client->_event( `SESSION_FROM_ERROR` ) ).
+            )->a( n = `press`   v = client->_event( `SESSION_FROM_ERROR` )
+        )->tag( `Button`
+            )->a( n = `text`    v = `Analyze failures`
+            )->a( n = `icon`    v = `sap-icon://lightbulb`
+            )->a( n = `enabled` v = client->_bind( s_head-can_change )
+            )->a( n = `tooltip` v = `What the failing cases have in common, against other states of the app - administrators only`
+            )->a( n = `press`   v = client->_event( `ERROR_ANALYZE` ) ).
+
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( failures_text )
+        )->a( n = `type`     v = client->_bind( failures_strip )
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( failures_shown )
+        )->a( n = `class`    v = `sapUiSmallMarginTopBottom` ).
+
+    content->ele( `Table`
+        )->a( n = `headerText` v = `Values the failing cases share - a hint at the cause`
+        )->a( n = `items`      v = client->_bind( s_failures-t_common )
+        )->a( n = `visible`    v = client->_bind( failures_shown )
+        )->a( n = `noDataText` v = `No value tells the failing cases from the others.`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Field`
+            )->tag( `Column`
+                )->a( n = `header` v = `Value`
+            )->tag( `Column`
+                )->a( n = `header` v = `How often`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{PATH}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALUE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{TEXT}` ).
+
+    content->ele( `Table`
+        )->a( n = `headerText` v = `Business objects in the failing cases`
+        )->a( n = `items`      v = client->_bind( s_failures-t_business )
+        )->a( n = `visible`    v = client->_bind( failures_shown )
+        )->a( n = `noDataText` v = `No business object recognized in the failing cases.`
+        )->a( n = `class`      v = `sapUiSmallMarginTop`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Business object`
+            )->tag( `Column`
+                )->a( n = `header` v = `Value`
+            )->tag( `Column`
+                )->a( n = `header` v = `In failing cases`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{OBJECT}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{VALUE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{DRAFTS}` ).
 
     dialog->ele( `endButton`
         )->tag( `Button`
@@ -2867,6 +2984,38 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD failures_analyze.
+
+    DATA lt_id TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+
+    LOOP AT t_occurrences INTO DATA(ls_occ).
+      APPEND ls_occ-draft_id_prev TO lt_id.
+    ENDLOOP.
+    s_failures = z2ui5_cl_cockpit_session=>analyze_failures( it_id = lt_id
+                                                            app   = s_error-app ).
+    failures_shown = abap_true.
+    failures_strip = `Information`.
+
+    IF s_failures-error IS NOT INITIAL.
+      failures_strip = `Error`.
+      failures_text = |The drafts could not be read: { s_failures-error }|.
+    ELSEIF s_failures-failing < 2.
+      failures_strip = `Warning`.
+      failures_text = |{ s_failures-failing } of the { lines( t_occurrences ) } occurrences still have the state | &&
+                      |they failed in - drafts expire after a few hours, and two are needed to compare.|.
+    ELSEIF s_failures-t_common IS INITIAL.
+      failures_text = |No value tells the { s_failures-failing } failing states from { s_failures-others } other | &&
+                      |states of { s_error-app }. The cause is not in a value the app holds - look at the event, | &&
+                      |the database or the user's authorizations.|.
+    ELSE.
+      failures_strip = `Warning`.
+      failures_text = |{ lines( s_failures-t_common ) } value(s) the { s_failures-failing } failing states share | &&
+                      |and the { s_failures-others } other states of { s_error-app } rarely have - check them first. | &&
+                      |A correlation, not a proof.|.
+    ENDIF.
+
+  ENDMETHOD.
+
   METHOD occurrence_select.
 
     DATA lv_owner TYPE string.
@@ -2914,6 +3063,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
           WHEN `APP_DETAIL`.
             detail_app = client->get_event_arg( ).
+            CLEAR s_app_objects.
+            CLEAR app_objects_shown.
             t_events = z2ui5_cl_cockpit_stats=>get_app_events( app  = detail_app
                                                               days = get_days( ) ).
             popup_app( ).
@@ -2924,6 +3075,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             t_occurrences = z2ui5_cl_cockpit_stats=>get_error_occurrences( is_error = s_error
                                                                           days     = get_days( ) ).
             outcomes_fill( ).
+            CLEAR s_failures.
+            CLEAR failures_shown.
             occurrence_select( VALUE #( t_occurrences[ 1 ]-id OPTIONAL ) ).
             popup_error( ).
 
@@ -3147,6 +3300,27 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               load_tab( ).
             ENDIF.
 
+          WHEN `APP_OBJECTS`.
+            s_app_objects = z2ui5_cl_cockpit_session=>get_app_objects( detail_app ).
+            app_objects_shown = abap_true.
+            app_objects_text = COND #(
+                WHEN s_app_objects-error IS NOT INITIAL
+                THEN |The draft table could not be read: { s_app_objects-error }|
+                WHEN s_app_objects-drafts = 0
+                THEN |No draft of { detail_app } in the draft table - nothing to read the business objects from.|
+                ELSE |The business objects { detail_app } works with, recognized by field name in | &&
+                     |{ s_app_objects-drafts } of its drafts.| ).
+
+          WHEN `ERROR_ANALYZE`.
+            IF check_change( ) = abap_true.
+              " the change log first, committed - the analysis reads other users' drafts
+              z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-analysis
+                                          text   = |failures analyzed: { s_error-app } { s_error-event } | &&
+                                                   |{ s_error-error_class }| ).
+              COMMIT WORK.
+              failures_analyze( ).
+            ENDIF.
+
           WHEN `APP_SESSIONS`.
             IF check_change( ) = abap_true.
               client->popup_destroy( ).
@@ -3329,6 +3503,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ENDIF.
     IF step_strip IS INITIAL.
       step_strip = `Information`.
+    ENDIF.
+    IF failures_strip IS INITIAL.
+      failures_strip = `Information`.
     ENDIF.
     IF s_kpi-p95_state IS INITIAL.
       s_kpi-p95_state = `Neutral`.

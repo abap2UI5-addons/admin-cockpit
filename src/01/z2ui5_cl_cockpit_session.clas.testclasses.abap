@@ -60,6 +60,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS messages_in_state FOR TESTING.
     METHODS flows_with_ends FOR TESTING.
     METHODS outcomes_after_errors FOR TESTING.
+    METHODS common_values_of_failures FOR TESTING.
     METHODS seconds_across_midnight FOR TESTING.
 
     METHODS draft
@@ -418,6 +419,50 @@ CLASS ltcl_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD common_values_of_failures.
+
+    " QTY = 0 in all three failing states and in one of four others: the
+    " hint. MODE = edit everywhere: no hint. NOTE = x in two of three: too few
+    DATA(lt_failing) = VALUE z2ui5_cl_cockpit_session=>ty_t_sample(
+        ( sample = 1 path = `APP-QTY` value = `0` )
+        ( sample = 1 path = `APP-MODE` value = `edit` )
+        ( sample = 1 path = `APP-NOTE` value = `x` )
+        ( sample = 2 path = `APP-QTY` value = `0` )
+        ( sample = 2 path = `APP-MODE` value = `edit` )
+        ( sample = 2 path = `APP-NOTE` value = `x` )
+        ( sample = 3 path = `APP-QTY` value = `0` )
+        ( sample = 3 path = `APP-MODE` value = `edit` )
+        ( sample = 3 path = `APP-NOTE` value = `y` ) ).
+    DATA(lt_others) = VALUE z2ui5_cl_cockpit_session=>ty_t_sample(
+        ( sample = 1 path = `APP-QTY` value = `0` )
+        ( sample = 1 path = `APP-MODE` value = `edit` )
+        ( sample = 2 path = `APP-QTY` value = `5` )
+        ( sample = 2 path = `APP-MODE` value = `edit` )
+        ( sample = 3 path = `APP-QTY` value = `7` )
+        ( sample = 3 path = `APP-MODE` value = `edit` )
+        ( sample = 4 path = `APP-QTY` value = `1` )
+        ( sample = 4 path = `APP-MODE` value = `edit` ) ).
+
+    DATA(lt_common) = z2ui5_cl_cockpit_session=>common_of( it_failing = lt_failing
+                                                          it_others  = lt_others ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( lt_common ) ).
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_s_common( path       = `APP-QTY`
+                                                           value      = `0`
+                                                           failing    = 3
+                                                           of_failing = 3
+                                                           others_pct = 25
+                                                           text       = `in 3 of 3 failing, in 25 % of 4 other states` )
+        act = lt_common[ 1 ] ).
+
+    " no baseline - nothing to tell the failing ones from
+    cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_session=>common_of( it_failing = lt_failing
+                                                                             it_others  = VALUE #( ) ) ).
+
+  ENDMETHOD.
+
   METHOD outcomes_after_errors.
 
     " nodes( ): B is continued by C and D, C and G are last steps - C long
@@ -562,6 +607,7 @@ CLASS ltcl_session_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION
     METHODS export_as_text FOR TESTING.
     METHODS history_of_a_field FOR TESTING.
     METHODS search_in_drafts FOR TESTING.
+    METHODS failures_and_app_objects FOR TESTING.
 
     METHODS order
       IMPORTING
@@ -766,6 +812,29 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                                        path    = `ZCL_ORDER-NO_SUCH_FIELD` ).
     cl_abap_unit_assert=>assert_equals( exp = `(not there)`
                                         act = lt_history[ 3 ]-value ).
+
+  ENDMETHOD.
+
+  METHOD failures_and_app_objects.
+
+    " steps 2 and 3 as the failing states: step 1 is a baseline of the app
+    DATA(ls_failures) = z2ui5_cl_cockpit_session=>analyze_failures( it_id = VALUE #( ( `ZZCKUT2` ) ( `ZZCKUT3` ) )
+                                                                   app   = `ZCL_ORDER` ).
+
+    cl_abap_unit_assert=>assert_initial( ls_failures-error ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = ls_failures-failing ).
+    cl_abap_unit_assert=>assert_true( xsdbool( ls_failures-others >= 1 ) ).
+    " MV_MODE = edit is in every state, the customers differ - no hint
+    cl_abap_unit_assert=>assert_initial( ls_failures-t_common ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( ls_failures-t_business ) ).
+
+    DATA(ls_objects) = z2ui5_cl_cockpit_session=>get_app_objects( `ZCL_ORDER` ).
+    cl_abap_unit_assert=>assert_initial( ls_objects-error ).
+    cl_abap_unit_assert=>assert_true( xsdbool( ls_objects-drafts >= 3 ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `Customer`
+                                        act = ls_objects-t_object[ 1 ]-object ).
 
   ENDMETHOD.
 

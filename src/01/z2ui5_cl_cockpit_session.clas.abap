@@ -33,6 +33,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS c_max_hits   TYPE i VALUE 200.
     " a shorter search term would match nearly every draft
     CONSTANTS c_min_search TYPE i VALUE 3.
+    " the most drafts a scan for the drafts of one app reads
+    CONSTANTS c_max_scan   TYPE i VALUE 5000.
 
     CONSTANTS:
       "! What a user did after a failed roundtrip, read from the drafts.
@@ -145,6 +147,56 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
 
     TYPES ty_t_id TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+
+    TYPES:
+      "! A field of one sample - a draft - for common_of.
+      BEGIN OF ty_s_sample,
+        sample TYPE i,
+        path   TYPE string,
+        value  TYPE string,
+      END OF ty_s_sample.
+    TYPES ty_t_sample TYPE STANDARD TABLE OF ty_s_sample WITH EMPTY KEY.
+
+    TYPES:
+      "! A value most failing cases share and the other states rarely have.
+      BEGIN OF ty_s_common,
+        path       TYPE string,
+        value      TYPE string,
+        failing    TYPE i,
+        of_failing TYPE i,
+        others_pct TYPE i,
+        text       TYPE string,
+      END OF ty_s_common.
+    TYPES ty_t_common TYPE STANDARD TABLE OF ty_s_common WITH EMPTY KEY.
+
+    TYPES:
+      "! A business object value and in how many drafts it occurs.
+      BEGIN OF ty_s_object_count,
+        object TYPE string,
+        value  TYPE string,
+        drafts TYPE i,
+        field  TYPE string,
+      END OF ty_s_object_count.
+    TYPES ty_t_object_count TYPE STANDARD TABLE OF ty_s_object_count WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_failures,
+        error      TYPE string,
+        " the failing cases whose draft still exists, of all given
+        failing    TYPE i,
+        given      TYPE i,
+        " other states of the same app, the baseline
+        others     TYPE i,
+        t_common   TYPE ty_t_common,
+        t_business TYPE ty_t_object_count,
+      END OF ty_s_failures.
+
+    TYPES:
+      BEGIN OF ty_s_app_objects,
+        error     TYPE string,
+        drafts    TYPE i,
+        t_object  TYPE ty_t_object_count,
+      END OF ty_s_app_objects.
 
     TYPES:
       BEGIN OF ty_s_outcome,
@@ -422,6 +474,40 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_t_outcome.
 
+    "! What failing cases have in common: the states the failed roundtrips
+    "! started from, against other states of the same app. A value in at
+    "! least 80 % of the failing states and at most 30 % of the others is a
+    "! hint at the cause - "MS_HEAD-QTY = 0 in 5 of 5, in 3 % of the
+    "! others". Also the business objects of the failing states, counted.
+    "! Never raises.
+    "! @parameter it_id | the drafts the failed roundtrips started from
+    "! @parameter app   | the app, for the baseline
+    CLASS-METHODS analyze_failures
+      IMPORTING
+        it_id         TYPE ty_t_id
+        app           TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_s_failures.
+
+    "! The values that tell failing samples from the others - see
+    "! analyze_failures. Needs 2 failing samples and 1 other; the most
+    "! telling first, at most 20.
+    CLASS-METHODS common_of
+      IMPORTING
+        it_failing    TYPE ty_t_sample
+        it_others     TYPE ty_t_sample
+      RETURNING
+        VALUE(result) TYPE ty_t_common.
+
+    "! The business objects an app works with, from its drafts: per object
+    "! type the number of drafts it appears in - types only, no values.
+    "! Never raises.
+    CLASS-METHODS get_app_objects
+      IMPORTING
+        app           TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_s_app_objects.
+
     "! A text as UTF-8, base64 encoded - the payload of a data: URL.
     CLASS-METHODS to_base64
       IMPORTING
@@ -557,6 +643,28 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         state TYPE string
       CHANGING
         cs_step TYPE ty_s_step.
+
+    "! Drafts of an app, in the order of their ids - at most c_max_scan
+    "! drafts are read to find them.
+    "! @parameter max_hits  | the most drafts returned
+    "! @parameter it_skip   | drafts not to return
+    CLASS-METHODS scan_app
+      IMPORTING
+        app           TYPE clike
+        max_hits      TYPE i
+        it_skip       TYPE ty_t_id OPTIONAL
+      RETURNING
+        VALUE(result) TYPE ty_t_id
+      RAISING
+        cx_static_check.
+
+    "! The fields of a draft as samples for common_of.
+    CLASS-METHODS samples_of
+      IMPORTING
+        sample        TYPE i
+        xml           TYPE string
+      CHANGING
+        ct_sample     TYPE ty_t_sample.
 
     CLASS-METHODS user_text
       IMPORTING
@@ -1342,6 +1450,288 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDIF.
       APPEND ls_outcome TO result.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD analyze_failures.
+
+    TYPES:
+      BEGIN OF ty_s_seen,
+        object TYPE string,
+        value  TYPE string,
+      END OF ty_s_seen.
+    DATA lt_failing TYPE ty_t_sample.
+    DATA lt_others TYPE ty_t_sample.
+    DATA lt_done TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+    DATA lv_xml TYPE string.
+
+    TRY.
+        LOOP AT it_id INTO DATA(lv_id).
+          IF lv_id IS INITIAL.
+            CONTINUE.
+          ENDIF.
+          result-given = result-given + 1.
+          " one failing state counts once, however often it failed
+          INSERT lv_id INTO TABLE lt_done.
+          IF sy-subrc <> 0.
+            CONTINUE.
+          ENDIF.
+          lv_xml = read_data( lv_id ).
+          IF lv_xml IS INITIAL.
+            CONTINUE.
+          ENDIF.
+          result-failing = result-failing + 1.
+          samples_of( EXPORTING sample    = result-failing
+                                xml       = lv_xml
+                      CHANGING  ct_sample = lt_failing ).
+
+          CLEAR lt_seen.
+          LOOP AT business_of( flatten( lv_xml ) ) INTO DATA(ls_business).
+            INSERT VALUE #( object = ls_business-object
+                            value  = ls_business-value ) INTO TABLE lt_seen.
+            IF sy-subrc <> 0.
+              CONTINUE.
+            ENDIF.
+            READ TABLE result-t_business ASSIGNING FIELD-SYMBOL(<object>)
+                 WITH KEY object = ls_business-object value = ls_business-value. "#EC CI_SORTSEQ
+            IF sy-subrc <> 0.
+              APPEND VALUE #( object = ls_business-object
+                              value  = ls_business-value
+                              field  = ls_business-field ) TO result-t_business ASSIGNING <object>.
+            ENDIF.
+            <object>-drafts = <object>-drafts + 1.
+          ENDLOOP.
+        ENDLOOP.
+        SORT result-t_business BY drafts DESCENDING object ASCENDING value ASCENDING.
+
+        IF result-failing < 2.
+          RETURN.
+        ENDIF.
+
+        DATA(lt_other_ids) = scan_app( app      = app
+                                       max_hits = 300
+                                       it_skip  = it_id ).
+        LOOP AT lt_other_ids INTO lv_id.
+          lv_xml = read_data( lv_id ).
+          IF lv_xml IS INITIAL.
+            CONTINUE.
+          ENDIF.
+          result-others = result-others + 1.
+          samples_of( EXPORTING sample    = result-others
+                                xml       = lv_xml
+                      CHANGING  ct_sample = lt_others ).
+        ENDLOOP.
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+
+    result-t_common = common_of( it_failing = lt_failing
+                                 it_others  = lt_others ).
+
+  ENDMETHOD.
+
+  METHOD common_of.
+
+    TYPES:
+      BEGIN OF ty_s_count,
+        path    TYPE string,
+        value   TYPE string,
+        count   TYPE i,
+      END OF ty_s_count.
+    TYPES:
+      BEGIN OF ty_s_key,
+        sample TYPE i,
+        path   TYPE string,
+        value  TYPE string,
+      END OF ty_s_key.
+    TYPES:
+      BEGIN OF ty_s_rank,
+        common TYPE ty_s_common,
+        f_pct  TYPE i,
+      END OF ty_s_rank.
+    DATA lt_failing TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY path value.
+    DATA lt_others TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY path value.
+    DATA lt_once TYPE HASHED TABLE OF ty_s_key WITH UNIQUE KEY sample path value.
+    DATA lt_rank TYPE STANDARD TABLE OF ty_s_rank WITH EMPTY KEY.
+    DATA lv_failing TYPE i.
+    DATA lv_others TYPE i.
+    DATA lv_pct TYPE i.
+
+    LOOP AT it_failing INTO DATA(ls_sample).
+      IF ls_sample-sample > lv_failing.
+        lv_failing = ls_sample-sample.
+      ENDIF.
+      INSERT VALUE #( sample = ls_sample-sample
+                      path   = ls_sample-path
+                      value  = ls_sample-value ) INTO TABLE lt_once.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_failing ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY path = ls_sample-path value = ls_sample-value.
+      IF sy-subrc <> 0.
+        INSERT VALUE #( path  = ls_sample-path
+                        value = ls_sample-value ) INTO TABLE lt_failing ASSIGNING <count>.
+      ENDIF.
+      <count>-count = <count>-count + 1.
+    ENDLOOP.
+
+    CLEAR lt_once.
+    LOOP AT it_others INTO ls_sample.
+      IF ls_sample-sample > lv_others.
+        lv_others = ls_sample-sample.
+      ENDIF.
+      INSERT VALUE #( sample = ls_sample-sample
+                      path   = ls_sample-path
+                      value  = ls_sample-value ) INTO TABLE lt_once.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_others ASSIGNING <count> WITH TABLE KEY path = ls_sample-path value = ls_sample-value.
+      IF sy-subrc <> 0.
+        INSERT VALUE #( path  = ls_sample-path
+                        value = ls_sample-value ) INTO TABLE lt_others ASSIGNING <count>.
+      ENDIF.
+      <count>-count = <count>-count + 1.
+    ENDLOOP.
+
+    IF lv_failing < 2 OR lv_others < 1.
+      RETURN.
+    ENDIF.
+
+    LOOP AT lt_failing INTO DATA(ls_count).
+      IF ls_count-count * 100 < lv_failing * 80.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_others INTO DATA(ls_other) WITH TABLE KEY path = ls_count-path value = ls_count-value.
+      IF sy-subrc <> 0.
+        CLEAR ls_other.
+      ENDIF.
+      lv_pct = ls_other-count * 100 / lv_others.
+      IF lv_pct > 30.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( f_pct  = ls_count-count * 100 / lv_failing
+                      common = VALUE #( path       = ls_count-path
+                                        value      = ls_count-value
+                                        failing    = ls_count-count
+                                        of_failing = lv_failing
+                                        others_pct = lv_pct
+                                        text       = |in { ls_count-count } of { lv_failing } failing, | &&
+                                                     |in { lv_pct } % of { lv_others } other states| ) )
+             TO lt_rank.
+    ENDLOOP.
+
+    SORT lt_rank BY f_pct DESCENDING common-others_pct ASCENDING common-path ASCENDING.
+    LOOP AT lt_rank INTO DATA(ls_rank) TO 20.
+      APPEND ls_rank-common TO result.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD samples_of.
+
+    LOOP AT flatten( xml ) INTO DATA(ls_value).
+      " a reference or a long text tells nothing about a cause
+      IF ls_value-value CP `->*` OR strlen( ls_value-value ) > 100.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( sample = sample
+                      path   = ls_value-path
+                      value  = ls_value-value ) TO ct_sample.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD get_app_objects.
+
+    TYPES:
+      BEGIN OF ty_s_seen,
+        object TYPE string,
+      END OF ty_s_seen.
+    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object.
+    DATA lv_xml TYPE string.
+
+    TRY.
+        DATA(lt_ids) = scan_app( app      = app
+                                 max_hits = 300 ).
+        LOOP AT lt_ids INTO DATA(lv_id).
+          lv_xml = read_data( lv_id ).
+          IF lv_xml IS INITIAL.
+            CONTINUE.
+          ENDIF.
+          result-drafts = result-drafts + 1.
+          CLEAR lt_seen.
+          LOOP AT business_of( flatten( lv_xml ) ) INTO DATA(ls_business).
+            INSERT VALUE #( object = ls_business-object ) INTO TABLE lt_seen.
+            IF sy-subrc <> 0.
+              CONTINUE.
+            ENDIF.
+            READ TABLE result-t_object ASSIGNING FIELD-SYMBOL(<object>)
+                 WITH KEY object = ls_business-object. "#EC CI_SORTSEQ
+            IF sy-subrc <> 0.
+              APPEND VALUE #( object = ls_business-object
+                              field  = ls_business-field ) TO result-t_object ASSIGNING <object>.
+            ENDIF.
+            <object>-drafts = <object>-drafts + 1.
+          ENDLOOP.
+        ENDLOOP.
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    SORT result-t_object BY drafts DESCENDING object ASCENDING.
+
+  ENDMETHOD.
+
+  METHOD scan_app.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        id   TYPE c LENGTH 32,
+        data TYPE string,
+      END OF ty_s_row.
+    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_skip TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA lv_last TYPE c LENGTH 32.
+    DATA lv_tab TYPE string.
+    DATA lv_scanned TYPE i.
+
+    DATA(lv_app) = to_upper( condense( app ) ).
+    LOOP AT it_skip INTO DATA(lv_skip).
+      INSERT lv_skip INTO TABLE lt_skip.
+    ENDLOOP.
+    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    DO.
+      CLEAR lt_rows.
+      SELECT id, data FROM (lv_tab)
+        WHERE id > @lv_last
+        ORDER BY id
+        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+        UP TO 200 ROWS.
+      IF lt_rows IS INITIAL.
+        RETURN.
+      ENDIF.
+      LOOP AT lt_rows INTO DATA(ls_row).
+        lv_last = ls_row-id.
+        lv_scanned = lv_scanned + 1.
+        DATA(lv_id) = CONV string( ls_row-id ).
+        IF line_exists( lt_skip[ table_line = lv_id ] ).
+          CONTINUE.
+        ENDIF.
+        IF app_of( ls_row-data ) <> lv_app.
+          CONTINUE.
+        ENDIF.
+        APPEND lv_id TO result.
+        IF lines( result ) >= max_hits.
+          RETURN.
+        ENDIF.
+      ENDLOOP.
+      IF lv_scanned >= c_max_scan.
+        RETURN.
+      ENDIF.
+    ENDDO.
 
   ENDMETHOD.
 
