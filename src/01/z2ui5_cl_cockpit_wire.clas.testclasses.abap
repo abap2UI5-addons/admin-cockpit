@@ -26,6 +26,7 @@ CLASS ltcl_wire DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     METHODS screen_rebuilt FOR TESTING RAISING cx_static_check.
     METHODS popup_taken_apart FOR TESTING RAISING cx_static_check.
     METHODS pressed_marked FOR TESTING RAISING cx_static_check.
+    METHODS escaped_once FOR TESTING RAISING cx_static_check.
     METHODS variants_counted FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
@@ -193,6 +194,22 @@ CLASS ltcl_wire IMPLEMENTATION.
               `<Table><items><ColumnListItem><cells><Text text="M1"/></cells></ColumnListItem>` &&
               `<ColumnListItem><cells><Text text="M&lt;2&gt;"/></cells></ColumnListItem></items></Table></Page>`
         act = ls_screen-content ).
+
+  ENDMETHOD.
+
+  METHOD escaped_once.
+
+    " the CSS of the playback goes into an attribute escaped once: a brace
+    " that arrives as \\{ is read by UI5 as a backslash and a binding - the
+    " Screen popup failed with "Expected ',' instead of 'p'" (3px)
+    cl_abap_unit_assert=>assert_equals(
+        exp = `&lt;div&gt;&lt;style&gt;.ckPressed \{outline: 3px solid #e9730c !important; outline-offset: 2px; ` &&
+              `box-shadow: 0 0 0 6px rgba(233,115,12,0.3) !important;\}&lt;/style&gt;&lt;/div&gt;`
+        act = z2ui5_cl_cockpit_wire=>xml_escape( z2ui5_cl_cockpit_wire=>c_pressed_style ) ).
+
+    " a recorded value: the backslash first, then the brace - UI5 shows C:\{x}
+    cl_abap_unit_assert=>assert_equals( exp = `C:\\\{x\}`
+                                        act = z2ui5_cl_cockpit_wire=>xml_escape( `C:\{x}` ) ).
 
   ENDMETHOD.
 

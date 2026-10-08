@@ -408,17 +408,46 @@ The drafts show what an app *held* after each step. What the user *saw* and
 *did* - the screen, the button, the error box - never reaches a draft. The
 recorder takes it where it passes anyway: the HTTP handler. One line after
 the framework's own call stores the complete request and response of every
-roundtrip, untouched:
+roundtrip, untouched.
+
+### Where the line goes
+
+In **your own** HTTP handler class - the one the abap2UI5 service calls, not
+a class of the abap2UI5 repository (a pull would overwrite it):
+
+- **Standard ABAP:** transaction `SICF`, the service of your installation
+  (e.g. `/sap/bc/z2ui5`), tab *Handler List* - that class, method
+  `if_http_extension~handle_request`.
+- **ABAP Cloud:** the HTTP service of your installation, its handler class,
+  method `if_http_service_extension~handle_request`.
+
+There the call of abap2UI5 already stands. The new line goes right **after**
+it - the recorder reads the finished response:
 
 ```abap
-" Standard ABAP - your ICF handler
-z2ui5_cl_ui5_http_handler=>run( server ).
-z2ui5_cl_cockpit_wire=>record( server ).
+" Standard ABAP
+METHOD if_http_extension~handle_request.
+  z2ui5_cl_ui5_http_handler=>run( server ).  " already there
+  z2ui5_cl_cockpit_wire=>record( server ).   " new
+ENDMETHOD.
 
-" ABAP Cloud - your if_http_service_extension~handle_request
-z2ui5_cl_ui5_http_handler=>run( req = request res = response ).
-z2ui5_cl_cockpit_wire=>record( req = request res = response ).
+" ABAP Cloud
+METHOD if_http_service_extension~handle_request.
+  z2ui5_cl_ui5_http_handler=>run( req = request res = response ).  " already there
+  z2ui5_cl_cockpit_wire=>record( req = request res = response ).   " new
+ENDMETHOD.
 ```
+
+An older installation calls `z2ui5_cl_http_handler=>run( server )` - the
+deprecated name that forwards to `z2ui5_cl_ui5_http_handler`. The line goes
+after it the same way.
+
+Add it only once the cockpit is pulled and **active**: the line runs on every
+request of every abap2UI5 app, and a class that does not activate is a short
+dump no `CATCH` stops - in all apps. `record( )` itself never raises.
+
+To check it: click through any app, then open the **Installation** tab - the
+row *Recorder of requests and responses* counts today's recordings.
 
 It needs no abap2UI5 API beyond the handler (the bodies are read as they
 went over the wire, and taken apart only when someone looks), never raises,
