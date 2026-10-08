@@ -8,10 +8,12 @@
 "!
 "! Opt-in by one line in the HTTP handler class of the installation (SICF,
 "! the service's Handler List; not a class of the abap2UI5 repository),
-"! method if_http_extension~handle_request, right after abap2UI5 ran:
-"!   z2ui5_cl_ui5_http_handler=&gt;run( server ).
-"!   z2ui5_cl_cockpit_wire=&gt;record( server ).
-"! (ABAP Cloud: record( req = request res = response ).) Like the monitor it
+"! method if_http_extension~handle_request, in place of abap2UI5's call:
+"!   z2ui5_cl_cockpit_wire=&gt;run( server ).
+"! (ABAP Cloud: run( req = request res = response ).) It calls abap2UI5,
+"! records the bodies and feeds the roundtrip statistics - the one place
+"! the cockpit hooks in. record( server ) after abap2UI5's own call records
+"! the bodies only. Like the monitor it
 "! then runs on every request - add the line only once the cockpit is active
 "! and syntax-clean, a syntax error is a short dump no CATCH stops.
 "!
@@ -155,8 +157,49 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         t_variant    TYPE ty_t_variant,
       END OF ty_s_variants.
 
-    "! Record the roundtrip that just ran - the line for the ICF handler.
-    "! Never raises.
+    "! The one line for the ICF handler - in place of abap2UI5's own call:
+    "! runs abap2UI5, takes the time, records the request and response and
+    "! feeds the roundtrip statistics (z2ui5_cl_cockpit_rec) - the monitor
+    "! without the monitor hook, on every abap2UI5 release. A monitor class
+    "! that recorded the roundtrip already is not counted twice. Only what
+    "! abap2UI5 raises leaves it, the cockpit's own part never does.
+    "! @parameter server | Standard ABAP: the IF_HTTP_SERVER of the handler
+    "! @parameter req    | ABAP Cloud: the IF_WEB_HTTP_REQUEST
+    "! @parameter res    | ABAP Cloud: the IF_WEB_HTTP_RESPONSE
+    CLASS-METHODS run
+      IMPORTING
+        server TYPE REF TO object OPTIONAL
+        req    TYPE REF TO object OPTIONAL
+        res    TYPE REF TO object OPTIONAL.
+
+    "! A roundtrip for the statistics, taken from its request and response:
+    "! app, event, drafts, sizes, the browser time of the roundtrip before,
+    "! and for a failure the error text and the innermost exception class
+    "! of the 500 body. The phases of the monitor hook stay 0.
+    "! @parameter request     | the request body
+    "! @parameter response    | the response body
+    "! @parameter http_status | the HTTP status of the response
+    "! @parameter check_sticky | the roundtrip ran in a stateful session
+    CLASS-METHODS roundtrip_of
+      IMPORTING
+        request       TYPE string
+        response      TYPE string
+        http_status   TYPE i
+        check_sticky  TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(result) TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
+
+    "! Milliseconds between two time stamps - by hand, as seconds_between.
+    CLASS-METHODS ms_between
+      IMPORTING
+        ts_from       TYPE timestampl
+        ts_to         TYPE timestampl
+      RETURNING
+        VALUE(result) TYPE i.
+
+    "! Record the roundtrip that just ran - the line for the ICF handler
+    "! after abap2UI5's own call, when that one stays: the request and
+    "! response only, no statistics (no time to take). Never raises.
     "! @parameter server | Standard ABAP: the IF_HTTP_SERVER of the handler
     "! @parameter req    | ABAP Cloud: the IF_WEB_HTTP_REQUEST
     "! @parameter res    | ABAP Cloud: the IF_WEB_HTTP_RESPONSE
@@ -364,6 +407,24 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_ck_wir WITH EMPTY KEY.
 
+    "! The request and response of the roundtrip that just ran, read from
+    "! the handler's objects by name. False when it was no POST or nothing
+    "! could be read.
+    CLASS-METHODS read_exchange
+      IMPORTING
+        server        TYPE REF TO object OPTIONAL
+        req           TYPE REF TO object OPTIONAL
+        res           TYPE REF TO object OPTIONAL
+      EXPORTING
+        request       TYPE string
+        response      TYPE string
+        http_status   TYPE i
+        check_sticky  TYPE abap_bool
+      RETURNING
+        VALUE(result) TYPE abap_bool
+      RAISING
+        cx_static_check.
+
     "! The table row of a recorded roundtrip - ids, app and event taken out
     "! of the bodies, the user as the privacy setting allows.
     CLASS-METHODS row_of
@@ -406,90 +467,80 @@ ENDCLASS.
 
 CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
-  METHOD record.
+  METHOD run.
 
-    DATA lo_req TYPE REF TO object.
-    DATA lo_res TYPE REF TO object.
-    DATA lv_method TYPE string.
     DATA lv_request TYPE string.
     DATA lv_response TYPE string.
     DATA lv_status TYPE i.
     DATA lv_sticky TYPE abap_bool.
-    DATA lr_status TYPE REF TO data.
-    FIELD-SYMBOLS <any> TYPE any.
-    FIELD-SYMBOLS <status> TYPE any.
-    FIELD-SYMBOLS <code> TYPE any.
+    DATA lv_start TYPE timestampl.
+    DATA lv_end TYPE timestampl.
+
+    GET TIME STAMP FIELD lv_start.
+    DATA(lv_count) = z2ui5_cl_cockpit_rec=>get_count( ).
+    IF server IS BOUND.
+      z2ui5_cl_ui5_http_handler=>run( server ).
+    ELSE.
+      z2ui5_cl_ui5_http_handler=>run( req = req
+                                      res = res ).
+    ENDIF.
+    GET TIME STAMP FIELD lv_end.
 
     TRY.
-        IF server IS BOUND.
-          " the same dynamic access abap2UI5 uses - IS ASSIGNED, never sy-subrc
-          UNASSIGN <any>.
-          ASSIGN server->(`REQUEST`) TO <any>.
-          IF <any> IS NOT ASSIGNED.
-            RETURN.
-          ENDIF.
-          lo_req = <any>.
-          UNASSIGN <any>.
-          ASSIGN server->(`RESPONSE`) TO <any>.
-          IF <any> IS NOT ASSIGNED.
-            RETURN.
-          ENDIF.
-          lo_res = <any>.
-
-          CALL METHOD lo_req->(`IF_HTTP_REQUEST~GET_METHOD`)
-            RECEIVING
-              method = lv_method.
-          IF to_upper( lv_method ) <> `POST`.
-            RETURN.
-          ENDIF.
-          CALL METHOD lo_req->(`GET_CDATA`)
-            RECEIVING
-              data = lv_request.
-          CALL METHOD lo_res->(`GET_CDATA`)
-            RECEIVING
-              data = lv_response.
-          TRY.
-              CALL METHOD lo_res->(`IF_HTTP_RESPONSE~GET_STATUS`)
-                IMPORTING
-                  code = lv_status.
-            CATCH cx_root ##NO_HANDLER.
-          ENDTRY.
-          UNASSIGN <any>.
-          ASSIGN server->(`STATEFUL`) TO <any>.
-          IF <any> IS ASSIGNED.
-            lv_sticky = xsdbool( <any> = 1 ).
-          ENDIF.
-
-        ELSEIF req IS BOUND AND res IS BOUND.
-          CALL METHOD req->(`IF_WEB_HTTP_REQUEST~GET_METHOD`)
-            RECEIVING
-              r_value = lv_method.
-          IF to_upper( lv_method ) <> `POST`.
-            RETURN.
-          ENDIF.
-          CALL METHOD req->(`IF_WEB_HTTP_REQUEST~GET_TEXT`)
-            RECEIVING
-              r_value = lv_request.
-          CALL METHOD res->(`IF_WEB_HTTP_RESPONSE~GET_TEXT`)
-            RECEIVING
-              r_value = lv_response.
-          TRY.
-              CREATE DATA lr_status TYPE (`IF_WEB_HTTP_RESPONSE=>HTTP_STATUS`).
-              ASSIGN lr_status->* TO <status>.
-              CALL METHOD res->(`IF_WEB_HTTP_RESPONSE~GET_STATUS`)
-                RECEIVING
-                  r_value = <status>.
-              ASSIGN COMPONENT `CODE` OF STRUCTURE <status> TO <code>.
-              IF <code> IS ASSIGNED.
-                lv_status = <code>.
-              ENDIF.
-            CATCH cx_root ##NO_HANDLER.
-          ENDTRY.
-
-        ELSE.
+        IF read_exchange( EXPORTING server       = server
+                                    req          = req
+                                    res          = res
+                          IMPORTING request      = lv_request
+                                    response     = lv_response
+                                    http_status  = lv_status
+                                    check_sticky = lv_sticky ) = abap_false.
           RETURN.
         ENDIF.
+        record_bodies( request      = lv_request
+                       response     = lv_response
+                       http_status  = lv_status
+                       check_sticky = lv_sticky ).
 
+        " a monitor class recorded it already - with its phases
+        IF z2ui5_cl_cockpit_rec=>get_count( ) > lv_count.
+          RETURN.
+        ENDIF.
+        DATA(ls_roundtrip) = roundtrip_of( request      = lv_request
+                                           response     = lv_response
+                                           http_status  = lv_status
+                                           check_sticky = lv_sticky ).
+        ls_roundtrip-timestampl = lv_start.
+        ls_roundtrip-ms_total   = ms_between( ts_from = lv_start
+                                              ts_to   = lv_end ).
+        ls_roundtrip-uname      = sy-uname.
+        " a failed roundtrip names no app - the draft it started from does
+        IF ls_roundtrip-app IS INITIAL AND ls_roundtrip-draft_id_prev IS NOT INITIAL.
+          ls_roundtrip-app = z2ui5_cl_cockpit_session=>get_app_of_draft( ls_roundtrip-draft_id_prev ).
+        ENDIF.
+        z2ui5_cl_cockpit_rec=>record( ls_roundtrip ).
+      CATCH cx_root ##NO_HANDLER.
+        " never break a roundtrip because of the cockpit
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD record.
+
+    DATA lv_request TYPE string.
+    DATA lv_response TYPE string.
+    DATA lv_status TYPE i.
+    DATA lv_sticky TYPE abap_bool.
+
+    TRY.
+        IF read_exchange( EXPORTING server       = server
+                                    req          = req
+                                    res          = res
+                          IMPORTING request      = lv_request
+                                    response     = lv_response
+                                    http_status  = lv_status
+                                    check_sticky = lv_sticky ) = abap_false.
+          RETURN.
+        ENDIF.
         record_bodies( request      = lv_request
                        response     = lv_response
                        http_status  = lv_status
@@ -497,6 +548,187 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       CATCH cx_root ##NO_HANDLER.
         " never break a roundtrip because of the recorder
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD read_exchange.
+
+    DATA lo_req TYPE REF TO object.
+    DATA lo_res TYPE REF TO object.
+    DATA lv_method TYPE string.
+    DATA lr_status TYPE REF TO data.
+    FIELD-SYMBOLS <any> TYPE any.
+    FIELD-SYMBOLS <status> TYPE any.
+    FIELD-SYMBOLS <code> TYPE any.
+
+    CLEAR request.
+    CLEAR response.
+    CLEAR http_status.
+    CLEAR check_sticky.
+
+    IF server IS BOUND.
+      " the same dynamic access abap2UI5 uses - IS ASSIGNED, never sy-subrc
+      UNASSIGN <any>.
+      ASSIGN server->(`REQUEST`) TO <any>.
+      IF <any> IS NOT ASSIGNED.
+        RETURN.
+      ENDIF.
+      lo_req = <any>.
+      UNASSIGN <any>.
+      ASSIGN server->(`RESPONSE`) TO <any>.
+      IF <any> IS NOT ASSIGNED.
+        RETURN.
+      ENDIF.
+      lo_res = <any>.
+
+      CALL METHOD lo_req->(`IF_HTTP_REQUEST~GET_METHOD`)
+        RECEIVING
+          method = lv_method.
+      IF to_upper( lv_method ) <> `POST`.
+        RETURN.
+      ENDIF.
+      CALL METHOD lo_req->(`GET_CDATA`)
+        RECEIVING
+          data = request.
+      CALL METHOD lo_res->(`GET_CDATA`)
+        RECEIVING
+          data = response.
+      TRY.
+          CALL METHOD lo_res->(`IF_HTTP_RESPONSE~GET_STATUS`)
+            IMPORTING
+              code = http_status.
+        CATCH cx_root ##NO_HANDLER.
+      ENDTRY.
+      UNASSIGN <any>.
+      ASSIGN server->(`STATEFUL`) TO <any>.
+      IF <any> IS ASSIGNED.
+        check_sticky = xsdbool( <any> = 1 ).
+      ENDIF.
+
+    ELSEIF req IS BOUND AND res IS BOUND.
+      CALL METHOD req->(`IF_WEB_HTTP_REQUEST~GET_METHOD`)
+        RECEIVING
+          r_value = lv_method.
+      IF to_upper( lv_method ) <> `POST`.
+        RETURN.
+      ENDIF.
+      CALL METHOD req->(`IF_WEB_HTTP_REQUEST~GET_TEXT`)
+        RECEIVING
+          r_value = request.
+      CALL METHOD res->(`IF_WEB_HTTP_RESPONSE~GET_TEXT`)
+        RECEIVING
+          r_value = response.
+      TRY.
+          CREATE DATA lr_status TYPE (`IF_WEB_HTTP_RESPONSE=>HTTP_STATUS`).
+          ASSIGN lr_status->* TO <status>.
+          CALL METHOD res->(`IF_WEB_HTTP_RESPONSE~GET_STATUS`)
+            RECEIVING
+              r_value = <status>.
+          ASSIGN COMPONENT `CODE` OF STRUCTURE <status> TO <code>.
+          IF <code> IS ASSIGNED.
+            http_status = <code>.
+          ENDIF.
+        CATCH cx_root ##NO_HANDLER.
+      ENDTRY.
+
+    ELSE.
+      RETURN.
+    ENDIF.
+
+    result = abap_true.
+
+  ENDMETHOD.
+
+  METHOD roundtrip_of.
+
+    DATA lv_root TYPE string.
+
+    result-check_sticky   = check_sticky.
+    result-bytes_request  = strlen( request ).
+    result-bytes_response = strlen( response ).
+    result-check_error    = xsdbool( http_status >= 500 ).
+
+    TRY.
+        DATA(lt_request) = json_flatten( request ).
+        lv_root = COND #( WHEN line_exists( lt_request[ path = `value/S_FRONT/ID` ] )
+                            OR line_exists( lt_request[ path = `value/S_FRONT/EVENT` ] ) THEN `value/` ).
+        " the keys in variables - a template is no key operand on 7.02
+        DATA(lv_id_path) = |{ lv_root }S_FRONT/ID|.
+        DATA(lv_event_path) = |{ lv_root }S_FRONT/EVENT|.
+        DATA(lv_client_path) = |{ lv_root }S_FRONT/MS_CLIENT_PREV|.
+        result-draft_id_prev = VALUE #( lt_request[ path = lv_id_path ]-value OPTIONAL ).
+        result-event         = VALUE #( lt_request[ path = lv_event_path ]-value OPTIONAL ).
+        DATA(lv_client) = VALUE string( lt_request[ path = lv_client_path ]-value OPTIONAL ).
+        IF lv_client CO `0123456789` AND lv_client IS NOT INITIAL AND strlen( lv_client ) < 10.
+          result-ms_client_prev = lv_client.
+        ENDIF.
+      CATCH cx_root ##NO_HANDLER.
+        " no JSON - counted as it came
+    ENDTRY.
+    result-check_start = xsdbool( result-draft_id_prev IS INITIAL ).
+
+    IF result-check_error = abap_false.
+      " id and app stand first in S_FRONT, before PROTOCOL - found by text
+      DATA(lv_protocol) = find( val = response
+                                sub = `"PROTOCOL":` ).
+      IF lv_protocol > 0.
+        result-draft_id = member_before( json   = response
+                                         name   = `ID`
+                                         before = lv_protocol ).
+        result-app      = to_upper( member_before( json   = response
+                                                   name   = `APP`
+                                                   before = lv_protocol ) ).
+      ENDIF.
+      DATA(lv_model) = find( val = response
+                             sub = `,"MODEL":` ).
+      IF lv_model > 0.
+        " up to the closing brace of the response itself
+        result-bytes_model = strlen( response ) - lv_model - 10.
+      ENDIF.
+      RETURN.
+    ENDIF.
+
+    " the 500 body: the error text, then the exception chain as lines
+    " [1] CLASS ... [n] CLASS - the last one is the root cause
+    result-error_text = response.
+    DATA(lv_at) = find( val = response
+                        sub = |\n[|
+                        occ = -1 ).
+    IF lv_at >= 0.
+      DATA(lv_close) = find( val = response
+                             sub = `] `
+                             off = lv_at ).
+      IF lv_close > lv_at.
+        DATA(lv_class) = substring( val = response
+                                    off = lv_close + 2 ).
+        DATA(lv_end) = find( val = lv_class
+                             regex = `[\s:]` ).
+        IF lv_end > 0.
+          lv_class = substring( val = lv_class
+                                len = lv_end ).
+        ENDIF.
+        IF strlen( lv_class ) <= 30.
+          result-error_class = to_upper( lv_class ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD ms_between.
+
+    " typed, not inline: the fractions are decimals
+    DATA lv_frac TYPE p LENGTH 16 DECIMALS 7.
+
+    " whole seconds by hand, then the fractions of both - see seconds_between
+    DATA(lv_seconds) = z2ui5_cl_cockpit_session=>seconds_between( ts_from = ts_from
+                                                                  ts_to   = ts_to ).
+    lv_frac = frac( ts_to ) - frac( ts_from ).
+    result = lv_seconds * 1000 + round( val = lv_frac * 1000
+                                        dec = 0 ).
+    IF result < 0.
+      result = 0.
+    ENDIF.
 
   ENDMETHOD.
 

@@ -2981,8 +2981,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         WHEN s_variants-error IS NOT INITIAL
         THEN |The recordings could not be read: { s_variants-error }|
         WHEN s_variants-records = 0
-        THEN `Nothing recorded in the period. Add z2ui5_cl_cockpit_wire=>record( server ) after abap2UI5 in your ` &&
-             `HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, says where exactly.`
+        THEN `Nothing recorded in the period. Call z2ui5_cl_cockpit_wire=>run( server ) instead of abap2UI5 in ` &&
+             `your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, says where exactly.`
         WHEN s_variants-t_variant IS INITIAL
         THEN |No run passed { variants_app } in { s_variants-records } recorded roundtrips.|
         ELSE |{ s_variants-runs } runs in { lines( s_variants-t_variant ) } variants, from { s_variants-records } | &&
@@ -3923,7 +3923,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               WHEN s_wire_messages-error IS NOT INITIAL
               THEN |Messages users saw - the recordings could not be read: { s_wire_messages-error }|
               WHEN s_wire_messages-records = 0
-              THEN `Messages users saw - nothing recorded. Add z2ui5_cl_cockpit_wire=>record( server ) after ` &&
+              THEN `Messages users saw - nothing recorded. Call z2ui5_cl_cockpit_wire=>run( server ) instead of ` &&
                    `abap2UI5 in your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, ` &&
                    `says where exactly.`
               ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&

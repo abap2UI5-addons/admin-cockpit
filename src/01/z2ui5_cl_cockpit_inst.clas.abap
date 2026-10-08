@@ -537,15 +537,16 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                           ELSE |{ lv_recorded } today, kept { ls_set-wire_days } days| )
                          text   = `Stores the complete request and response of each roundtrip - the values users ` &&
                                   `typed, the messages and screens they saw - for the screen playback, the process ` &&
-                                  `variants and the messages users saw. Records only once one line is added to ` &&
-                                  `your own HTTP handler class.`
+                                  `variants and the messages users saw; the same line feeds the usage, error and ` &&
+                                  `performance tabs on every abap2UI5 release. Records once your own HTTP handler ` &&
+                                  `class calls the cockpit.`
                          fix    = `SICF, the service of your installation (e.g. /sap/bc/z2ui5), tab Handler List: ` &&
-                                  `in that class, method if_http_extension~handle_request, right after ` &&
-                                  `z2ui5_cl_ui5_http_handler=>run( server ) (older: z2ui5_cl_http_handler=>run) ` &&
-                                  `add z2ui5_cl_cockpit_wire=>record( server ). ABAP Cloud: the handler class of ` &&
-                                  `your HTTP service, if_http_service_extension~handle_request, record( req = ` &&
-                                  `request res = response ). Only once the cockpit is active - the line runs in ` &&
-                                  `every app. Settings tab: retention in days, 0 switches it off; keep it short.`
+                                  `in that class, method if_http_extension~handle_request, replace ` &&
+                                  `z2ui5_cl_ui5_http_handler=>run( server ) (older: z2ui5_cl_http_handler=>run) by ` &&
+                                  `z2ui5_cl_cockpit_wire=>run( server ). ABAP Cloud: the handler class of your HTTP ` &&
+                                  `service, if_http_service_extension~handle_request, run( req = request res = ` &&
+                                  `response ). Only once the cockpit is active - the line runs in every app. Settings ` &&
+                                  `tab: retention in days, 0 switches the recording of bodies off; keep it short.`
                CHANGING  checks = checks ).
 
   ENDMETHOD.

@@ -18,6 +18,8 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         other        TYPE string VALUE `OTHER`,
         no_interface TYPE string VALUE `NO_INTERFACE`,
         no_class     TYPE string VALUE `NO_CLASS`,
+        " fed by the ICF handler line z2ui5_cl_cockpit_wire=>run( ), no hook
+        handler      TYPE string VALUE `HANDLER`,
       END OF cs_monitor.
 
     CONSTANTS c_monitor_intf  TYPE string VALUE `Z2UI5_IF_UI5_MONITOR`.
@@ -282,6 +284,11 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     TYPES ty_p TYPE p LENGTH 16 DECIMALS 0.
 
+    "! Whether the aggregates hold a roundtrip of the last 7 days.
+    CLASS-METHODS check_recent
+      RETURNING
+        VALUE(result) TYPE abap_bool.
+
     TYPES:
       BEGIN OF ty_s_sum,
         utc_day   TYPE c LENGTH 8,
@@ -444,12 +451,37 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_monitor.
 
+    DATA lv_handler_line TYPE string.
+    lv_handler_line = `Or replace abap2UI5's call in your HTTP handler class by z2ui5_cl_cockpit_wire=>run( server ) - ` &&
+                      `it records on every abap2UI5 release (Installation tab, row Recorder, says where).`.
+
+    DATA(lv_hook) = xsdbool( z2ui5_cl_cockpit_inst=>check_type_exists( c_monitor_intf ) = abap_true
+                             AND z2ui5_cl_cockpit_inst=>check_class_exists( c_monitor_class ) = abap_true ).
+
+    " without the hook the numbers come from the handler line - recent ones
+    " show that it is in place
+    IF lv_hook = abap_false AND check_recent( ) = abap_true.
+      result-check_data = abap_true.
+      IF z2ui5_cl_cockpit_setup=>get( )-mode = z2ui5_cl_cockpit_setup=>cs_mode-off.
+        result-state      = cs_monitor-off.
+        result-strip_type = `Warning`.
+        result-text       = `Recording is switched off (Settings tab, mode OFF) - the numbers below stop at that point.`.
+      ELSE.
+        result-state      = cs_monitor-handler.
+        result-strip_type = `Success`.
+        result-text       = |Recording through the HTTP handler (z2ui5_cl_cockpit_wire=>run): mode | &&
+                            |{ z2ui5_cl_cockpit_setup=>get( )-mode }, user tracking | &&
+                            |{ z2ui5_cl_cockpit_setup=>get( )-user_tracking }, days in UTC. Phases of a roundtrip | &&
+                            |(load, main, render) need the monitor hook.|.
+      ENDIF.
+      RETURN.
+    ENDIF.
+
     IF z2ui5_cl_cockpit_inst=>check_type_exists( c_monitor_intf ) = abap_false.
       result = VALUE #( state      = cs_monitor-no_interface
                         strip_type = `Information`
-                        text       = |This tab needs the roundtrip monitor hook { c_monitor_intf } of abap2UI5 - | &&
-                                     |it ships with the abap2UI5 release after { z2ui5_if_app=>version }. | &&
-                                     |Update abap2UI5, then pull the admin cockpit from its main branch. | &&
+                        text       = |Nothing recorded yet. The roundtrip monitor hook { c_monitor_intf } ships with | &&
+                                     |the abap2UI5 release after { z2ui5_if_app=>version }. { lv_handler_line } | &&
                                      |Installation & Security and Drafts work already.| ).
       RETURN.
     ENDIF.
@@ -458,8 +490,8 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       result = VALUE #( state      = cs_monitor-no_class
                         strip_type = `Information`
                         text       = |Your abap2UI5 offers the monitor hook, but the cockpit's monitor class | &&
-                                     |{ c_monitor_class } (package 02) is not installed. Pull the main branch | &&
-                                     |of the admin cockpit to start recording.| ).
+                                     |{ c_monitor_class } (package 02) is not installed - pull the main branch | &&
+                                     |of the admin cockpit. { lv_handler_line }| ).
       RETURN.
     ENDIF.
 
@@ -483,6 +515,20 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       result-text       = |Recording: mode { z2ui5_cl_cockpit_setup=>get( )-mode }, | &&
                           |user tracking { z2ui5_cl_cockpit_setup=>get( )-user_tracking }, days in UTC.|.
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD check_recent.
+
+    DATA lv_from TYPE c LENGTH 8.
+    lv_from = z2ui5_cl_cockpit_setup=>day_minus( 6 ).
+    TRY.
+        SELECT SINGLE @abap_true FROM z2ui5_t_ck_agg
+          WHERE utc_day >= @lv_from
+          INTO @result.
+      CATCH cx_root.
+        CLEAR result.
+    ENDTRY.
 
   ENDMETHOD.
 

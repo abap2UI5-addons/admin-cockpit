@@ -588,6 +588,14 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE i.
 
+    "! The app a draft belongs to, read from the draft table - empty when
+    "! the draft is gone. Never raises.
+    CLASS-METHODS get_app_of_draft
+      IMPORTING
+        id            TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
+
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -2803,6 +2811,16 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ORDER BY timestampl DESCENDING
       INTO CORRESPONDING FIELDS OF TABLE @result
       UP TO @c_max_nodes ROWS.                        "#EC CI_NOWHERE
+
+  ENDMETHOD.
+
+  METHOD get_app_of_draft.
+
+    TRY.
+        result = app_of( read_data( id ) ).
+      CATCH cx_root.
+        CLEAR result.
+    ENDTRY.
 
   ENDMETHOD.
 
