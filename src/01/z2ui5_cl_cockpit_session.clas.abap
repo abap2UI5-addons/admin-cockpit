@@ -129,6 +129,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         shown_state    TYPE string,
         wire_id        TYPE string,
         wire_fail_id   TYPE string,
+        " the event of the failed click after this step
+        wire_fail_event TYPE string,
         " the highlight of the row: Information for the step shown
         state   TYPE string,
       END OF ty_s_step.
@@ -2351,6 +2353,10 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       READ TABLE lt_record INTO DATA(ls_record) WITH KEY draft_id = <step>-id. "#EC CI_SORTSEQ
       IF sy-subrc = 0.
         <step>-wire_id = ls_record-id.
+        " the monitor may be off - the recording names the event too
+        IF <step>-event IS INITIAL.
+          <step>-event = ls_record-event.
+        ENDIF.
         z2ui5_cl_cockpit_wire=>get_bodies( EXPORTING id       = ls_record-id
                                            IMPORTING request  = lv_request
                                                      response = lv_response ).
@@ -2377,6 +2383,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       " is the user's last attempt
       LOOP AT lt_record INTO ls_record WHERE draft_id_prev = <step>-id AND http_status >= 500. "#EC CI_SORTSEQ
         <step>-wire_fail_id = ls_record-id.
+        <step>-wire_fail_event = ls_record-event.
         z2ui5_cl_cockpit_wire=>get_bodies( EXPORTING id      = ls_record-id
                                            IMPORTING request = lv_request ).
         <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&

@@ -59,6 +59,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         draft_id      TYPE string,
         draft_id_prev TYPE string,
         http_status   TYPE i,
+        " the user as stored - name or pseudonym, filled by get_variants only
+        user          TYPE string,
       END OF ty_s_record.
     TYPES ty_t_record TYPE STANDARD TABLE OF ty_s_record WITH EMPTY KEY.
 
@@ -91,6 +93,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the popup the step's response opened, as a second content
         popup     TYPE string,
         popup_title TYPE string,
+        " the control of the event passed in is marked - class ckPressed
+        marked    TYPE abap_bool,
       END OF ty_s_screen.
 
     TYPES:
@@ -103,6 +107,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         users TYPE i,
         last  TYPE string,
         state TYPE string,
+        " the draft of the last roundtrip that showed it - its session opens there
+        example TYPE string,
       END OF ty_s_message.
     TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
 
@@ -114,6 +120,36 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_capped TYPE abap_bool,
         t_message    TYPE ty_t_message,
       END OF ty_s_messages.
+
+    "! The class a pressed control gets in a rebuilt screen.
+    CONSTANTS c_pressed TYPE string VALUE `ckPressed`.
+
+    TYPES:
+      "! A process variant: one way through the apps, the events in order.
+      BEGIN OF ty_s_variant,
+        path     TYPE string,
+        runs     TYPE i,
+        share    TYPE string,
+        users    TYPE i,
+        steps    TYPE i,
+        failed   TYPE i,
+        last     TYPE string,
+        last_ts  TYPE timestampl,
+        state    TYPE string,
+        " the newest run's last draft - its session opens there
+        example  TYPE string,
+      END OF ty_s_variant.
+    TYPES ty_t_variant TYPE STANDARD TABLE OF ty_s_variant WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_variants,
+        error        TYPE string,
+        records      TYPE i,
+        runs         TYPE i,
+        failed_runs  TYPE i,
+        check_capped TYPE abap_bool,
+        t_variant    TYPE ty_t_variant,
+      END OF ty_s_variants.
 
     "! Record the roundtrip that just ran - the line for the ICF handler.
     "! Never raises.
@@ -236,10 +272,12 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! emptied - a press in the copy fires nothing.
     "! @parameter xml        | the view XML of a display action (an mvc:View)
     "! @parameter it_model   | the model as path and value (json_flatten)
+    "! @parameter event      | the event pressed next - its control marked (mark_pressed)
     CLASS-METHODS screen_of
       IMPORTING
         xml           TYPE string
         it_model      TYPE z2ui5_cl_cockpit_session=>ty_t_value
+        event         TYPE clike OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_s_screen.
 
@@ -247,9 +285,11 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! last main view displayed, the model as the responses and requests
     "! left it, and the popup the step's own response opened. Never raises.
     "! @parameter it_id | the recordings that wrote the steps up to this one, oldest first
+    "! @parameter event | the event the user raised next on this screen - its control is marked
     CLASS-METHODS get_screen
       IMPORTING
         it_id         TYPE z2ui5_cl_cockpit_session=>ty_t_id
+        event         TYPE clike OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_s_screen.
 
@@ -265,6 +305,40 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       EXPORTING
         content TYPE string
         buttons TYPE string.
+
+    "! The process variants in recordings: every run from the start of a
+    "! session to where it ended, as its events in order - a repeated event
+    "! once, a failed click in place, an app change named. Runs of the same
+    "! path are counted together, the most frequent first.
+    "! @parameter it_record | the recordings, any order
+    "! @parameter app       | only runs that pass this app, all when empty
+    CLASS-METHODS variants_of
+      IMPORTING
+        it_record     TYPE ty_t_record
+        app           TYPE clike OPTIONAL
+      RETURNING
+        VALUE(result) TYPE ty_t_variant.
+
+    "! The process variants of the recordings of the last days - see
+    "! variants_of. Reads no body. Never raises.
+    CLASS-METHODS get_variants
+      IMPORTING
+        app           TYPE clike OPTIONAL
+        days          TYPE i
+      RETURNING
+        VALUE(result) TYPE ty_s_variants.
+
+    "! Mark the control that raises an event in view XML with the class
+    "! ckPressed - the first one, its class attribute extended or added.
+    "! @parameter event  | the event as the request named it
+    "! @parameter result | whether one was found
+    CLASS-METHODS mark_pressed
+      IMPORTING
+        event         TYPE clike
+      CHANGING
+        xml           TYPE string
+      RETURNING
+        VALUE(result) TYPE abap_bool.
 
     "! A value made safe for an XML attribute.
     CLASS-METHODS xml_escape
@@ -646,11 +720,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     TYPES:
       BEGIN OF ty_s_row,
-        app        TYPE c LENGTH 30,
-        uname      TYPE c LENGTH 12,
-        user_key   TYPE c LENGTH 64,
-        timestampl TYPE timestampl,
-        res_body   TYPE string,
+        app           TYPE c LENGTH 30,
+        uname         TYPE c LENGTH 12,
+        user_key      TYPE c LENGTH 64,
+        timestampl    TYPE timestampl,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        res_body      TYPE string,
       END OF ty_s_row.
     TYPES:
       BEGIN OF ty_s_user,
@@ -666,7 +742,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, uname, user_key, timestampl, res_body FROM z2ui5_t_ck_wir
+        SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, res_body FROM z2ui5_t_ck_wir
           WHERE utc_day >= @lv_from
           ORDER BY timestampl DESCENDING
           INTO CORRESPONDING FIELDS OF TABLE @lt_rows
@@ -690,11 +766,14 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           " a variable, not to_lower( ) in the SWITCH - no CASE operand on 7.02
           DATA(lv_type) = to_lower( ls_shown-type ).
           " rows come newest first - the first one is the last time it was shown
-          APPEND VALUE #( app   = ls_row-app
-                          kind  = ls_shown-kind
-                          type  = ls_shown-type
-                          text  = ls_shown-text
-                          last  = z2ui5_cl_cockpit_setup=>ts_text( ls_row-timestampl )
+          " a failed roundtrip wrote no draft - its session opens where it started
+          APPEND VALUE #( app     = ls_row-app
+                          kind    = ls_shown-kind
+                          type    = ls_shown-type
+                          text    = ls_shown-text
+                          example = COND #( WHEN ls_row-draft_id IS NOT INITIAL THEN ls_row-draft_id
+                                            ELSE ls_row-draft_id_prev )
+                          last    = z2ui5_cl_cockpit_setup=>ts_text( ls_row-timestampl )
                           state = SWITCH #( lv_type
                                             WHEN `error` THEN `Error`
                                             WHEN `warning` THEN `Warning`
@@ -1109,6 +1188,11 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                   off = lv_root_end + 1
                                   len = lv_last - lv_root_end - 1 ).
 
+    IF event IS NOT INITIAL.
+      result-marked = mark_pressed( EXPORTING event = event
+                                    CHANGING  xml   = lv_content ).
+    ENDIF.
+
     " event handlers emptied: .eB( .eBP( .eF( are the framework's wires
     lv_pos = 0.
     DO.
@@ -1305,11 +1389,18 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       APPEND VALUE #( path  = ls_model-path
                       value = ls_model-value ) TO lt_values.
     ENDLOOP.
-    result = screen_of( xml      = lv_main
-                        it_model = lt_values ).
-    IF lv_popup IS NOT INITIAL.
+    " a popup on top takes the click - the screen below it cannot
+    IF lv_popup IS INITIAL.
+      result = screen_of( xml      = lv_main
+                          it_model = lt_values
+                          event    = event ).
+    ELSE.
+      result = screen_of( xml      = lv_main
+                          it_model = lt_values ).
       DATA(ls_popup) = screen_of( xml      = lv_popup
-                                  it_model = lt_values ).
+                                  it_model = lt_values
+                                  event    = event ).
+      result-marked      = ls_popup-marked.
       result-popup       = ls_popup-content.
       result-popup_title = ls_popup-title.
       " a prefix declared twice on one element breaks the XML
@@ -1375,6 +1466,310 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ELSE.
       content = lv_rest.
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD variants_of.
+
+    TYPES:
+      BEGIN OF ty_s_by_draft,
+        draft_id TYPE string,
+        index    TYPE i,
+      END OF ty_s_by_draft.
+    TYPES:
+      BEGIN OF ty_s_fail,
+        draft_id_prev TYPE string,
+        timestampl    TYPE timestampl,
+        event         TYPE string,
+      END OF ty_s_fail.
+    TYPES:
+      BEGIN OF ty_s_token,
+        app  TYPE string,
+        text TYPE string,
+      END OF ty_s_token.
+    TYPES:
+      BEGIN OF ty_s_user,
+        path TYPE string,
+        user TYPE string,
+      END OF ty_s_user.
+    DATA lt_by_draft TYPE HASHED TABLE OF ty_s_by_draft WITH UNIQUE KEY draft_id.
+    DATA lt_parent TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA lt_succeeded TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA lt_fail TYPE SORTED TABLE OF ty_s_fail WITH NON-UNIQUE KEY draft_id_prev timestampl.
+    DATA lt_users TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY path user.
+    DATA lt_run TYPE STANDARD TABLE OF i WITH EMPTY KEY.
+    DATA lt_token TYPE STANDARD TABLE OF ty_s_token WITH EMPTY KEY.
+    DATA ls_record TYPE ty_s_record.
+    DATA ls_on TYPE ty_s_record.
+    DATA ls_by TYPE ty_s_by_draft.
+    DATA lv_index TYPE i.
+    DATA lv_at TYPE i.
+    DATA lv_total TYPE i.
+    DATA lv_path TYPE string.
+    DATA lv_app TYPE string.
+    DATA lv_text TYPE string.
+    DATA lv_screen_app TYPE string.
+    DATA lv_answered TYPE string.
+    DATA lv_last TYPE i.
+    DATA lv_check_app TYPE abap_bool.
+    DATA lv_failed TYPE abap_bool.
+    DATA lv_check_leaf TYPE abap_bool.
+    DATA lv_check_repeated TYPE abap_bool.
+
+    LOOP AT it_record INTO ls_record.
+      lv_index = sy-tabix.
+      IF ls_record-draft_id IS NOT INITIAL.
+        INSERT VALUE #( draft_id = ls_record-draft_id
+                        index    = lv_index ) INTO TABLE lt_by_draft.
+      ENDIF.
+      IF ls_record-draft_id_prev IS NOT INITIAL.
+        INSERT ls_record-draft_id_prev INTO TABLE lt_parent.
+        IF ls_record-draft_id IS NOT INITIAL.
+          INSERT ls_record-draft_id_prev INTO TABLE lt_succeeded.
+        ELSE.
+          INSERT VALUE #( draft_id_prev = ls_record-draft_id_prev
+                          timestampl    = ls_record-timestampl
+                          event         = ls_record-event ) INTO TABLE lt_fail.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT it_record INTO ls_record.
+      lv_index = sy-tabix.
+      " a run ends where nothing continues it: a draft no roundtrip started
+      " from, or a failed click the user did not try again from that screen
+      IF ls_record-draft_id IS NOT INITIAL.
+        READ TABLE lt_parent TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_record-draft_id.
+      ELSE.
+        READ TABLE lt_succeeded TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_record-draft_id_prev.
+      ENDIF.
+      lv_check_leaf = xsdbool( sy-subrc <> 0 ).
+      IF lv_check_leaf = abap_false.
+        CONTINUE.
+      ENDIF.
+
+      " back to the start of the session
+      CLEAR lt_run.
+      lv_at = lv_index.
+      DO 500 TIMES.
+        INSERT lv_at INTO lt_run INDEX 1.
+        READ TABLE it_record INTO ls_on INDEX lv_at.
+        READ TABLE lt_by_draft INTO ls_by WITH TABLE KEY draft_id = ls_on-draft_id_prev.
+        IF sy-subrc <> 0 OR ls_by-index = lv_at.
+          EXIT.
+        ENDIF.
+        lv_at = ls_by-index.
+      ENDDO.
+
+      " the clicks that failed on the way - in place, before the one that
+      " worked. An event belongs to the app whose screen it was pressed on:
+      " the one the roundtrip before answered with
+      CLEAR lt_token.
+      CLEAR lv_check_app.
+      CLEAR lv_failed.
+      CLEAR lv_screen_app.
+      CLEAR lv_answered.
+      LOOP AT lt_run INTO lv_at.
+        READ TABLE it_record INTO ls_on INDEX lv_at.
+        IF lv_screen_app IS INITIAL.
+          lv_screen_app = ls_on-app.
+        ENDIF.
+        IF app IS NOT INITIAL AND ls_on-app = app.
+          lv_check_app = abap_true.
+        ENDIF.
+        IF ls_on-draft_id IS NOT INITIAL AND ls_on-draft_id_prev IS NOT INITIAL.
+          LOOP AT lt_fail INTO DATA(ls_fail) WHERE draft_id_prev = ls_on-draft_id_prev.
+            IF ls_fail-timestampl < ls_on-timestampl.
+              APPEND VALUE #( app  = lv_screen_app
+                              text = |{ COND #( WHEN ls_fail-event IS INITIAL THEN `(start)`
+                                                ELSE ls_fail-event ) } (failed)| ) TO lt_token.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+        lv_text = COND #( WHEN ls_on-event IS INITIAL THEN `(start)` ELSE ls_on-event ).
+        IF ls_on-draft_id IS INITIAL.
+          lv_text = |{ lv_text } (failed)|.
+          lv_failed = abap_true.
+        ELSEIF ls_on-app IS NOT INITIAL.
+          lv_answered = ls_on-app.
+        ENDIF.
+        " a repeated event once - NEXT, NEXT, NEXT is one way, not three
+        CLEAR lv_check_repeated.
+        lv_last = lines( lt_token ).
+        IF lv_last > 0.
+          READ TABLE lt_token ASSIGNING FIELD-SYMBOL(<token>) INDEX lv_last.
+          IF <token>-app = lv_screen_app AND ( <token>-text = lv_text OR <token>-text = |{ lv_text } (repeated)| ).
+            <token>-text = |{ lv_text } (repeated)|.
+            lv_check_repeated = abap_true.
+          ENDIF.
+        ENDIF.
+        IF lv_check_repeated = abap_false.
+          APPEND VALUE #( app  = lv_screen_app
+                          text = lv_text ) TO lt_token.
+        ENDIF.
+        IF ls_on-draft_id IS NOT INITIAL AND ls_on-app IS NOT INITIAL.
+          lv_screen_app = ls_on-app.
+        ENDIF.
+      ENDLOOP.
+      " where the run arrived, when its last event led into another app
+      lv_last = lines( lt_token ).
+      IF lv_failed = abap_false AND lv_answered IS NOT INITIAL AND lv_last > 0.
+        READ TABLE lt_token ASSIGNING <token> INDEX lv_last.
+        IF <token>-app <> lv_answered.
+          APPEND VALUE #( app = lv_answered ) TO lt_token.
+        ENDIF.
+      ENDIF.
+      IF app IS NOT INITIAL AND lv_check_app = abap_false.
+        CONTINUE.
+      ENDIF.
+
+      CLEAR lv_path.
+      CLEAR lv_app.
+      LOOP AT lt_token INTO DATA(ls_token).
+        IF sy-tabix > 30.
+          lv_path = |{ lv_path } -> ... ({ lines( lt_token ) - 30 } more)|.
+          EXIT.
+        ENDIF.
+        IF ls_token-app <> lv_app.
+          lv_path = |{ lv_path }{ COND #( WHEN lv_path IS NOT INITIAL THEN ` => ` ) }{ ls_token-app }| &&
+                    |{ COND #( WHEN ls_token-text IS NOT INITIAL THEN |: { ls_token-text }| ) }|.
+          lv_app = ls_token-app.
+        ELSE.
+          lv_path = |{ lv_path } -> { ls_token-text }|.
+        ENDIF.
+      ENDLOOP.
+
+      lv_total = lv_total + 1.
+      READ TABLE result ASSIGNING FIELD-SYMBOL(<variant>) WITH KEY path = lv_path. "#EC CI_SORTSEQ
+      IF sy-subrc <> 0.
+        APPEND VALUE #( path  = lv_path
+                        steps = lines( lt_run ) ) TO result ASSIGNING <variant>.
+      ENDIF.
+      <variant>-runs = <variant>-runs + 1.
+      IF lv_failed = abap_true.
+        <variant>-failed = <variant>-failed + 1.
+      ENDIF.
+      " the newest run is the example - a failed click wrote no draft, its
+      " run opens where it started
+      IF <variant>-example IS INITIAL OR <variant>-last_ts < ls_record-timestampl.
+        <variant>-last_ts = ls_record-timestampl.
+        <variant>-last = z2ui5_cl_cockpit_setup=>ts_text( ls_record-timestampl ).
+        <variant>-example = COND #( WHEN ls_record-draft_id IS NOT INITIAL THEN ls_record-draft_id
+                                    ELSE ls_record-draft_id_prev ).
+      ENDIF.
+      READ TABLE lt_run INTO lv_at INDEX 1.
+      READ TABLE it_record INTO ls_on INDEX lv_at.
+      IF ls_on-user IS NOT INITIAL.
+        INSERT VALUE #( path = lv_path
+                        user = ls_on-user ) INTO TABLE lt_users.
+        IF sy-subrc = 0.
+          <variant>-users = <variant>-users + 1.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT result ASSIGNING <variant>.
+      <variant>-share = |{ <variant>-runs * 100 / lv_total } %|.
+      <variant>-state = COND #( WHEN <variant>-failed > 0 THEN `Error`
+                                WHEN <variant>-path CS `(failed)` THEN `Warning`
+                                ELSE `None` ).
+    ENDLOOP.
+    SORT result BY runs DESCENDING path ASCENDING.
+
+  ENDMETHOD.
+
+  METHOD get_variants.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        id            TYPE c LENGTH 32,
+        timestampl    TYPE timestampl,
+        app           TYPE c LENGTH 30,
+        event         TYPE c LENGTH 40,
+        uname         TYPE c LENGTH 12,
+        user_key      TYPE c LENGTH 64,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        http_status   TYPE i,
+      END OF ty_s_row.
+    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_record TYPE ty_t_record.
+    DATA lv_from TYPE c LENGTH 8.
+
+    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
+    TRY.
+        " no body - ids, app and event are columns of their own
+        SELECT id, timestampl, app, event, uname, user_key, draft_id, draft_id_prev, http_status
+          FROM z2ui5_t_ck_wir
+          WHERE utc_day >= @lv_from
+          ORDER BY timestampl DESCENDING
+          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+          UP TO 20000 ROWS.
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    result-records = lines( lt_rows ).
+    result-check_capped = xsdbool( result-records >= 20000 ).
+
+    LOOP AT lt_rows INTO DATA(ls_row).
+      APPEND VALUE #( id            = ls_row-id
+                      timestampl    = ls_row-timestampl
+                      app           = ls_row-app
+                      event         = ls_row-event
+                      draft_id      = ls_row-draft_id
+                      draft_id_prev = ls_row-draft_id_prev
+                      http_status   = ls_row-http_status
+                      user          = COND #( WHEN ls_row-uname IS NOT INITIAL THEN ls_row-uname
+                                              ELSE ls_row-user_key ) ) TO lt_record.
+    ENDLOOP.
+    result-t_variant = variants_of( it_record = lt_record
+                                    app       = app ).
+    LOOP AT result-t_variant INTO DATA(ls_variant).
+      result-runs = result-runs + ls_variant-runs.
+      result-failed_runs = result-failed_runs + ls_variant-failed.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD mark_pressed.
+
+    DATA(lv_wire) = |['{ event }'|.
+    DATA(lv_at) = find( val = xml
+                        sub = lv_wire ).
+    IF lv_at < 0.
+      RETURN.
+    ENDIF.
+    " the element around it: the last < before, the first > after
+    DATA(lv_open) = find( val = substring( val = xml
+                                           len = lv_at )
+                          sub = `<`
+                          occ = -1 ).
+    DATA(lv_close) = find( val = xml
+                           sub = `>`
+                           off = lv_at ).
+    DATA(lv_name_end) = find( val = xml
+                              sub = ` `
+                              off = lv_open ).
+    IF lv_open < 0 OR lv_close < 0 OR lv_name_end < 0 OR lv_name_end > lv_close.
+      RETURN.
+    ENDIF.
+    DATA(lv_tag) = substring( val = xml
+                              off = lv_open
+                              len = lv_close - lv_open ).
+    DATA(lv_class) = find( val = lv_tag
+                           sub = ` class="` ).
+    IF lv_class >= 0.
+      DATA(lv_insert) = lv_open + lv_class + 8.
+      xml = |{ substring( val = xml
+                          len = lv_insert ) }{ c_pressed } { substring( val = xml
+                                                                        off = lv_insert ) }|.
+    ELSE.
+      xml = |{ substring( val = xml
+                          len = lv_name_end ) } class="{ c_pressed }"{ substring( val = xml
+                                                                                  off = lv_name_end ) }|.
+    ENDIF.
+    result = abap_true.
 
   ENDMETHOD.
 

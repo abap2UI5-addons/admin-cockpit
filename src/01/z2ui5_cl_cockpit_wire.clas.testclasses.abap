@@ -25,6 +25,8 @@ CLASS ltcl_wire DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     METHODS control_of_field FOR TESTING.
     METHODS screen_rebuilt FOR TESTING RAISING cx_static_check.
     METHODS popup_taken_apart FOR TESTING RAISING cx_static_check.
+    METHODS pressed_marked FOR TESTING RAISING cx_static_check.
+    METHODS variants_counted FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -191,6 +193,117 @@ CLASS ltcl_wire IMPLEMENTATION.
               `<Table><items><ColumnListItem><cells><Text text="M1"/></cells></ColumnListItem>` &&
               `<ColumnListItem><cells><Text text="M&lt;2&gt;"/></cells></ColumnListItem></items></Table></Page>`
         act = ls_screen-content ).
+
+  ENDMETHOD.
+
+  METHOD pressed_marked.
+
+    DATA(lv_xml) = `<Input value="1"/><Button text="Save" press=".eB(['SAVE'])"/>`.
+    cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_wire=>mark_pressed( EXPORTING event = `SAVE`
+                                                                          CHANGING  xml   = lv_xml ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `<Input value="1"/><Button class="ckPressed" text="Save" ` &&
+                                              `press=".eB(['SAVE'])"/>`
+                                        act = lv_xml ).
+
+    " a class of its own is kept
+    lv_xml = `<Button class="sapUiTinyMargin" press=".eB(['GO'])"/>`.
+    z2ui5_cl_cockpit_wire=>mark_pressed( EXPORTING event = `GO`
+                                         CHANGING  xml   = lv_xml ).
+    cl_abap_unit_assert=>assert_equals( exp = `<Button class="ckPressed sapUiTinyMargin" press=".eB(['GO'])"/>`
+                                        act = lv_xml ).
+
+    " an event no control raises
+    cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_wire=>mark_pressed( EXPORTING event = `NONE`
+                                                                           CHANGING  xml   = lv_xml ) ).
+
+    " a rebuilt screen: marked before the handler is emptied
+    DATA(ls_screen) = z2ui5_cl_cockpit_wire=>screen_of(
+                          xml      = `<mvc:View xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc">` &&
+                                     `<Button text="Save" press=".eB(['SAVE'])"/></mvc:View>`
+                          it_model = VALUE #( )
+                          event    = `SAVE` ).
+    cl_abap_unit_assert=>assert_true( ls_screen-marked ).
+    cl_abap_unit_assert=>assert_equals( exp = `<Button class="ckPressed" text="Save" press=""/>`
+                                        act = ls_screen-content ).
+
+  ENDMETHOD.
+
+  METHOD variants_counted.
+
+    DATA lt_record TYPE z2ui5_cl_cockpit_wire=>ty_t_record.
+
+    " every component written out: the 702 downport the unit build runs
+    " before transpiling carries an omitted component over from the row
+    " before (abap2UI5 backlog abaplint-downport-value-row-not-cleared,
+    " fixed in abaplint 2.120.70)
+    lt_record = VALUE #(
+    " run 1: a failed save, tried again from the same screen
+      ( id = `1` timestampl = '20261008100001' app = `ZAPP` event = `` draft_id = `A1`
+        draft_id_prev = `` http_status = 0 user = `U1` )
+      ( id = `2` timestampl = '20261008100002' app = `ZAPP` event = `CREATE` draft_id = `A2`
+        draft_id_prev = `A1` http_status = 0 user = `U1` )
+      ( id = `3` timestampl = '20261008100003' app = `` event = `SAVE` draft_id = ``
+        draft_id_prev = `A2` http_status = 500 user = `U1` )
+      ( id = `4` timestampl = '20261008100004' app = `ZAPP` event = `SAVE` draft_id = `A3`
+        draft_id_prev = `A2` http_status = 0 user = `U1` )
+    " run 2: the failed save is where it ended
+      ( id = `5` timestampl = '20261008100005' app = `ZAPP` event = `` draft_id = `B1`
+        draft_id_prev = `` http_status = 0 user = `U2` )
+      ( id = `6` timestampl = '20261008100006' app = `ZAPP` event = `CREATE` draft_id = `B2`
+        draft_id_prev = `B1` http_status = 0 user = `U2` )
+      ( id = `7` timestampl = '20261008100007' app = `` event = `SAVE` draft_id = ``
+        draft_id_prev = `B2` http_status = 500 user = `U2` )
+    " runs 3 and 4: paging, the same way twice, into another app
+      ( id = `8` timestampl = '20261008100008' app = `ZAPP` event = `` draft_id = `C1`
+        draft_id_prev = `` http_status = 0 user = `U1` )
+      ( id = `9` timestampl = '20261008100009' app = `ZAPP` event = `NEXT` draft_id = `C2`
+        draft_id_prev = `C1` http_status = 0 user = `U1` )
+      ( id = `10` timestampl = '20261008100010' app = `ZAPP` event = `NEXT` draft_id = `C3`
+        draft_id_prev = `C2` http_status = 0 user = `U1` )
+      ( id = `11` timestampl = '20261008100011' app = `ZOTHER` event = `GO` draft_id = `C4`
+        draft_id_prev = `C3` http_status = 0 user = `U1` )
+      ( id = `12` timestampl = '20261008100012' app = `ZAPP` event = `` draft_id = `D1`
+        draft_id_prev = `` http_status = 0 user = `U2` )
+      ( id = `13` timestampl = '20261008100013' app = `ZAPP` event = `NEXT` draft_id = `D2`
+        draft_id_prev = `D1` http_status = 0 user = `U2` )
+      ( id = `14` timestampl = '20261008100014' app = `ZAPP` event = `NEXT` draft_id = `D3`
+        draft_id_prev = `D2` http_status = 0 user = `U2` )
+      ( id = `15` timestampl = '20261008100015' app = `ZOTHER` event = `GO` draft_id = `D4`
+        draft_id_prev = `D3` http_status = 0 user = `U2` ) ).
+
+    DATA(lt_variant) = z2ui5_cl_cockpit_wire=>variants_of( lt_record ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 3
+                                        act = lines( lt_variant ) ).
+    " the most frequent first
+    cl_abap_unit_assert=>assert_equals( exp = `ZAPP: (start) -> NEXT (repeated) -> GO => ZOTHER`
+                                        act = lt_variant[ 1 ]-path ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lt_variant[ 1 ]-runs ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lt_variant[ 1 ]-users ).
+    cl_abap_unit_assert=>assert_equals( exp = `D4`
+                                        act = lt_variant[ 1 ]-example ).
+
+    DATA(ls_retried) = lt_variant[ path = `ZAPP: (start) -> CREATE -> SAVE (failed) -> SAVE` ].
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = ls_retried-failed ).
+    cl_abap_unit_assert=>assert_equals( exp = `Warning`
+                                        act = ls_retried-state ).
+
+    DATA(ls_ended) = lt_variant[ path = `ZAPP: (start) -> CREATE -> SAVE (failed)` ].
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = ls_ended-failed ).
+    cl_abap_unit_assert=>assert_equals( exp = `Error`
+                                        act = ls_ended-state ).
+    " a failed click wrote no draft - its run opens where it started
+    cl_abap_unit_assert=>assert_equals( exp = `B2`
+                                        act = ls_ended-example ).
+
+    " only the runs that pass an app
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( z2ui5_cl_cockpit_wire=>variants_of( it_record = lt_record
+                                                                                         app       = `ZOTHER` ) ) ).
 
   ENDMETHOD.
 

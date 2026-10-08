@@ -106,6 +106,11 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA s_wire_messages TYPE z2ui5_cl_cockpit_wire=>ty_s_messages.
     DATA wire_messages_text TYPE string.
     DATA wire_messages_shown TYPE abap_bool.
+    DATA wire_message_search TYPE string.
+    DATA s_variants     TYPE z2ui5_cl_cockpit_wire=>ty_s_variants.
+    DATA variants_text  TYPE string.
+    DATA variants_title TYPE string.
+    DATA variants_has_app TYPE abap_bool.
     DATA business_shown TYPE abap_bool.
     DATA t_history      TYPE z2ui5_cl_cockpit_session=>ty_t_history.
     DATA history_title  TYPE string.
@@ -120,6 +125,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PROTECTED SECTION.
     DATA client     TYPE REF TO z2ui5_if_client.
+    " the app the process variants are of - empty for all apps
+    DATA variants_app TYPE string.
     DATA detail_app TYPE string.
     DATA s_occ      TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
     DATA s_session  TYPE z2ui5_cl_cockpit_session=>ty_s_session.
@@ -146,6 +153,14 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The recorded request and response of the current step.
     "! @parameter check_failed | the failed click after the step instead
+    "! The process variants of variants_app, from the recordings.
+    METHODS popup_variants.
+
+    "! Open the session a draft belongs to at that draft - administrators
+    "! only, logged by session_open.
+    METHODS session_open_draft
+      IMPORTING
+        draft TYPE clike.
     METHODS popup_wire
       IMPORTING
         check_failed TYPE abap_bool DEFAULT abap_false.
@@ -724,13 +739,26 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{LAST_SEEN}` ).
 
     errors->ele( `Table`
-        )->a( n = `headerText`       v = client->_bind( wire_messages_text )
         )->a( n = `items`            v = client->_bind( s_wire_messages-t_message )
         )->a( n = `visible`          v = client->_bind( wire_messages_shown )
         )->a( n = `growing`          v = `true`
         )->a( n = `growingThreshold` v = `30`
         )->a( n = `noDataText`       v = `No message box, toast or popup recorded in the period.`
         )->a( n = `class`            v = `sapUiMediumMarginTop`
+
+        )->ele( `headerToolbar`
+            )->ele( `OverflowToolbar`
+                )->tag( `Title`
+                    )->a( n = `text`     v = client->_bind( wire_messages_text )
+                    )->a( n = `wrapping` v = `true`
+                )->tag( `ToolbarSpacer`
+                )->tag( `SearchField`
+                    )->a( n = `value`       v = client->_bind( wire_message_search )
+                    )->a( n = `search`      v = client->_event( `MESSAGES_SEARCH` )
+                    )->a( n = `placeholder` v = `Text or app - who saw it?`
+                    )->a( n = `width`       v = `16rem`
+            )->end(
+        )->end(
 
         )->ele( `columns`
 
@@ -754,6 +782,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->ele( `items`
             )->ele( `ColumnListItem`
                 )->a( n = `highlight` v = `{STATE}`
+                )->a( n = `type`      v = `Active`
+                )->a( n = `press`     v = client->_event( val = `MESSAGE_SESSION` arg = `${EXAMPLE}` )
 
                 )->ele( `cells`
 
@@ -946,6 +976,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `text`  v = `Analyze navigation`
             )->a( n = `icon`  v = `sap-icon://split`
             )->a( n = `press` v = client->_event( `DRAFTS_FLOWS` )
+        )->tag( `Button`
+            )->a( n = `text`    v = `Process variants`
+            )->a( n = `icon`    v = `sap-icon://process`
+            )->a( n = `tooltip` v = `The ways users really go through the apps, from the recorder - counted, failures marked`
+            )->a( n = `press`   v = client->_event( `DRAFTS_VARIANTS` )
         )->tag( `Button`
             )->a( n = `text`    v = `Clean up cockpit log (retention)`
             )->a( n = `icon`    v = `sap-icon://broken-link`
@@ -2174,6 +2209,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `tooltip` v = `The business objects this app works with, from its drafts - types only, no values`
             )->a( n = `press`   v = client->_event( `APP_OBJECTS` )
         )->tag( `Button`
+            )->a( n = `text`    v = `Process variants`
+            )->a( n = `icon`    v = `sap-icon://process`
+            )->a( n = `tooltip` v = `The ways users go through this app, from the recorder - counted, failures marked`
+            )->a( n = `press`   v = client->_event( `APP_VARIANTS` )
+        )->tag( `Button`
             )->a( n = `text`    v = `Sessions of this app`
             )->a( n = `icon`    v = `sap-icon://history`
             )->a( n = `enabled` v = client->_bind( s_head-can_change )
@@ -2828,6 +2868,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ENDIF.
     DATA(ls_step) = t_steps[ step_index ].
 
+    " what the user did on this screen is what led to the step after it - or
+    " the click that failed there
+    DATA(lv_next_event) = ls_step-wire_fail_event.
+    LOOP AT t_steps INTO DATA(ls_after) WHERE follows = step_index. "#EC CI_SORTSEQ
+      lv_next = ls_after-did.
+      lv_next_event = ls_after-event.
+      EXIT.
+    ENDLOOP.
+
     " the recordings on the way to this step - not those of a branch beside it
     IF ls_step-wire_id IS INITIAL.
       ls_screen-error = `This step was not recorded - the recorder was off, or it began later.`.
@@ -2840,14 +2889,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         ENDIF.
         lv_at = COND #( WHEN ls_on-follows < lv_at THEN ls_on-follows ELSE 0 ).
       ENDWHILE.
-      ls_screen = z2ui5_cl_cockpit_wire=>get_screen( lt_id ).
+      ls_screen = z2ui5_cl_cockpit_wire=>get_screen( it_id = lt_id
+                                                     event = lv_next_event ).
     ENDIF.
-
-    " what the user did on this screen is what led to the step after it
-    LOOP AT t_steps INTO DATA(ls_after) WHERE follows = step_index. "#EC CI_SORTSEQ
-      lv_next = ls_after-did.
-      EXIT.
-    ENDLOOP.
 
     DATA(lv_text) = |Step { step_index } of { lines( t_steps ) }, { ls_step-time } UTC.|.
     IF ls_step-did IS NOT INITIAL.
@@ -2863,10 +2907,17 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ELSEIF step_index = lines( t_steps ).
       lv_text = |{ lv_text } The session ends here.|.
     ENDIF.
+    IF ls_screen-marked = abap_true.
+      lv_text = |{ lv_text } Outlined in orange: what the user pressed next.|.
+    ENDIF.
     DATA(lv_type) = COND string( WHEN ls_step-shown_state = `Error` OR ls_step-wire_fail_id IS NOT INITIAL
                                  THEN `Error`
                                  WHEN ls_step-shown_state = `Warning` THEN `Warning`
                                  ELSE `Information` ).
+
+    " the pressed control stands out - a class mark_pressed gave it
+    DATA(lv_style) = `<div><style>.` && z2ui5_cl_cockpit_wire=>c_pressed && ` \{outline: 3px solid #e9730c !important; ` &&
+                     `outline-offset: 2px; box-shadow: 0 0 0 6px rgba(233,115,12,0.3) !important;\}</style></div>`.
 
     " written by hand: the recorded view comes with namespaces of its own,
     " the frame uses prefixes it cannot have taken
@@ -2875,6 +2926,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                              |Screen of step { step_index } - { ls_step-app }| ) }"| &&
                    | contentWidth="95%" contentHeight="90%" resizable="true" draggable="true">| &&
                    |<ckm:content>| &&
+                   |<ckc:HTML content="{ z2ui5_cl_cockpit_wire=>xml_escape( lv_style ) }"/>| &&
                    |<ckm:MessageStrip text="{ z2ui5_cl_cockpit_wire=>xml_escape( lv_text ) }" type="{ lv_type }"| &&
                    | showIcon="true" class="sapUiSmallMargin"/>|.
 
@@ -2915,6 +2967,128 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
              |</ckm:buttons></ckm:Dialog></ckc:FragmentDefinition>|.
 
     client->popup_display( lv_xml ).
+
+  ENDMETHOD.
+
+  METHOD popup_variants.
+
+    DATA(lv_days) = get_days( ).
+    s_variants = z2ui5_cl_cockpit_wire=>get_variants( app  = variants_app
+                                                      days = lv_days ).
+    variants_has_app = xsdbool( variants_app IS NOT INITIAL ).
+    variants_title = |Process variants - { COND #( WHEN variants_app IS NOT INITIAL THEN variants_app
+                                                     ELSE `all apps` ) }, last { lv_days } day(s)|.
+    variants_text = COND #(
+        WHEN s_variants-error IS NOT INITIAL
+        THEN |The recordings could not be read: { s_variants-error }|
+        WHEN s_variants-records = 0
+        THEN `Nothing recorded in the period. Add z2ui5_cl_cockpit_wire=>record( server ) after abap2UI5 in your ` &&
+             `ICF handler - every roundtrip then counts (README, Recorder).`
+        WHEN s_variants-t_variant IS INITIAL
+        THEN |No run passed { variants_app } in { s_variants-records } recorded roundtrips.|
+        ELSE |{ s_variants-runs } runs in { lines( s_variants-t_variant ) } variants, from { s_variants-records } | &&
+             |recorded roundtrips{ COND #( WHEN s_variants-check_capped = abap_true THEN ` (the newest)` ) }. | &&
+             |{ s_variants-failed_runs } runs ended in a failed click (red); orange: a click failed on the way, | &&
+             |the user got through. A run goes from the start of a session to where nothing continued it - | &&
+             |"(repeated)" is the same event several times in a row. Select one for its newest run.| ).
+
+    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+        )->ele( n = `FragmentDefinition` ns = `core`
+            )->a( n = `xmlns`      v = `sap.m`
+            )->a( n = `xmlns:core` v = `sap.ui.core` ).
+
+    DATA(dialog) = popup->ele( `Dialog`
+        )->a( n = `title`         v = client->_bind( variants_title )
+        )->a( n = `contentWidth`  v = `90%`
+        )->a( n = `contentHeight` v = `80%`
+        )->a( n = `resizable`     v = `true`
+        )->a( n = `draggable`     v = `true` ).
+
+    DATA(content) = dialog->ele( `content` ).
+
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( variants_text )
+        )->a( n = `type`     v = COND string( WHEN s_variants-error IS NOT INITIAL THEN `Error` ELSE `Information` )
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `class`    v = `sapUiSmallMargin` ).
+
+    content->ele( `Table`
+        )->a( n = `items`            v = client->_bind( s_variants-t_variant )
+        )->a( n = `growing`          v = `true`
+        )->a( n = `growingThreshold` v = `50`
+        )->a( n = `noDataText`       v = `No process variant.`
+
+        )->ele( `columns`
+
+            )->tag( `Column`
+                )->a( n = `header` v = `Runs`
+                )->a( n = `width`  v = `4rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Share`
+                )->a( n = `width`  v = `4rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Users`
+                )->a( n = `width`  v = `4rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Steps`
+                )->a( n = `width`  v = `4rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Failed`
+                )->a( n = `width`  v = `4rem`
+            )->tag( `Column`
+                )->a( n = `header` v = `Way through the apps - event by event`
+            )->tag( `Column`
+                )->a( n = `header` v = `Newest (UTC)`
+                )->a( n = `width`  v = `10rem`
+
+        )->end(
+        )->ele( `items`
+            )->ele( `ColumnListItem`
+                )->a( n = `type`      v = `Active`
+                )->a( n = `highlight` v = `{STATE}`
+                )->a( n = `press`     v = client->_event( val = `VARIANT_OPEN` arg = `${EXAMPLE}` )
+
+                )->ele( `cells`
+
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{RUNS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{SHARE}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{USERS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{STEPS}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{FAILED}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{PATH}`
+                    )->tag( `Text`
+                        )->a( n = `text` v = `{LAST}` ).
+
+    dialog->ele( `buttons`
+        )->tag( `Button`
+            )->a( n = `text`    v = `Back to the app`
+            )->a( n = `icon`    v = `sap-icon://nav-back`
+            )->a( n = `visible` v = client->_bind( variants_has_app )
+            )->a( n = `press`   v = client->_event( `VARIANTS_BACK` )
+        )->tag( `Button`
+            )->a( n = `text`  v = `Close`
+            )->a( n = `press` v = client->follow_up_action( z2ui5_if_client=>cs_event-popup_close ) ).
+
+    client->popup_display( popup->stringify( ) ).
+
+  ENDMETHOD.
+
+  METHOD session_open_draft.
+
+    DATA(lv_session) = z2ui5_cl_cockpit_session=>get_session_of( draft ).
+    IF lv_session IS INITIAL.
+      client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
+      RETURN.
+    ENDIF.
+    session_from_error = abap_false.
+    session_open( id    = lv_session
+                  draft = draft ).
 
   ENDMETHOD.
 
@@ -3616,6 +3790,25 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               failures_analyze( ).
             ENDIF.
 
+          WHEN `APP_VARIANTS`.
+            variants_app = detail_app.
+            popup_variants( ).
+
+          WHEN `DRAFTS_VARIANTS`.
+            CLEAR variants_app.
+            popup_variants( ).
+
+          WHEN `VARIANTS_BACK`.
+            popup_app( ).
+
+          WHEN `VARIANT_OPEN` OR `MESSAGE_SESSION`.
+            IF check_change( ) = abap_true.
+              session_open_draft( client->get_event_arg( ) ).
+            ENDIF.
+
+          WHEN `MESSAGES_SEARCH`.
+            load_tab( ).
+
           WHEN `APP_SESSIONS`.
             IF check_change( ) = abap_true.
               client->popup_destroy( ).
@@ -3734,7 +3927,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               THEN `Messages users saw - nothing recorded. Add z2ui5_cl_cockpit_wire=>record( server ) after ` &&
                    `abap2UI5 in your ICF handler to record every roundtrip (README, Recorder).`
               ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&
-                   |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) }| ).
+                   |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) } - | &&
+                   |select one for the session where it was shown last| ).
+          IF wire_message_search IS NOT INITIAL.
+            DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
+                                                         OR app CS wire_message_search ).
+          ENDIF.
         ENDIF.
       WHEN `PERF`.
         t_hints = z2ui5_cl_cockpit_stats=>get_hints( lv_days ).
