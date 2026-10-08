@@ -435,14 +435,40 @@ What it gives you, in the session viewer:
 - **Screen** - the screen of the step rebuilt from the recorded view XML and
   the model as the responses and inputs left it: the values in the fields,
   the rows of the tables (50 each), the popup on top with its buttons. Every
-  event handler is emptied, a press in the copy fires nothing. *Previous
-  screen* / *Next screen* step through the session like a film, each screen
-  with what the user did on it next - or that the next click failed.
+  event handler is emptied, a press in the copy fires nothing. The control
+  the user pressed next is **outlined in orange** - on the popup when one
+  was open. *Previous screen* / *Next screen* step through the session like
+  a film, each screen with what the user did on it next - or that the next
+  click failed.
 - **Request / Response** - the raw bodies, the inputs, the view XML, and for
   a step whose next click ended in an HTTP 500 the failed request itself.
 
 The Errors tab adds **"Messages users saw"**: the error and warning boxes and
 toasts of the last days, per app and text, how often and for how many users.
+Search it for the text from a ticket ("Material not found") - selecting a
+message opens the session where it was shown last, at that step.
+
+**Process variants** (Drafts & Housekeeping, and per app in the Apps tab
+detail) - process mining on the recordings: every run from the start of a
+session to where nothing continued it, written as its events in order and
+counted. Runs of the same way are one variant:
+
+```
+ZORDER: (start) -> CREATE -> SAVE (failed) -> SAVE => ZDELIVERY: SHIP   12 runs  40 %
+ZORDER: (start) -> CREATE -> SAVE (failed)                               5 runs  red
+ZORDER: (start) -> SEARCH -> NEXT (repeated) -> DISPLAY                  9 runs
+```
+
+- an event is counted on the app whose screen it was pressed on, `=>` is an
+  app change;
+- a click that failed and was tried again stands in place (orange row), a
+  run that ended in a failed click is red - the ways into an error, with
+  how often each happens;
+- `(repeated)` is the same event several times in a row, so paging through
+  ten pages and through two is one way;
+- reads no body, only ids and event names - up to 20,000 recordings;
+- selecting a variant opens its newest run in the session viewer
+  (administrators).
 
 **Retention:** 2 days by default (Settings, *Recorder retention*; `0` stops
 recording, the line in the handler can stay). The Installation tab shows
