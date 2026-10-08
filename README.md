@@ -10,7 +10,7 @@ app, installed with abapGit next to abap2UI5.
 
 | Tab | What it shows | Needs |
 |---|---|---|
-| **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
+| **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size, sessions with errors in the draft table (select it to step through them) - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
 | **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events and its sessions in the draft table. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
 | **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
@@ -320,6 +320,10 @@ Open one and the viewer shows it **step by step**:
 - select a field for its **history** - its value in every step of the
   session, the steps where it changed highlighted, each one a jump target:
   *when did the quantity become 0?*
+- a warning when the **app state grows**: when the last step is twice the size
+  of the first and above 20 KB, the viewer names the tables that grew most
+  (`ZCL_APP-MT_LOG 3 -> 1200 rows`) - state that is serialized and read back
+  on every roundtrip, and makes each one slower.
 
 **Find a value in all drafts** answers the question a support call starts
 with - *"I had a problem with order 4711"*: it searches every field of every

@@ -55,6 +55,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS app_is_first_own_object FOR TESTING.
     METHODS base64_of_utf8 FOR TESTING.
     METHODS flows_between_apps FOR TESTING.
+    METHODS growth_of_tables FOR TESTING.
     METHODS seconds_across_midnight FOR TESTING.
 
     METHODS draft
@@ -367,6 +368,31 @@ CLASS ltcl_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD growth_of_tables.
+
+    " MT_LOG grows from 1 to 3 rows, the nested T_SUB of row 1 from 1 to 2,
+    " MT_SAME keeps its row
+    DATA(lt_before) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-MT_LOG[1]-TEXT` value = `a` )
+                                                                  ( path = `APP-MT_A[1]-T_SUB[1]-X` value = `1` )
+                                                                  ( path = `APP-MT_SAME[1]` value = `s` ) ).
+    DATA(lt_after) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-MT_LOG[1]-TEXT` value = `a` )
+                                                                 ( path = `APP-MT_LOG[1]-NR` value = `1` )
+                                                                 ( path = `APP-MT_LOG[2]-TEXT` value = `b` )
+                                                                 ( path = `APP-MT_LOG[3]-TEXT` value = `c` )
+                                                                 ( path = `APP-MT_A[1]-T_SUB[1]-X` value = `1` )
+                                                                 ( path = `APP-MT_A[1]-T_SUB[2]-X` value = `2` )
+                                                                 ( path = `APP-MT_SAME[1]` value = `t` ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_growth( ( path = `APP-MT_LOG` rows_before = 1 rows_after = 3 )
+                                                           ( path        = `APP-MT_A[1]-T_SUB`
+                                                             rows_before = 1
+                                                             rows_after  = 2 ) )
+        act = z2ui5_cl_cockpit_session=>growth_of( it_before = lt_before
+                                                   it_after  = lt_after ) ).
+
+  ENDMETHOD.
+
   METHOD flows_between_apps.
 
     " two sessions: X -> X -> Y -> X and one starting in Y; E's predecessor
@@ -550,6 +576,12 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                                       check_errors = abap_true ).
     cl_abap_unit_assert=>assert_equals( exp = `ZZCKUT1`
                                         act = ls_list-t_session[ 1 ]-id ).
+
+    " the overview's count: no session listed, none read
+    ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 0
+                                                      check_errors = abap_true ).
+    cl_abap_unit_assert=>assert_initial( ls_list-t_session ).
+    cl_abap_unit_assert=>assert_true( xsdbool( ls_list-sessions >= 1 ) ).
 
     ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1
                                                       search       = `no such app` ).

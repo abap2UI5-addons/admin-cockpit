@@ -69,6 +69,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA t_log         TYPE z2ui5_cl_cockpit_auth=>ty_t_log.
     DATA s_sessions     TYPE z2ui5_cl_cockpit_session=>ty_s_list.
     DATA s_live_sessions TYPE z2ui5_cl_cockpit_session=>ty_s_list.
+    DATA sessions_failed TYPE i.
+    DATA sessions_failed_state TYPE string.
     DATA sessions_text  TYPE string.
     DATA sessions_shown TYPE abap_bool.
     DATA session_search TYPE string.
@@ -86,6 +88,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA session_enabled TYPE abap_bool.
     DATA session_from_error TYPE abap_bool.
     DATA step_pin_text  TYPE string.
+    DATA growth_text    TYPE string.
+    DATA growth_shown   TYPE abap_bool.
     DATA t_history      TYPE z2ui5_cl_cockpit_session=>ty_t_history.
     DATA history_title  TYPE string.
     DATA history_shown  TYPE abap_bool.
@@ -131,6 +135,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
         draft  TYPE clike OPTIONAL
         user   TYPE clike OPTIONAL
         search TYPE clike OPTIONAL.
+
+    "! Whether the app state of the open session grows from step to step,
+    "! and which tables - into growth_text.
+    METHODS growth_check.
 
     "! Show a step of the open session, compared with the step it continues.
     METHODS step_show
@@ -355,6 +363,29 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                             )->a( n = `value`      v = client->_bind( s_kpi-drafts )
                             )->a( n = `valueColor` v = client->_bind( s_kpi-drafts_state )
                             )->a( n = `icon`       v = `sap-icon://database`
+                            )->a( n = `withMargin` v = `false`
+
+                    )->end(
+                )->end(
+            )->end(
+        )->end(
+
+        )->ele( `GenericTile`
+            )->a( n = `header`    v = `Sessions with errors`
+            )->a( n = `subheader` v = `in the draft table now`
+            )->a( n = `class`     v = `sapUiTinyMarginEnd sapUiTinyMarginBottom`
+            )->a( n = `press`     v = client->_event( `OVERVIEW_FAILED` )
+
+            )->ele( `tileContent`
+                )->ele( `TileContent`
+                    )->a( n = `footer` v = `select to step through them`
+
+                    )->ele( `content`
+
+                        )->tag( `NumericContent`
+                            )->a( n = `value`      v = client->_bind( sessions_failed )
+                            )->a( n = `valueColor` v = client->_bind( sessions_failed_state )
+                            )->a( n = `icon`       v = `sap-icon://history`
                             )->a( n = `withMargin` v = `false` ).
 
     overview->ele( `Table`
@@ -2356,6 +2387,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `showIcon` v = `true`
         )->a( n = `class`    v = `sapUiSmallMarginTopBottom` ).
 
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( growth_text )
+        )->a( n = `type`     v = `Warning`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( growth_shown )
+        )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
+
     content->ele( `VBox`
         )->a( n = `visible` v = client->_bind( history_shown )
         )->a( n = `class`   v = `sapUiSmallMarginBottom`
@@ -2589,11 +2627,42 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     CLEAR step_base.
     CLEAR t_history.
     CLEAR history_shown.
+    growth_check( ).
     step_show( lv_index ).
     IF ls_steps-check_capped = abap_true.
       step_info = |Only the newest { z2ui5_cl_cockpit_session=>c_max_steps } steps are shown. { step_info }|.
     ENDIF.
     popup_session( ).
+
+  ENDMETHOD.
+
+  METHOD growth_check.
+
+    DATA lv_tables TYPE string.
+
+    CLEAR growth_text.
+    CLEAR growth_shown.
+    IF lines( t_steps ) < 2.
+      RETURN.
+    ENDIF.
+    DATA(ls_first) = t_steps[ 1 ].
+    DATA(ls_last) = t_steps[ lines( t_steps ) ].
+    " a state that doubles and passes 20 KB - below that it is noise
+    IF ls_last-kb < 20 OR ls_last-kb < 2 * ls_first-kb.
+      RETURN.
+    ENDIF.
+
+    DATA(lt_growth) = z2ui5_cl_cockpit_session=>get_growth( id_before = ls_first-id
+                                                           id_after  = ls_last-id ).
+    LOOP AT lt_growth INTO DATA(ls_growth) TO 3.
+      lv_tables = |{ lv_tables }{ COND #( WHEN lv_tables IS NOT INITIAL THEN `, ` ) }| &&
+                  |{ ls_growth-path } { ls_growth-rows_before } -> { ls_growth-rows_after } rows|.
+    ENDLOOP.
+    growth_text = |The app state grew from { ls_first-kb } KB (step 1) to { ls_last-kb } KB | &&
+                  |(step { ls_last-step }). It is serialized into the draft and read back on every roundtrip, | &&
+                  |so each one gets slower.{ COND #( WHEN lv_tables IS NOT INITIAL
+                                                    THEN | Grown most: { lv_tables }.| ) }|.
+    growth_shown = abap_true.
 
   ENDMETHOD.
 
@@ -2938,6 +3007,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                  ELSE |Navigation between apps and session starts, from { s_flows-drafts } drafts - | &&
                                       |"(start)" is a session's first app| ).
 
+          WHEN `OVERVIEW_FAILED`.
+            IF check_change( ) = abap_true.
+              tab = `DRAFTS`.
+              CLEAR session_search.
+              session_errors = abap_true.
+              sessions_shown = abap_true.
+              load_tab( ).
+            ENDIF.
+
           WHEN `APP_SESSIONS`.
             IF check_change( ) = abap_true.
               client->popup_destroy( ).
@@ -3013,6 +3091,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         t_trend     = z2ui5_cl_cockpit_stats=>get_trend( ).
         t_alert_now = z2ui5_cl_cockpit_alert=>check( ).
         s_alerts    = z2ui5_cl_cockpit_alert=>get_status( t_alert_now ).
+        " a count only - no session is read for it, and no app either
+        sessions_failed = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 0
+                                                                  check_errors = abap_true )-sessions.
+        sessions_failed_state = COND #( WHEN sessions_failed > 0 THEN `Error` ELSE `Good` ).
         t_alert_log = z2ui5_cl_cockpit_alert=>get_history( ).
       WHEN `APPS`.
         t_apps   = z2ui5_cl_cockpit_stats=>get_apps( lv_days ).
@@ -3125,6 +3207,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     ENDIF.
     IF s_kpi-drafts_state IS INITIAL.
       s_kpi-drafts_state = `Neutral`.
+    ENDIF.
+    IF sessions_failed_state IS INITIAL.
+      sessions_failed_state = `Neutral`.
     ENDIF.
 
   ENDMETHOD.

@@ -197,6 +197,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       END OF ty_s_flows.
 
     TYPES:
+      "! A table of the app and its rows in two steps.
+      BEGIN OF ty_s_growth,
+        path        TYPE string,
+        rows_before TYPE i,
+        rows_after  TYPE i,
+      END OF ty_s_growth.
+    TYPES ty_t_growth TYPE STANDARD TABLE OF ty_s_growth WITH EMPTY KEY.
+
+    TYPES:
       "! A draft, its predecessor and its app - the input of flows_of.
       BEGIN OF ty_s_link,
         id      TYPE c LENGTH 32,
@@ -301,6 +310,25 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         it_link       TYPE ty_t_link
       RETURNING
         VALUE(result) TYPE ty_t_flow.
+
+    "! The tables of the app that have more rows in the later of two steps,
+    "! the most grown first. Never raises - empty when a step is gone.
+    CLASS-METHODS get_growth
+      IMPORTING
+        id_before     TYPE clike
+        id_after      TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_t_growth.
+
+    "! The tables of two sets of fields and their rows - a table is a path
+    "! up to a [n], a nested table counts per row of its parent. Only those
+    "! that grew, the most grown first.
+    CLASS-METHODS growth_of
+      IMPORTING
+        it_before     TYPE ty_t_value
+        it_after      TYPE ty_t_value
+      RETURNING
+        VALUE(result) TYPE ty_t_growth.
 
     "! A text as UTF-8, base64 encoded - the payload of a data: URL.
     CLASS-METHODS to_base64
@@ -1008,6 +1036,94 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                       count  = ls_count-count ) TO result.
     ENDLOOP.
     SORT result BY count DESCENDING source ASCENDING target ASCENDING.
+
+  ENDMETHOD.
+
+  METHOD get_growth.
+
+    TRY.
+        DATA(lv_before) = read_data( id_before ).
+        DATA(lv_after) = read_data( id_after ).
+      CATCH cx_root.
+        RETURN.
+    ENDTRY.
+    IF lv_before IS INITIAL OR lv_after IS INITIAL.
+      RETURN.
+    ENDIF.
+    result = growth_of( it_before = flatten( lv_before )
+                        it_after  = flatten( lv_after ) ).
+
+  ENDMETHOD.
+
+  METHOD growth_of.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        tab TYPE string,
+        row TYPE string,
+      END OF ty_s_row.
+    TYPES:
+      BEGIN OF ty_s_count,
+        tab    TYPE string,
+        before TYPE i,
+        after  TYPE i,
+      END OF ty_s_count.
+    DATA lt_row TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY tab row.
+    DATA lt_count TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY tab.
+    DATA lt_values TYPE ty_t_value.
+    DATA lv_pos TYPE i.
+
+    DO 2 TIMES.
+      DATA(lv_pass) = sy-index.
+      CLEAR lt_row.
+      lt_values = COND #( WHEN lv_pass = 1 THEN it_before ELSE it_after ).
+      LOOP AT lt_values INTO DATA(ls_value).
+        " every [n] of the path is a row of the table the path names up to it
+        lv_pos = 0.
+        DO.
+          DATA(lv_close) = find( val = ls_value-path
+                                 sub = `]`
+                                 off = lv_pos ).
+          IF lv_close < 0.
+            EXIT.
+          ENDIF.
+          DATA(lv_prefix) = substring( val = ls_value-path
+                                       len = lv_close + 1 ).
+          DATA(lv_open) = find( val = lv_prefix
+                                sub = `[`
+                                occ = -1 ).
+          lv_pos = lv_close + 1.
+          IF lv_open <= 0.
+            CONTINUE.
+          ENDIF.
+          INSERT VALUE #( tab = substring( val = lv_prefix
+                                           len = lv_open )
+                          row = lv_prefix ) INTO TABLE lt_row.
+        ENDDO.
+      ENDLOOP.
+
+      LOOP AT lt_row INTO DATA(ls_row).
+        READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY tab = ls_row-tab.
+        IF sy-subrc <> 0.
+          INSERT VALUE #( tab = ls_row-tab ) INTO TABLE lt_count ASSIGNING <count>.
+        ENDIF.
+        IF lv_pass = 1.
+          <count>-before = <count>-before + 1.
+        ELSE.
+          <count>-after = <count>-after + 1.
+        ENDIF.
+      ENDLOOP.
+    ENDDO.
+
+    LOOP AT lt_count INTO DATA(ls_count).
+      IF ls_count-after <= ls_count-before.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( path        = ls_count-tab
+                      rows_before = ls_count-before
+                      rows_after  = ls_count-after ) TO result.
+    ENDLOOP.
+    SORT result BY rows_after DESCENDING path ASCENDING.
 
   ENDMETHOD.
 
