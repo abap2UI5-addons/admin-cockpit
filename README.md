@@ -1,34 +1,60 @@
-# abap2UI5 Admin Cockpit
+# admin-cockpit
+
+[![abap2UI5-addons](https://img.shields.io/badge/abap2UI5--addons-app-1873b4)](https://github.com/abap2UI5-addons)
+[![ABAP](https://img.shields.io/badge/ABAP-Cloud%20%7C%20Standard%20%E2%89%A5%207.50%20%7C%207.02-blue)](#installation)
+[![abap2UI5](https://img.shields.io/badge/requires-abap2UI5-blue)](https://github.com/abap2UI5/abap2UI5)
+[![License](https://img.shields.io/github/license/abap2UI5-addons/admin-cockpit)](LICENSE)
+<br>
+[![ABAP Cloud](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_CLOUD.yaml?branch=main&label=ABAP%20Cloud)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_CLOUD.yaml)
+[![ABAP Standard](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_STANDARD.yaml?branch=main&label=ABAP%20Standard)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_STANDARD.yaml)
+[![ABAP 7.02](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_702.yaml?branch=main&label=ABAP%207.02)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_702.yaml)
+[![ABAP Unit](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_UNIT.yaml?branch=main&label=ABAP%20Unit)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_UNIT.yaml)
+[![check-abap2UI5](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/check-abap2UI5.yaml?branch=main&label=check-abap2UI5)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/check-abap2UI5.yaml)
+
+**See whether abap2UI5 is used, fast and safely configured - in one abap2UI5
+app.** The Admin Cockpit shows usage and errors per app, response times with
+their phases, the draft table and a security traffic light of the
+installation. It is itself an abap2UI5 app, installed with abapGit next to
+abap2UI5, for the administrators and IT leads who run it.
+
+> Part of [abap2UI5-addons](https://github.com/abap2UI5-addons) - addons and apps for [abap2UI5](https://github.com/abap2UI5/abap2UI5), installed with [abapGit](https://abapgit.org).
+
+## Why
 
 **Is abap2UI5 used? Is it fast? Is it safely configured?** The three questions
-an IT lead asks before abap2UI5 goes to production - answered by an abap2UI5
-app, installed with abapGit next to abap2UI5.
+an IT lead asks before abap2UI5 goes to production. The cockpit answers them
+from the roundtrips it records, the abap2UI5 draft table and the configuration
+the framework computes - and the security and draft tabs need no logging at
+all: install, open, read the traffic light.
 
-```
-?app_start=z2ui5_cl_cockpit_app
-```
+Good for:
 
-| Tab | What it shows | Needs |
-|---|---|---|
-| **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size, sessions with errors in the draft table (select it to step through them) - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
-| **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events, its sessions in the draft table and the **business objects it works with** (from its drafts, types only). Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
-| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default), and **what the user did afterwards** - continued from the same screen, stopped there, still open (from the drafts) - **Analyze failures**: the values the failing cases share and other states of the app rarely have, and the business objects they concern - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
-| **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
-| **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); **find a value** (an order number, a customer) in all drafts; the **navigation** between apps; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
-| **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
-| **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, the **sessions active right now** - open one to see what the user is doing - and a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
-| **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/agent)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
-| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, draft searches, failure analyses, test notifications) | - |
-
-The tabs marked *-* work **without any logging** - install, open, read the
-traffic light. That is the quick win.
-
-## Screenshots
-
-*Placeholder - screenshots of the Overview, Errors and Installation & Security
-tabs follow with the first release.*
+- **IT leads and administrators** deciding whether abap2UI5 is ready for
+  production, and keeping an eye on it afterwards.
+- **Finding errors** - grouped by app and exception, with the user's steps up
+  to the error and a replay of the failed event.
+- **Performance** - the slowest roundtrips, their phases and runtime hints.
+- **Privacy by default** - no user names unless you switch them on (see
+  [Privacy and the works council](#privacy-and-the-works-council)).
 
 ## Installation
+
+**Requirements**
+
+- ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; the 7.02
+  downport is linted in CI (`ABAP_702`). The UI runs on UI5 1.71 and later
+  (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
+  SAPUI5-only micro charts.
+- [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
+  branch `main` an abap2UI5 with the monitor hook `z2ui5_if_ui5_monitor`
+  (see the table below).
+- Optional: [abap2UI5-addons/abap-agent-runtime](https://github.com/abap2UI5-addons/abap-agent-runtime)
+  for the [Agents](#agents) tab, the [headless frontend](https://github.com/abap2UI5/headless-frontend)
+  for [Reproduce](#reproduce-an-error), [abap2UI5-addons/lock-manager](https://github.com/abap2UI5-addons/lock-manager)
+  for its monitor on the Live tab. All are found at run time - the cockpit
+  activates without them.
+
+**Steps** - with [abapGit](https://abapgit.org):
 
 1. **abap2UI5** first - <https://github.com/abap2UI5/abap2UI5>.
 2. **This repository** with abapGit, into a package of its own (for example
@@ -83,6 +109,11 @@ Once your abap2UI5 has the monitor hook, you can switch the abapGit
 repository from `standalone` to `main` and pull, and switch the hook on
 (step 4) for the phases - the handler line can stay.
 
+**Start** - `?app_start=z2ui5_cl_cockpit_app`. Claim the administrator role
+(step 3); Installation & Security and Drafts & Housekeeping work right away,
+the usage, error and performance tabs fill once step 4 is in place. What each
+tab shows: [Usage](#usage).
+
 ### Two packages, two branches
 
 | Package | Content | Activates on |
@@ -104,6 +135,32 @@ leaves the class inactive and shows it as a diff on every pull. The
 `.github/workflows/publish-standalone.yaml` on every push to `main`, after
 linting `src/01` against the released abap2UI5 (the tag `1.146.0`, pinned:
 `main` of abap2UI5 already carries the hook).
+
+## Usage
+
+```
+?app_start=z2ui5_cl_cockpit_app
+```
+
+| Tab | What it shows | Needs |
+|---|---|---|
+| **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size, sessions with errors in the draft table (select it to step through them) - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
+| **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events, its sessions in the draft table and the **business objects it works with** (from its drafts, types only). Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
+| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default), and **what the user did afterwards** - continued from the same screen, stopped there, still open (from the drafts) - **Analyze failures**: the values the failing cases share and other states of the app rarely have, and the business objects they concern - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
+| **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
+| **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); **find a value** (an order number, a customer) in all drafts; the **navigation** between apps; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
+| **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
+| **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, the **sessions active right now** - open one to see what the user is doing - and a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
+| **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
+| **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, draft searches, failure analyses, test notifications) | - |
+
+The tabs marked *-* work **without any logging** - install, open, read the
+traffic light. That is the quick win.
+
+## Screenshots
+
+*Placeholder - screenshots of the Overview, Errors and Installation & Security
+tabs follow with the first release.*
 
 ## How the monitor works
 
@@ -285,7 +342,7 @@ its activation.
 ## Reproduce an error
 
 The detail of an error group offers **Reproduce...** for the selected
-occurrence when the [headless frontend](https://github.com/abap2UI5-addons/headless-frontend)
+occurrence when the [headless frontend](https://github.com/abap2UI5/headless-frontend)
 (`z2ui5_cl_frontend_simulator`) is installed. It resumes the draft the failed
 request came with (`draft_id_prev` of the log entry) and fires the same event
 again, through the simulator - the app runs exactly as it ran for the user,
@@ -567,7 +624,7 @@ short and agree it with your works council like the rest of the monitoring.
 
 ## Agents
 
-When the [agent addon](https://github.com/abap2UI5-addons/agent) is installed
+When the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime) is installed
 (detected by its class `z2ui5_cl_agent_settings` or its audit table
 `Z2UI5_T_AG_LOG`), the Agents tab reads its audit log and settings - with
 dynamic SQL inside `TRY`, so there is no dependency either way:
@@ -665,11 +722,14 @@ notified:
   `if_apj_dt_exec_object` / `if_apj_rt_exec_object` whose `execute` calls
   `z2ui5_cl_cockpit_job=>run( )`, plus the job catalog entry and template.
 
-## Platforms
+## Roadmap
 
-ABAP Cloud and Standard ABAP from 7.50, released APIs only; the 7.02 downport
-is linted in CI (`ABAP_702`). The UI runs on UI5 1.71 and later (OpenUI5 and
-SAPUI5): IconTabBar, GenericTile, sap.m tables - no SAPUI5-only micro charts.
+- **Export** of the aggregates to OpenTelemetry / SAP Cloud ALM, so abap2UI5
+  shows up next to the rest of the landscape.
+- **Reproduce with the user's input** - record the model delta and the event
+  arguments of a failed roundtrip (opt-in, privacy!) so the replay sends them
+  too.
+- Per-app authorization overview: which roles may start which app classes.
 
 ## Development
 
@@ -708,17 +768,11 @@ when none ran. The first run takes a few minutes.
 monitor interface (abap2UI5/linter#140, merged), `abap2ui5lint.jsonc` waives
 `non-released-api` for the monitor class.
 
-See [AGENTS.md](AGENTS.md) for the conventions of this repository.
+## Contributing
 
-## Roadmap
-
-- **Export** of the aggregates to OpenTelemetry / SAP Cloud ALM, so abap2UI5
-  shows up next to the rest of the landscape.
-- **Reproduce with the user's input** - record the model delta and the event
-  arguments of a failed roundtrip (opt-in, privacy!) so the replay sends them
-  too.
-- Per-app authorization overview: which roles may start which app classes.
+Issues and pull requests are welcome. See [AGENTS.md](AGENTS.md) for the
+conventions of this repository.
 
 ## License
 
-MIT
+MIT - see [LICENSE](LICENSE).
