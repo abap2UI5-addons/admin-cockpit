@@ -116,6 +116,9 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE abap_bool.
 
+    "! Whether a class or type exists and can be loaded. One that exists but
+    "! cannot be loaded - an addon class with a syntax error raises in RTTI -
+    "! counts as missing instead of raising.
     CLASS-METHODS check_class_exists
       IMPORTING
         name          TYPE clike
@@ -147,6 +150,15 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PROTECTED SECTION.
 
   PRIVATE SECTION.
+
+    "! RTTI lookup of a class or type: found, or why it could not be loaded
+    "! (error stays empty when it does not exist).
+    CLASS-METHODS describe
+      IMPORTING
+        name  TYPE clike
+      EXPORTING
+        found TYPE abap_bool
+        error TYPE string.
 
     CLASS-METHODS get_exit
       RETURNING
@@ -517,6 +529,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_addons.
 
+    DATA lv_error TYPE string.
+
     result = VALUE #(
       ( name = `popups`                   marker = `Z2UI5_CL_POPUP_CONTEXT`         kind = `library` )
       ( name = `layout-management`        marker = `Z2UI5_CL_LAYO_MANAGER`          kind = `library` )
@@ -543,7 +557,9 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       <addon>-url = |https://github.com/abap2UI5-addons/{ segment( val   = <addon>-name
                                                                     index = 1
                                                                     sep   = ` ` ) }|.
-      <addon>-installed = check_class_exists( <addon>-marker ).
+      describe( EXPORTING name  = <addon>-marker
+                IMPORTING found = <addon>-installed
+                          error = lv_error ).
       IF <addon>-installed = abap_true.
         <addon>-status = `installed`.
         <addon>-state = COND #( WHEN <addon>-kind = `developer tool`
@@ -556,6 +572,10 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
           WHEN `test tool`.
             <addon>-note = `Enables Reproduce on the Errors tab.`.
         ENDCASE.
+      ELSEIF lv_error IS NOT INITIAL.
+        <addon>-status = `installed, cannot be loaded`.
+        <addon>-state = cs_status-error.
+        <addon>-note = |{ <addon>-marker }: { lv_error } - check the addon's objects for syntax errors.|.
       ELSE.
         <addon>-status = `not installed`.
         <addon>-state = `None`.
@@ -614,10 +634,28 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD check_class_exists.
 
-    cl_abap_typedescr=>describe_by_name( EXPORTING  p_name         = name
-                                         EXCEPTIONS type_not_found = 1
-                                                    OTHERS         = 2 ).
-    result = xsdbool( sy-subrc = 0 ).
+    describe( EXPORTING name  = name
+              IMPORTING found = result ).
+
+  ENDMETHOD.
+
+  METHOD describe.
+
+    CLEAR: found,
+           error.
+    TRY.
+        cl_abap_typedescr=>describe_by_name( EXPORTING  p_name         = name
+                                             EXCEPTIONS type_not_found = 1
+                                                        OTHERS         = 2 ).
+        found = xsdbool( sy-subrc = 0 ).
+      CATCH cx_root INTO DATA(lx).
+        " the class exists but cannot be loaded, e.g. a syntax error in an
+        " installed addon - it must not take the whole tab down
+        error = lx->get_text( ).
+        IF error IS INITIAL.
+          error = `cannot be loaded`.
+        ENDIF.
+    ENDTRY.
 
   ENDMETHOD.
 
