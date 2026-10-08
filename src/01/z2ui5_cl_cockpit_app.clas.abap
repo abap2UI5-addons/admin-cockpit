@@ -62,6 +62,7 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA s_error       TYPE z2ui5_cl_cockpit_stats=>ty_s_error.
     DATA t_occurrences TYPE z2ui5_cl_cockpit_stats=>ty_t_occurrence.
     DATA error_text    TYPE string.
+    DATA error_outcome TYPE string.
     DATA repro_enabled TYPE abap_bool.
     DATA repro_hint    TYPE string.
     DATA s_repro       TYPE z2ui5_cl_cockpit_repro=>ty_s_result.
@@ -90,6 +91,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA step_pin_text  TYPE string.
     DATA growth_text    TYPE string.
     DATA growth_shown   TYPE abap_bool.
+    DATA stuck_text     TYPE string.
+    DATA stuck_shown    TYPE abap_bool.
+    DATA business_text  TYPE string.
+    DATA business_shown TYPE abap_bool.
     DATA t_history      TYPE z2ui5_cl_cockpit_session=>ty_t_history.
     DATA history_title  TYPE string.
     DATA history_shown  TYPE abap_bool.
@@ -140,6 +145,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! and which tables - into growth_text.
     METHODS growth_check.
 
+    "! Whether the user repeated an action without effect - steps in a row
+    "! that changed no field - into stuck_text.
+    METHODS stuck_check.
+
     "! Show a step of the open session, compared with the step it continues.
     METHODS step_show
       IMPORTING
@@ -148,6 +157,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING
         id TYPE clike.
     METHODS on_event.
+
+    "! What the users did after each occurrence - continued, stopped here -
+    "! into t_occurrences and error_outcome. Reads no draft content.
+    METHODS outcomes_fill.
     METHODS load_head.
     METHODS load_tab.
     METHODS check_change
@@ -2094,6 +2107,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->tag( `Text`
                 )->a( n = `text` v = client->_bind( s_error-count ) ).
 
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( error_outcome )
+        )->a( n = `type`     v = `Information`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `class`    v = `sapUiSmallMarginTopBottom` ).
+
     content->ele( `Table`
         )->a( n = `headerText`       v = `Occurrences, newest first - select one for its full exception chain`
         )->a( n = `items`            v = client->_bind( t_occurrences )
@@ -2112,6 +2131,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 )->a( n = `header` v = `ms`
             )->tag( `Column`
                 )->a( n = `header` v = `Start`
+            )->tag( `Column`
+                )->a( n = `header` v = `Afterwards`
 
         )->end(
         )->ele( `items`
@@ -2130,7 +2151,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->tag( `Text`
                         )->a( n = `text` v = `{MS_TOTAL}`
                     )->tag( `Text`
-                        )->a( n = `text` v = `{START}` ).
+                        )->a( n = `text` v = `{START}`
+                    )->tag( `ObjectStatus`
+                        )->a( n = `text`  v = `{AFTERWARDS}`
+                        )->a( n = `state` v = `{AFTERWARDS_STATE}` ).
 
     content->tag( `TextArea`
         )->a( n = `value`    v = client->_bind( error_text )
@@ -2388,6 +2412,20 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `class`    v = `sapUiSmallMarginTopBottom` ).
 
     content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( business_text )
+        )->a( n = `type`     v = `Information`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( business_shown )
+        )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
+
+    content->tag( `MessageStrip`
+        )->a( n = `text`     v = client->_bind( stuck_text )
+        )->a( n = `type`     v = `Warning`
+        )->a( n = `showIcon` v = `true`
+        )->a( n = `visible`  v = client->_bind( stuck_shown )
+        )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
+
+    content->tag( `MessageStrip`
         )->a( n = `text`     v = client->_bind( growth_text )
         )->a( n = `type`     v = `Warning`
         )->a( n = `showIcon` v = `true`
@@ -2477,10 +2515,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->a( n = `header` v = `Event`
                     )->a( n = `width`  v = `8rem`
                 )->tag( `Column`
+                    )->a( n = `header` v = `Changes`
+                    )->a( n = `width`  v = `5rem`
+                )->tag( `Column`
                     )->a( n = `header` v = `KB`
                     )->a( n = `width`  v = `4rem`
                 )->tag( `Column`
                     )->a( n = `header` v = `Monitor`
+                )->tag( `Column`
+                    )->a( n = `header` v = `Messages in the app`
                 )->tag( `Column`
                     )->a( n = `header` v = `Note`
 
@@ -2504,10 +2547,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->tag( `Text`
                             )->a( n = `text` v = `{EVENT}`
                         )->tag( `Text`
+                            )->a( n = `text` v = `{CHANGES}`
+                        )->tag( `Text`
                             )->a( n = `text` v = `{KB}`
                         )->tag( `ObjectStatus`
                             )->a( n = `text`  v = `{MONITOR}`
                             )->a( n = `state` v = `{MONITOR_STATE}`
+                        )->tag( `ObjectStatus`
+                            )->a( n = `text`  v = `{MESSAGES}`
+                            )->a( n = `state` v = `{MESSAGES_STATE}`
                         )->tag( `Text`
                             )->a( n = `text` v = `{NOTE}` ).
 
@@ -2628,6 +2676,20 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     CLEAR t_history.
     CLEAR history_shown.
     growth_check( ).
+    stuck_check( ).
+    CLEAR business_text.
+    LOOP AT ls_steps-t_business INTO DATA(ls_business).
+      IF sy-tabix > 8.
+        business_text = |{ business_text } (+{ lines( ls_steps-t_business ) - 8 } more)|.
+        EXIT.
+      ENDIF.
+      business_text = |{ business_text }{ COND #( WHEN business_text IS NOT INITIAL THEN `, ` ) }| &&
+                      |{ ls_business-object } { ls_business-value } (step { ls_business-step })|.
+    ENDLOOP.
+    business_shown = xsdbool( business_text IS NOT INITIAL ).
+    IF business_shown = abap_true.
+      business_text = |Business objects in this session: { business_text }|.
+    ENDIF.
     step_show( lv_index ).
     IF ls_steps-check_capped = abap_true.
       step_info = |Only the newest { z2ui5_cl_cockpit_session=>c_max_steps } steps are shown. { step_info }|.
@@ -2663,6 +2725,38 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   |so each one gets slower.{ COND #( WHEN lv_tables IS NOT INITIAL
                                                     THEN | Grown most: { lv_tables }.| ) }|.
     growth_shown = abap_true.
+
+  ENDMETHOD.
+
+  METHOD stuck_check.
+
+    DATA lv_run TYPE i.
+    DATA lv_best TYPE i.
+    DATA lv_best_end TYPE i.
+
+    CLEAR stuck_text.
+    CLEAR stuck_shown.
+    LOOP AT t_steps INTO DATA(ls_step).
+      IF ls_step-follows > 0 AND ls_step-changes = 0 AND ls_step-kb > 0.
+        lv_run = lv_run + 1.
+        IF lv_run > lv_best.
+          lv_best = lv_run.
+          lv_best_end = ls_step-step.
+        ENDIF.
+      ELSE.
+        lv_run = 0.
+      ENDIF.
+    ENDLOOP.
+    IF lv_best < 2.
+      RETURN.
+    ENDIF.
+
+    DATA(ls_end) = t_steps[ lv_best_end ].
+    stuck_text = |{ lv_best } roundtrips in a row changed nothing the app keeps (steps { lv_best_end - lv_best + 1 }| &&
+                 | to { lv_best_end }{ COND #( WHEN ls_end-event IS NOT INITIAL THEN |, event { ls_end-event }| ) }). | &&
+                 |The user pressed something again and again - a button without effect, a check that refuses | &&
+                 |without a message, or a message the user did not see.|.
+    stuck_shown = abap_true.
 
   ENDMETHOD.
 
@@ -2738,6 +2832,41 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD outcomes_fill.
+
+    DATA lt_id TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+    DATA lv_continued TYPE i.
+    DATA lv_stopped TYPE i.
+    DATA lv_open TYPE i.
+    DATA lv_unknown TYPE i.
+
+    LOOP AT t_occurrences INTO DATA(ls_occ).
+      APPEND ls_occ-draft_id_prev TO lt_id.
+    ENDLOOP.
+    DATA(lt_outcome) = z2ui5_cl_cockpit_session=>get_outcomes( lt_id ).
+
+    LOOP AT t_occurrences ASSIGNING FIELD-SYMBOL(<occ>).
+      DATA(ls_outcome) = VALUE #( lt_outcome[ sy-tabix ] OPTIONAL ).
+      <occ>-afterwards       = ls_outcome-outcome.
+      <occ>-afterwards_state = COND #( WHEN ls_outcome-state IS NOT INITIAL THEN ls_outcome-state ELSE `None` ).
+      CASE ls_outcome-outcome.
+        WHEN z2ui5_cl_cockpit_session=>cs_outcome-continued.
+          lv_continued = lv_continued + 1.
+        WHEN z2ui5_cl_cockpit_session=>cs_outcome-stopped.
+          lv_stopped = lv_stopped + 1.
+        WHEN z2ui5_cl_cockpit_session=>cs_outcome-open.
+          lv_open = lv_open + 1.
+        WHEN OTHERS.
+          lv_unknown = lv_unknown + 1.
+      ENDCASE.
+    ENDLOOP.
+
+    error_outcome = |After this error: { lv_continued } continued from the same screen, { lv_stopped } stopped | &&
+                    |there (gave up, or started over in a new session), { lv_open } still open, { lv_unknown } | &&
+                    |unknown (the draft has expired - the drafts tell only for the last hours).|.
+
+  ENDMETHOD.
+
   METHOD occurrence_select.
 
     DATA lv_owner TYPE string.
@@ -2794,6 +2923,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             s_error = VALUE #( t_errors[ key = lv_key ] OPTIONAL ). "#EC CI_SORTSEQ
             t_occurrences = z2ui5_cl_cockpit_stats=>get_error_occurrences( is_error = s_error
                                                                           days     = get_days( ) ).
+            outcomes_fill( ).
             occurrence_select( VALUE #( t_occurrences[ 1 ]-id OPTIONAL ) ).
             popup_error( ).
 
@@ -3004,8 +3134,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             flows_shown = abap_true.
             flows_text = COND #( WHEN s_flows-error IS NOT INITIAL
                                  THEN |The draft table could not be read: { s_flows-error }|
-                                 ELSE |Navigation between apps and session starts, from { s_flows-drafts } drafts - | &&
-                                      |"(start)" is a session's first app| ).
+                                 ELSE |How users move between apps, from { s_flows-drafts } drafts - "(start)" is | &&
+                                      |where a session began, "(end)" where a session without a step for 30 minutes | &&
+                                      |stopped, "(end after an error)" where it stopped right after a failed roundtrip| ).
 
           WHEN `OVERVIEW_FAILED`.
             IF check_change( ) = abap_true.

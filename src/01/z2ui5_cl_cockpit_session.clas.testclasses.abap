@@ -56,6 +56,10 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS base64_of_utf8 FOR TESTING.
     METHODS flows_between_apps FOR TESTING.
     METHODS growth_of_tables FOR TESTING.
+    METHODS business_objects FOR TESTING.
+    METHODS messages_in_state FOR TESTING.
+    METHODS flows_with_ends FOR TESTING.
+    METHODS outcomes_after_errors FOR TESTING.
     METHODS seconds_across_midnight FOR TESTING.
 
     METHODS draft
@@ -368,6 +372,95 @@ CLASS ltcl_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD business_objects.
+
+    DATA(lt_business) = z2ui5_cl_cockpit_session=>business_of(
+        VALUE #( ( path = `APP-MV_VBELN` value = `4711` )
+                 ( path = `APP-MS_HEAD-KUNNR` value = `1000` )
+                 ( path = `APP-MT_ITEMS[1]-MATNR` value = `M1` )
+                 ( path = `APP-MT_ITEMS[2]-MATNR` value = `M1` )
+                 ( path = `APP-MV_CUSTOMER` value = `` )
+                 ( path = `APP-MS_HEAD-WERKS` value = `0000` )
+                 ( path = `APP-MO_KUNNR` value = `-> ZCL_X` )
+                 ( path = `APP-MV_TEXT` value = `4711` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_business(
+                  ( object = `Sales document` value = `4711` field = `APP-MV_VBELN` )
+                  ( object = `Customer` value = `1000` field = `APP-MS_HEAD-KUNNR` )
+                  ( object = `Material` value = `M1` field = `APP-MT_ITEMS[1]-MATNR` ) )
+        act = lt_business ).
+
+  ENDMETHOD.
+
+  METHOD messages_in_state.
+
+    " a BAPI return with an error and a success, a UI structure whose TYPE
+    " is no message type, an error with a TEXT and a warning with MSG
+    DATA(lt_message) = z2ui5_cl_cockpit_session=>messages_of(
+        VALUE #( ( path = `APP-MT_RETURN[1]-TYPE` value = `E` )
+                 ( path = `APP-MT_RETURN[1]-MESSAGE` value = `Quantity must be greater than 0` )
+                 ( path = `APP-MT_RETURN[2]-TYPE` value = `S` )
+                 ( path = `APP-MT_RETURN[2]-MESSAGE` value = `Saved` )
+                 ( path = `APP-MS_BUTTON-TYPE` value = `Emphasized` )
+                 ( path = `APP-MS_BUTTON-TEXT` value = `Save` )
+                 ( path = `APP-MS_LOCK-SEVERITY` value = `error` )
+                 ( path = `APP-MS_LOCK-TEXT` value = `Order is locked by USER2` )
+                 ( path = `APP-MS_CHECK-MSGTY` value = `W` )
+                 ( path = `APP-MS_CHECK-MSG` value = `Delivery date in the past` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_message(
+                  ( type = `E` text = `Quantity must be greater than 0` path = `APP-MT_RETURN[1]` )
+                  ( type = `ERROR` text = `Order is locked by USER2` path = `APP-MS_LOCK` )
+                  ( type = `W` text = `Delivery date in the past` path = `APP-MS_CHECK` ) )
+        act = lt_message ).
+
+  ENDMETHOD.
+
+  METHOD outcomes_after_errors.
+
+    " nodes( ): B is continued by C and D, C and G are last steps - C long
+    " ago, G "now"; X is no draft at all
+    DATA(lt_outcome) = z2ui5_cl_cockpit_session=>outcomes_of( it_node      = nodes( )
+                                                              it_id        = VALUE #( ( `B` ) ( `C` ) ( `G` ) ( `X` ) )
+                                                              ended_before = `20261008105000.0` ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_outcome(
+                  ( id = `B` outcome = z2ui5_cl_cockpit_session=>cs_outcome-continued state = `Success` )
+                  ( id = `C` outcome = z2ui5_cl_cockpit_session=>cs_outcome-stopped state = `Error` )
+                  ( id = `G` outcome = z2ui5_cl_cockpit_session=>cs_outcome-open state = `Information` )
+                  ( id = `X` outcome = z2ui5_cl_cockpit_session=>cs_outcome-unknown state = `None` ) )
+        act = lt_outcome ).
+
+  ENDMETHOD.
+
+  METHOD flows_with_ends.
+
+    " the sessions of flows_between_apps, all over: D's roundtrip failed
+    DATA(lt_flow) = z2ui5_cl_cockpit_session=>flows_of(
+        it_link      = VALUE #( ( id = `A` app = `X` )
+                                ( id = `B` id_prev = `A` app = `X` )
+                                ( id = `C` id_prev = `B` app = `Y` )
+                                ( id = `D` id_prev = `C` app = `X` )
+                                ( id = `E` id_prev = `GONE` app = `Z` )
+                                ( id = `F` id_prev = `` app = `Y` ) )
+        it_failed    = VALUE #( ( `D` ) )
+        ended_before = `20991231000000.0` ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_flow( ( source = `(start)` target = `X` count = 1 )
+                                                         ( source = `(start)` target = `Y` count = 1 )
+                                                         ( source = `X` target = `(end after an error)` count = 1 )
+                                                         ( source = `X` target = `Y` count = 1 )
+                                                         ( source = `Y` target = `(end)` count = 1 )
+                                                         ( source = `Y` target = `X` count = 1 )
+                                                         ( source = `Z` target = `(end)` count = 1 ) )
+        act = lt_flow ).
+
+  ENDMETHOD.
+
   METHOD growth_of_tables.
 
     " MT_LOG grows from 1 to 3 rows, the nested T_SUB of row 1 from 1 to 2,
@@ -600,6 +693,15 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                         act = ls_steps-t_step[ 3 ]-app ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = ls_steps-t_step[ 3 ]-kb ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = ls_steps-t_step[ 2 ]-changes ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = ls_steps-t_step[ 3 ]-changes ).
+    cl_abap_unit_assert=>assert_equals(
+        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_business(
+                  ( object = `Customer` value = `4711` field = `ZCL_ORDER-MV_CUSTOMER` step = 2 )
+                  ( object = `Customer` value = `4712` field = `ZCL_ORDER-MV_CUSTOMER` step = 3 ) )
+        act = ls_steps-t_business ).
 
     DATA(ls_view) = z2ui5_cl_cockpit_session=>get_view( id            = `ZZCKUT3`
                                                        id_prev       = `ZZCKUT2`

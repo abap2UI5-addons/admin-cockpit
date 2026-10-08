@@ -120,6 +120,9 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_sticky  TYPE abap_bool,
         ms_total      TYPE i,
         start         TYPE string,
+        " what the user did afterwards, from the drafts - filled by the app
+        afterwards       TYPE string,
+        afterwards_state TYPE string,
       END OF ty_s_occurrence.
     TYPES ty_t_occurrence TYPE STANDARD TABLE OF ty_s_occurrence WITH EMPTY KEY.
 

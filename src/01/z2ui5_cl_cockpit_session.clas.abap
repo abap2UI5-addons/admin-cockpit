@@ -35,6 +35,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS c_min_search TYPE i VALUE 3.
 
     CONSTANTS:
+      "! What a user did after a failed roundtrip, read from the drafts.
+      BEGIN OF cs_outcome,
+        continued TYPE string VALUE `continued`,
+        stopped   TYPE string VALUE `stopped here`,
+        open      TYPE string VALUE `still open`,
+        unknown   TYPE string VALUE `unknown - draft expired`,
+      END OF cs_outcome.
+
+    CONSTANTS:
       BEGIN OF cs_change,
         new     TYPE string VALUE `new`,
         changed TYPE string VALUE `changed`,
@@ -103,16 +112,55 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         event         TYPE string,
         monitor       TYPE string,
         monitor_state TYPE string,
+        " fields that differ from the step it continues - 0 means the
+        " roundtrip changed nothing the app keeps
+        changes        TYPE i,
+        " messages the app holds in its state (a BAPI return, a message
+        " table) that were not there in the step before, and their highlight
+        messages       TYPE string,
+        messages_state TYPE string,
         " the highlight of the row: Information for the step shown
         state   TYPE string,
       END OF ty_s_step.
     TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH EMPTY KEY.
 
     TYPES:
+      "! A business object a session worked on, found by its field name.
+      BEGIN OF ty_s_business,
+        object TYPE string,
+        value  TYPE string,
+        field  TYPE string,
+        " the step it first appears in
+        step   TYPE i,
+      END OF ty_s_business.
+    TYPES ty_t_business TYPE STANDARD TABLE OF ty_s_business WITH EMPTY KEY.
+
+    TYPES:
+      "! A message the app holds in its state.
+      BEGIN OF ty_s_message,
+        type TYPE string,
+        text TYPE string,
+        path TYPE string,
+      END OF ty_s_message.
+    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
+
+    TYPES ty_t_id TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_s_outcome,
+        id      TYPE string,
+        outcome TYPE string,
+        state   TYPE string,
+      END OF ty_s_outcome.
+    TYPES ty_t_outcome TYPE STANDARD TABLE OF ty_s_outcome WITH EMPTY KEY.
+
+    TYPES:
       BEGIN OF ty_s_steps,
         error        TYPE string,
         check_capped TYPE abap_bool,
         t_step       TYPE ty_t_step,
+        " the business objects of the session, in the order they appear
+        t_business   TYPE ty_t_business,
       END OF ty_s_steps.
 
     TYPES:
@@ -208,9 +256,10 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES:
       "! A draft, its predecessor and its app - the input of flows_of.
       BEGIN OF ty_s_link,
-        id      TYPE c LENGTH 32,
-        id_prev TYPE c LENGTH 32,
-        app     TYPE string,
+        id         TYPE c LENGTH 32,
+        id_prev    TYPE c LENGTH 32,
+        app        TYPE string,
+        timestampl TYPE timestampl,
       END OF ty_s_link.
     TYPES ty_t_link TYPE STANDARD TABLE OF ty_s_link WITH EMPTY KEY.
 
@@ -303,13 +352,36 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         VALUE(result) TYPE ty_s_flows.
 
     "! The navigations of a set of drafts - a draft whose app differs from
-    "! its predecessor's - and the session starts, source "(start)". Sorted
-    "! by count, the most frequent first.
+    "! its predecessor's - the session starts, source "(start)", and the
+    "! session ends, target "(end)" or "(end after an error)" when a failed
+    "! roundtrip started from the last step. Sorted by count.
+    "! @parameter it_failed    | drafts a failed roundtrip started from
+    "! @parameter ended_before | a last step written later is a session still going on
     CLASS-METHODS flows_of
       IMPORTING
         it_link       TYPE ty_t_link
+        it_failed     TYPE ty_t_id OPTIONAL
+        ended_before  TYPE timestampl OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_t_flow.
+
+    "! The business objects among a step's fields - an order, a customer, a
+    "! material - recognized by the field name (VBELN, KUNNR, MATNR, ...,
+    "! also as the end of a name like MV_VBELN). Initial values are skipped.
+    CLASS-METHODS business_of
+      IMPORTING
+        it_value      TYPE ty_t_value
+      RETURNING
+        VALUE(result) TYPE ty_t_business.
+
+    "! The error and warning messages among a step's fields: a structure or
+    "! row with a type (TYPE, MSGTY, SEVERITY) of E, A, X or W and a text
+    "! (MESSAGE, MSG; TEXT for errors only) - a BAPI return, a message table.
+    CLASS-METHODS messages_of
+      IMPORTING
+        it_value      TYPE ty_t_value
+      RETURNING
+        VALUE(result) TYPE ty_t_message.
 
     "! The tables of the app that have more rows in the later of two steps,
     "! the most grown first. Never raises - empty when a step is gone.
@@ -329,6 +401,26 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         it_after      TYPE ty_t_value
       RETURNING
         VALUE(result) TYPE ty_t_growth.
+
+    "! What users did after failed roundtrips: for the draft each one
+    "! started from, whether a later draft continues it (continued), the
+    "! session went quiet there for 30 minutes (stopped here - gave up, or
+    "! started over in a new session), it is younger (still open) or gone.
+    "! Never raises.
+    CLASS-METHODS get_outcomes
+      IMPORTING
+        it_id         TYPE ty_t_id
+      RETURNING
+        VALUE(result) TYPE ty_t_outcome.
+
+    "! get_outcomes on given draft rows - one result row per id, in order.
+    CLASS-METHODS outcomes_of
+      IMPORTING
+        it_node       TYPE ty_t_node
+        it_id         TYPE ty_t_id
+        ended_before  TYPE timestampl
+      RETURNING
+        VALUE(result) TYPE ty_t_outcome.
 
     "! A text as UTF-8, base64 encoded - the payload of a data: URL.
     CLASS-METHODS to_base64
@@ -438,11 +530,17 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
+    "! App, size, changes, messages and business objects of the steps.
     CLASS-METHODS fill_steps
       CHANGING
-        ct_step TYPE ty_t_step
+        cs_steps TYPE ty_s_steps
       RAISING
         cx_static_check.
+
+    "! Field names of business objects and how they are called.
+    CLASS-METHODS business_catalogue
+      RETURNING
+        VALUE(result) TYPE z2ui5_if_client=>ty_t_name_value.
 
     "! What the roundtrip monitor logged about the steps - only errors and
     "! slow roundtrips are in its log.
@@ -639,7 +737,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           result-check_capped = abap_true.
           DELETE result-t_step TO lv_over.
         ENDIF.
-        fill_steps( CHANGING ct_step = result-t_step ).
+        fill_steps( CHANGING cs_steps = result ).
       CATCH cx_root INTO DATA(lx).
         result-error = lx->get_text( ).
         RETURN.
@@ -742,6 +840,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
     APPEND |{ lines( ls_steps-t_step ) } steps{ COND #( WHEN ls_steps-check_capped = abap_true
                                                          THEN | (the newest { c_max_steps })| ) }| TO lt_lines.
+    LOOP AT ls_steps-t_business INTO DATA(ls_business).
+      IF sy-tabix = 1.
+        APPEND `business objects:` TO lt_lines.
+      ENDIF.
+      APPEND |   { ls_business-object } { ls_business-value } (step { ls_business-step }, { ls_business-field })| TO lt_lines.
+    ENDLOOP.
 
     LOOP AT ls_steps-t_step INTO DATA(ls_step).
       APPEND `` TO lt_lines.
@@ -753,6 +857,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDIF.
       IF ls_step-monitor IS NOT INITIAL.
         APPEND |   monitor: { ls_step-monitor }| TO lt_lines.
+      ENDIF.
+      IF ls_step-messages IS NOT INITIAL.
+        APPEND |   messages in the app: { ls_step-messages }| TO lt_lines.
       ENDIF.
 
       CLEAR lt_old.
@@ -943,12 +1050,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     TYPES:
       BEGIN OF ty_s_row,
-        id      TYPE c LENGTH 32,
-        id_prev TYPE c LENGTH 32,
-        data    TYPE string,
+        id         TYPE c LENGTH 32,
+        id_prev    TYPE c LENGTH 32,
+        timestampl TYPE timestampl,
+        data       TYPE string,
       END OF ty_s_row.
+    TYPES ty_id TYPE c LENGTH 32.
     DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
     DATA lt_link TYPE ty_t_link.
+    DATA lt_ids TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
+    DATA lt_failed TYPE ty_t_id.
+    DATA lv_oldest TYPE timestampl.
     DATA lv_last TYPE c LENGTH 32.
     DATA lv_tab TYPE string.
 
@@ -956,7 +1068,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DO.
       CLEAR lt_rows.
       TRY.
-          SELECT id, id_prev, data FROM (lv_tab)
+          SELECT id, id_prev, timestampl, data FROM (lv_tab)
             WHERE id > @lv_last
             ORDER BY id
             INTO CORRESPONDING FIELDS OF TABLE @lt_rows
@@ -970,17 +1082,38 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDIF.
       LOOP AT lt_rows INTO DATA(ls_row).
         lv_last = ls_row-id.
-        APPEND VALUE #( id      = ls_row-id
-                        id_prev = ls_row-id_prev
-                        app     = app_of( ls_row-data ) ) TO lt_link.
+        APPEND VALUE #( id         = ls_row-id
+                        id_prev    = ls_row-id_prev
+                        timestampl = ls_row-timestampl
+                        app        = app_of( ls_row-data ) ) TO lt_link.
+        IF lv_oldest IS INITIAL OR ls_row-timestampl < lv_oldest.
+          lv_oldest = ls_row-timestampl.
+        ENDIF.
       ENDLOOP.
       IF lines( lt_link ) >= c_max_nodes.
         EXIT.
       ENDIF.
     ENDDO.
 
+    " the drafts a failed roundtrip started from - a session ending there
+    " ended in an error
+    TRY.
+        SELECT draft_id_prev FROM z2ui5_t_ck_log
+          WHERE check_error = @abap_true
+            AND timestampl >= @lv_oldest
+          INTO TABLE @lt_ids.
+      CATCH cx_root ##NO_HANDLER.
+        " no monitor log - every end is a plain end
+    ENDTRY.
+    LOOP AT lt_ids INTO DATA(lv_id).
+      APPEND CONV string( lv_id ) TO lt_failed.
+    ENDLOOP.
+
     result-drafts = lines( lt_link ).
-    result-t_flow = flows_of( lt_link ).
+    " a session without a step for half an hour is over
+    result-t_flow = flows_of( it_link      = lt_link
+                              it_failed    = lt_failed
+                              ended_before = z2ui5_cl_cockpit_setup=>now_minus_seconds( 1800 ) ).
 
   ENDMETHOD.
 
@@ -999,16 +1132,41 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       END OF ty_s_count.
     DATA lt_app TYPE HASHED TABLE OF ty_s_app WITH UNIQUE KEY id.
     DATA lt_count TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY source target.
+    DATA lt_prev TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA lt_failed TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lv_source TYPE string.
+    DATA lv_target TYPE string.
 
     LOOP AT it_link INTO DATA(ls_link).
       INSERT VALUE #( id  = ls_link-id
                       app = COND #( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ) )
              INTO TABLE lt_app.
+      IF ls_link-id_prev IS NOT INITIAL.
+        INSERT CONV string( ls_link-id_prev ) INTO TABLE lt_prev.
+      ENDIF.
+    ENDLOOP.
+    LOOP AT it_failed INTO DATA(lv_failed).
+      INSERT lv_failed INTO TABLE lt_failed.
     ENDLOOP.
 
     LOOP AT it_link INTO ls_link.
-      DATA(lv_target) = COND string( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ).
+      DATA(lv_link_id) = CONV string( ls_link-id ).
+      " the last step of a session that is over: where the user left
+      IF ended_before IS NOT INITIAL
+          AND ls_link-timestampl < ended_before
+          AND NOT line_exists( lt_prev[ table_line = lv_link_id ] ).
+        lv_source = COND #( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ).
+        lv_target = COND #( WHEN line_exists( lt_failed[ table_line = lv_link_id ] )
+                            THEN `(end after an error)` ELSE `(end)` ).
+        READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<end>) WITH TABLE KEY source = lv_source target = lv_target.
+        IF sy-subrc <> 0.
+          INSERT VALUE #( source = lv_source
+                          target = lv_target ) INTO TABLE lt_count ASSIGNING <end>.
+        ENDIF.
+        <end>-count = <end>-count + 1.
+      ENDIF.
+
+      lv_target = COND string( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ).
       IF ls_link-id_prev IS INITIAL.
         lv_source = `(start)`.
       ELSE.
@@ -1124,6 +1282,66 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                       rows_after  = ls_count-after ) TO result.
     ENDLOOP.
     SORT result BY rows_after DESCENDING path ASCENDING.
+
+  ENDMETHOD.
+
+  METHOD get_outcomes.
+
+    DATA lt_node TYPE ty_t_node.
+
+    TRY.
+        lt_node = read_nodes( ).
+      CATCH cx_root ##NO_HANDLER.
+        " no draft table - every outcome is unknown
+    ENDTRY.
+    result = outcomes_of( it_node      = lt_node
+                          it_id        = it_id
+                          ended_before = z2ui5_cl_cockpit_setup=>now_minus_seconds( 1800 ) ).
+
+  ENDMETHOD.
+
+  METHOD outcomes_of.
+
+    TYPES:
+      BEGIN OF ty_s_meta,
+        id         TYPE c LENGTH 32,
+        timestampl TYPE timestampl,
+      END OF ty_s_meta.
+    TYPES ty_id TYPE c LENGTH 32.
+    DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
+    DATA lt_prev TYPE HASHED TABLE OF ty_id WITH UNIQUE KEY table_line.
+    DATA lv_key TYPE ty_id.
+
+    LOOP AT it_node INTO DATA(ls_node).
+      INSERT VALUE #( id         = ls_node-id
+                      timestampl = ls_node-timestampl ) INTO TABLE lt_meta.
+      IF ls_node-id_prev IS NOT INITIAL.
+        INSERT ls_node-id_prev INTO TABLE lt_prev.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT it_id INTO DATA(lv_id).
+      lv_key = lv_id.
+      DATA(ls_outcome) = VALUE ty_s_outcome( id = lv_id ).
+      READ TABLE lt_meta INTO DATA(ls_meta) WITH TABLE KEY id = lv_key.
+      " kept at once: the downport turns the line_exists( ) below into a READ
+      " TABLE in front of this IF, which would overwrite sy-subrc
+      DATA(lv_found) = xsdbool( sy-subrc = 0 ).
+      IF lv_key IS INITIAL OR lv_found = abap_false.
+        ls_outcome-outcome = cs_outcome-unknown.
+        ls_outcome-state   = `None`.
+      ELSEIF line_exists( lt_prev[ table_line = lv_key ] ).
+        ls_outcome-outcome = cs_outcome-continued.
+        ls_outcome-state   = `Success`.
+      ELSEIF ls_meta-timestampl >= ended_before.
+        ls_outcome-outcome = cs_outcome-open.
+        ls_outcome-state   = `Information`.
+      ELSE.
+        ls_outcome-outcome = cs_outcome-stopped.
+        ls_outcome-state   = `Error`.
+      ENDIF.
+      APPEND ls_outcome TO result.
+    ENDLOOP.
 
   ENDMETHOD.
 
@@ -1330,38 +1548,120 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         id   TYPE c LENGTH 32,
         data TYPE string,
       END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_s_seen,
+        object TYPE string,
+        value  TYPE string,
+      END OF ty_s_seen.
+    DATA lt_data TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
+    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
     DATA lt_range TYPE ty_r_id.
+    DATA lt_prev TYPE ty_t_value.
+    DATA lv_prev_id TYPE string.
+    DATA lv_prev_messages TYPE string.
     DATA lv_tab TYPE string.
     DATA lv_app TYPE string.
     DATA lv_done TYPE i.
+    DATA lv_from TYPE i VALUE 1.
+    DATA lv_idle TYPE i.
+    DATA lv_messages TYPE string.
 
     lv_tab = z2ui5_cl_cockpit_draft=>c_table.
-    LOOP AT ct_step INTO DATA(ls_step).
+    LOOP AT cs_steps-t_step INTO DATA(ls_step).
       lv_done = lv_done + 1.
       APPEND VALUE #( sign   = `I`
                       option = `EQ`
                       low    = ls_step-id ) TO lt_range.
-      IF lines( lt_range ) < 50 AND lv_done < lines( ct_step ).
+      IF lines( lt_range ) < 50 AND lv_done < lines( cs_steps-t_step ).
         CONTINUE.
       ENDIF.
 
-      CLEAR lt_rows.
+      CLEAR lt_data.
       SELECT id, data FROM (lv_tab)
         WHERE id IN @lt_range
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows.
+        INTO CORRESPONDING FIELDS OF TABLE @lt_data.
       CLEAR lt_range.
 
-      LOOP AT lt_rows INTO DATA(ls_row).
-        READ TABLE ct_step ASSIGNING FIELD-SYMBOL(<step>) WITH KEY id = ls_row-id. "#EC CI_SORTSEQ
-        IF sy-subrc = 0.
-          <step>-app = app_of( ls_row-data ).
-          <step>-kb  = ( strlen( ls_row-data ) + 1023 ) DIV 1024.
+      " the steps of this batch in their order - each compared with the
+      " step it continues, which is the one before it unless the user went
+      " back in the browser
+      LOOP AT cs_steps-t_step ASSIGNING FIELD-SYMBOL(<step>) FROM lv_from TO lv_done.
+        DATA(lv_key) = CONV ty_id( <step>-id ).
+        READ TABLE lt_data INTO DATA(ls_row) WITH TABLE KEY id = lv_key.
+        IF sy-subrc <> 0.
+          CLEAR lt_prev.
+          CLEAR lv_prev_id.
+          CONTINUE.
         ENDIF.
+        <step>-app = app_of( ls_row-data ).
+        <step>-kb  = ( strlen( ls_row-data ) + 1023 ) DIV 1024.
+        DATA(lt_values) = flatten( ls_row-data ).
+
+        IF <step>-follows > 0.
+          DATA(lv_follows) = cs_steps-t_step[ <step>-follows ]-id.
+          IF lv_follows <> lv_prev_id.
+            lt_prev = flatten( read_data( lv_follows ) ).
+          ENDIF.
+          <step>-changes = 0.
+          LOOP AT diff( it_new = lt_values
+                        it_old = lt_prev ) TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
+            <step>-changes = <step>-changes + 1.
+          ENDLOOP.
+          IF <step>-changes = 0.
+            lv_idle = lv_idle + 1.
+            <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&
+                          |{ COND #( WHEN lv_idle > 1 THEN |no field changed - { lv_idle } times in a row|
+                                     ELSE `no field changed` ) }|.
+          ELSE.
+            lv_idle = 0.
+          ENDIF.
+        ELSE.
+          lv_idle = 0.
+        ENDIF.
+
+        " a message is shown where it appears, not on every step that keeps it
+        CLEAR lv_messages.
+        DATA(lt_message) = messages_of( lt_values ).
+        LOOP AT lt_message INTO DATA(ls_message).
+          IF sy-tabix > 2.
+            lv_messages = |{ lv_messages } (+{ lines( lt_message ) - 2 } more)|.
+            EXIT.
+          ENDIF.
+          lv_messages = |{ lv_messages }{ COND #( WHEN lv_messages IS NOT INITIAL THEN `; ` ) }| &&
+                        |{ ls_message-type }: { ls_message-text }|.
+        ENDLOOP.
+        IF lv_messages <> lv_prev_messages.
+          <step>-messages = lv_messages.
+          <step>-messages_state = COND #( WHEN line_exists( lt_message[ type = `E` ] )
+                                            OR line_exists( lt_message[ type = `A` ] )
+                                            OR line_exists( lt_message[ type = `X` ] )
+                                            OR line_exists( lt_message[ type = `ERROR` ] ) THEN `Error`
+                                          WHEN lt_message IS NOT INITIAL THEN `Warning`
+                                          ELSE `None` ).
+        ELSE.
+          <step>-messages_state = `None`.
+        ENDIF.
+        lv_prev_messages = lv_messages.
+
+        LOOP AT business_of( lt_values ) INTO DATA(ls_business).
+          INSERT VALUE #( object = ls_business-object
+                          value  = ls_business-value ) INTO TABLE lt_seen.
+          IF sy-subrc = 0 AND lines( cs_steps-t_business ) < 50.
+            ls_business-step = <step>-step.
+            APPEND ls_business TO cs_steps-t_business.
+          ENDIF.
+        ENDLOOP.
+
+        lt_prev = lt_values.
+        lv_prev_id = <step>-id.
       ENDLOOP.
+      lv_from = lv_done + 1.
     ENDLOOP.
 
-    LOOP AT ct_step ASSIGNING <step>.
+    LOOP AT cs_steps-t_step ASSIGNING <step>.
+      IF <step>-messages_state IS INITIAL.
+        <step>-messages_state = `None`.
+      ENDIF.
       IF <step>-step > 1 AND <step>-app <> lv_app AND <step>-app IS NOT INITIAL.
         <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&
                       |navigated to { <step>-app }|.
@@ -1369,6 +1669,163 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF <step>-app IS NOT INITIAL.
         lv_app = <step>-app.
       ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD business_catalogue.
+
+    " the classic field names of the SAP data model, the names of the ABAP
+    " flight and RAP demo models, and plain English ones
+    result = VALUE #( ( n = `VBELN`       v = `Sales document` )
+                      ( n = `KUNNR`       v = `Customer` )
+                      ( n = `KUNAG`       v = `Sold-to party` )
+                      ( n = `LIFNR`       v = `Supplier` )
+                      ( n = `PARTNER`     v = `Business partner` )
+                      ( n = `MATNR`       v = `Material` )
+                      ( n = `EBELN`       v = `Purchase order` )
+                      ( n = `BANFN`       v = `Purchase requisition` )
+                      ( n = `BELNR`       v = `Accounting document` )
+                      ( n = `MBLNR`       v = `Material document` )
+                      ( n = `AUFNR`       v = `Order` )
+                      ( n = `QMNUM`       v = `Notification` )
+                      ( n = `EQUNR`       v = `Equipment` )
+                      ( n = `TPLNR`       v = `Functional location` )
+                      ( n = `PERNR`       v = `Personnel number` )
+                      ( n = `BUKRS`       v = `Company code` )
+                      ( n = `WERKS`       v = `Plant` )
+                      ( n = `LGORT`       v = `Storage location` )
+                      ( n = `VKORG`       v = `Sales organization` )
+                      ( n = `EKORG`       v = `Purchasing organization` )
+                      ( n = `KOSTL`       v = `Cost center` )
+                      ( n = `PRCTR`       v = `Profit center` )
+                      ( n = `POSID`       v = `WBS element` )
+                      ( n = `ANLN1`       v = `Asset` )
+                      ( n = `CHARG`       v = `Batch` )
+                      ( n = `CARRID`      v = `Airline` )
+                      ( n = `CONNID`      v = `Flight connection` )
+                      ( n = `TRAVEL_ID`   v = `Travel` )
+                      ( n = `BOOKING_ID`  v = `Booking` )
+                      ( n = `ORDER_ID`    v = `Order` )
+                      ( n = `CUSTOMER`    v = `Customer` )
+                      ( n = `CUSTOMER_ID` v = `Customer` )
+                      ( n = `SUPPLIER`    v = `Supplier` )
+                      ( n = `PRODUCT`     v = `Product` )
+                      ( n = `PRODUCT_ID`  v = `Product` )
+                      ( n = `INVOICE`     v = `Invoice` ) ).
+
+  ENDMETHOD.
+
+  METHOD business_of.
+
+    TYPES:
+      BEGIN OF ty_s_seen,
+        object TYPE string,
+        value  TYPE string,
+      END OF ty_s_seen.
+    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+    DATA lv_name TYPE string.
+
+    DATA(lt_catalogue) = business_catalogue( ).
+    LOOP AT it_value INTO DATA(ls_value).
+      DATA(lv_value) = condense( ls_value-value ).
+      " empty, or an initial number or date
+      IF lv_value CO ` 0.:-` OR lv_value CP `->*`.
+        CONTINUE.
+      ENDIF.
+      " the last component of the path, without the row of an elementary table
+      " find( occ = -1 ) and not substring_after( occ = -1 ): the transpiled
+      " runtime ignores occ there and cuts at the first dash
+      lv_name = ls_value-path.
+      DATA(lv_dash) = find( val = lv_name
+                            sub = `-`
+                            occ = -1 ).
+      IF lv_dash >= 0.
+        lv_name = substring( val = lv_name
+                             off = lv_dash + 1 ).
+      ENDIF.
+      IF lv_name CS `[`.
+        lv_name = substring_before( val = lv_name
+                                    sub = `[` ).
+      ENDIF.
+      lv_name = to_upper( lv_name ).
+
+      LOOP AT lt_catalogue INTO DATA(ls_entry).
+        IF lv_name <> ls_entry-n AND lv_name NP |*_{ ls_entry-n }|.
+          CONTINUE.
+        ENDIF.
+        INSERT VALUE #( object = ls_entry-v
+                        value  = lv_value ) INTO TABLE lt_seen.
+        IF sy-subrc = 0.
+          APPEND VALUE #( object = ls_entry-v
+                          value  = lv_value
+                          field  = ls_value-path ) TO result.
+        ENDIF.
+        EXIT.
+      ENDLOOP.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD messages_of.
+
+    TYPES:
+      BEGIN OF ty_s_row,
+        prefix TYPE string,
+        type   TYPE string,
+        text   TYPE string,
+        weak   TYPE string,
+      END OF ty_s_row.
+    DATA lt_row TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lv_prefix TYPE string.
+    DATA lv_comp TYPE string.
+
+    LOOP AT it_value INTO DATA(ls_value).
+      " find( occ = -1 ), see business_of
+      DATA(lv_dash) = find( val = ls_value-path
+                            sub = `-`
+                            occ = -1 ).
+      IF lv_dash < 0.
+        CONTINUE.
+      ENDIF.
+      lv_prefix = substring( val = ls_value-path
+                             len = lv_dash ).
+      lv_comp = to_upper( substring( val = ls_value-path
+                                     off = lv_dash + 1 ) ).
+      IF lv_comp <> `TYPE` AND lv_comp <> `MSGTY` AND lv_comp <> `SEVERITY`
+          AND lv_comp <> `MESSAGE` AND lv_comp <> `MSG` AND lv_comp <> `TEXT`.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_row ASSIGNING FIELD-SYMBOL(<row>) WITH KEY prefix = lv_prefix. "#EC CI_SORTSEQ
+      IF sy-subrc <> 0.
+        APPEND VALUE #( prefix = lv_prefix ) TO lt_row ASSIGNING <row>.
+      ENDIF.
+      CASE lv_comp.
+        WHEN `TYPE` OR `MSGTY` OR `SEVERITY`.
+          <row>-type = to_upper( condense( ls_value-value ) ).
+        WHEN `MESSAGE` OR `MSG`.
+          <row>-text = ls_value-value.
+        WHEN OTHERS.
+          <row>-weak = ls_value-value.
+      ENDCASE.
+    ENDLOOP.
+
+    LOOP AT lt_row INTO DATA(ls_row).
+      DATA(lv_error) = xsdbool( ls_row-type = `E` OR ls_row-type = `A` OR ls_row-type = `X`
+                                OR ls_row-type = `ERROR` ).
+      " TEXT is too common a name - it counts only next to an error type
+      IF ls_row-text IS INITIAL AND lv_error = abap_true.
+        ls_row-text = ls_row-weak.
+      ENDIF.
+      IF ls_row-text IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      IF lv_error = abap_false AND ls_row-type <> `W` AND ls_row-type <> `WARNING`.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( type = ls_row-type
+                      text = ls_row-text
+                      path = ls_row-prefix ) TO result.
     ENDLOOP.
 
   ENDMETHOD.

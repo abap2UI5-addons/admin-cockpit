@@ -12,7 +12,7 @@ app, installed with abapGit next to abap2UI5.
 |---|---|---|
 | **Overview** | Tiles: active users today, roundtrips today, p95 response time, error rate, draft table size, sessions with errors in the draft table (select it to step through them) - the last 30 days, one row per day - and the **alerts**: thresholds exceeded right now and the alert history (see [Alerts](#alerts)) | monitor |
 | **Apps** | Per app class: users, sessions, roundtrips, avg/p95 ms, response and model size, errors, last used - select one for its events and its sessions in the draft table. Plus the **unused apps**: implementers of `z2ui5_if_app` without a roundtrip in N days | monitor |
-| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default) - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
+| **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default), and **what the user did afterwards** - continued from the same screen, stopped there, still open (from the drafts) - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
 | **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); **find a value** (an order number, a customer) in all drafts; the **navigation** between apps; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
 | **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
@@ -302,6 +302,19 @@ Open one and the viewer shows it **step by step**:
   seconds since the step before, app, size, and notes such as *navigated to
   ZCL_...*, *continues step 3* (browser back or a second window) or *the steps
   before it expired*;
+- how many **fields changed** in the step - a step that changed nothing is
+  marked *no field changed*, and when that happens twice or more in a row the
+  viewer warns: the user pressed something again and again without effect (a
+  button that does nothing, a check that refuses without a message);
+- the **messages the app holds** in its state when they appear - a BAPI return
+  or a message table: a structure or row with a type `E`/`A`/`X`/`W` (`TYPE`,
+  `MSGTY`, `SEVERITY`) and a text (`MESSAGE`, `MSG`, `TEXT` for errors). These
+  are the business errors the user saw, which are no exception and never reach
+  the Errors tab;
+- the **business objects** of the session - an order, a customer, a material -
+  recognized by the field name (`VBELN`, `KUNNR`, `MATNR`, `EBELN`, `BELNR`,
+  `AUFNR`, the flight and RAP demo keys, `ORDER_ID`, `CUSTOMER`, ..., also as
+  the end of a name like `MV_VBELN`), each with the step it first appears in;
 - what the **roundtrip monitor** logged about a step, when it is active: the
   roundtrip that started from this step and **failed** (exception class,
   first line, event - the row is red), and the slow roundtrip that wrote it
@@ -332,9 +345,12 @@ field and value; a hit opens its session at that step, the fields filtered to
 the value. Every search is written to the change log (`DRAFTS_SEARCH`), with
 the term.
 
-**Analyze navigation** counts how users move between apps: per pair of apps
-the navigations in the draft table, and per app the sessions that start in it
-(`(start)`). Only class names are read, no content.
+**Analyze navigation** counts how users move between apps - the business
+process as users walk it: per pair of apps the navigations in the draft
+table, per app the sessions that start in it (`(start)`), and where sessions
+end - `(end)` after 30 minutes without a step, `(end after an error)` when a
+failed roundtrip started from the last step: where users give up. Only class
+names are read, no content.
 
 **Export** writes the whole session into a text file - every field of the
 first step, then per step what changed, with events and monitor notes - to
