@@ -79,10 +79,19 @@ recorder keeps - do not loosen them:
 
 ## The request recorder (`_wire`)
 
-`z2ui5_cl_cockpit_wire=>record( )` runs in the customer's ICF handler, right
-after `z2ui5_cl_ui5_http_handler=>run( )` - every abap2UI5 app passes it. It
-keeps the monitor's rules (never raise, commit only outside a sticky LUW,
-buffer otherwise, pseudonym unless `NAME`) and adds its own:
+`z2ui5_cl_cockpit_wire=>run( )` stands in the customer's ICF handler in place
+of `z2ui5_cl_ui5_http_handler=>run( )`, which it calls - every abap2UI5 app
+passes it, on every release. It records the bodies and feeds
+`z2ui5_cl_cockpit_rec` with a roundtrip taken from them (`roundtrip_of`) - the
+monitor without the hook; `record( )` after abap2UI5's own call records the
+bodies only. It keeps the monitor's rules (never raise, commit only outside a
+sticky LUW, buffer otherwise, pseudonym unless `NAME`) and adds its own:
+
+- **Never swallow what abap2UI5 raises** - the TRY covers only the cockpit's
+  part after the call.
+- **Never count a roundtrip twice**: the monitor hook (src/02) records first,
+  inside the call; `run( )` compares `z2ui5_cl_cockpit_rec=>get_count( )`
+  before and after and leaves the statistics to it.
 
 - **Store the bodies untouched, take them apart when read.** The wire format
   (`S_FRONT`, `S_ACTION`, `T_SYSTEM`/`T_CUSTOM`, `VIEW_SLOTS`, `.eB([...])`)

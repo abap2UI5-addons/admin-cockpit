@@ -27,6 +27,9 @@ CLASS ltcl_wire DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     METHODS popup_taken_apart FOR TESTING RAISING cx_static_check.
     METHODS pressed_marked FOR TESTING RAISING cx_static_check.
     METHODS escaped_once FOR TESTING RAISING cx_static_check.
+    METHODS roundtrip_from_bodies FOR TESTING RAISING cx_static_check.
+    METHODS roundtrip_failed FOR TESTING RAISING cx_static_check.
+    METHODS milliseconds FOR TESTING RAISING cx_static_check.
     METHODS variants_counted FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
@@ -194,6 +197,93 @@ CLASS ltcl_wire IMPLEMENTATION.
               `<Table><items><ColumnListItem><cells><Text text="M1"/></cells></ColumnListItem>` &&
               `<ColumnListItem><cells><Text text="M&lt;2&gt;"/></cells></ColumnListItem></items></Table></Page>`
         act = ls_screen-content ).
+
+  ENDMETHOD.
+
+  METHOD roundtrip_from_bodies.
+
+    DATA(ls_roundtrip) = z2ui5_cl_cockpit_wire=>roundtrip_of(
+        request     = `{"value":{"S_FRONT":{"ID":"OLD","EVENT":"SAVE","MS_CLIENT_PREV":420},"MODEL":{}}}`
+        response    = `{"S_FRONT":{"ID":"NEW","APP":"zcl_app","PROTOCOL":2},"MODEL":{"QTY":"5"}}`
+        http_status = 200 ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `ZCL_APP`
+                                        act = ls_roundtrip-app ).
+    cl_abap_unit_assert=>assert_equals( exp = `SAVE`
+                                        act = ls_roundtrip-event ).
+    cl_abap_unit_assert=>assert_equals( exp = `NEW`
+                                        act = ls_roundtrip-draft_id ).
+    cl_abap_unit_assert=>assert_equals( exp = `OLD`
+                                        act = ls_roundtrip-draft_id_prev ).
+    cl_abap_unit_assert=>assert_equals( exp = 420
+                                        act = ls_roundtrip-ms_client_prev ).
+    cl_abap_unit_assert=>assert_false( ls_roundtrip-check_start ).
+    cl_abap_unit_assert=>assert_false( ls_roundtrip-check_error ).
+    cl_abap_unit_assert=>assert_equals( exp = strlen( `{"QTY":"5"}` )
+                                        act = ls_roundtrip-bytes_model ).
+    cl_abap_unit_assert=>assert_equals( exp = 73
+                                        act = ls_roundtrip-bytes_response ).
+
+    " the first request of an app start carries no draft
+    ls_roundtrip = z2ui5_cl_cockpit_wire=>roundtrip_of(
+        request     = `{"S_FRONT":{"EVENT":""}}`
+        response    = `{"S_FRONT":{"ID":"FIRST","APP":"ZCL_APP","PROTOCOL":2},"MODEL":{}}`
+        http_status = 200 ).
+    cl_abap_unit_assert=>assert_true( ls_roundtrip-check_start ).
+
+  ENDMETHOD.
+
+  METHOD roundtrip_failed.
+
+    DATA(lv_nl) = cl_abap_char_utilities=>newline.
+    DATA(lv_body) = |abap2UI5 1.146.0 - unhandled exception in a POST request{ lv_nl }{ lv_nl }| &&
+                    |--- error ---{ lv_nl }Division by zero{ lv_nl }{ lv_nl }--- exception chain ---{ lv_nl }| &&
+                    |[1] Z2UI5_CX_UI5_UTIL_ERROR{ lv_nl }    Division by zero{ lv_nl }| &&
+                    |[2] CX_SY_ZERODIVIDE{ lv_nl }    Division by zero{ lv_nl }|.
+
+    DATA(ls_roundtrip) = z2ui5_cl_cockpit_wire=>roundtrip_of(
+        request     = `{"S_FRONT":{"ID":"OLD","EVENT":"CALC"}}`
+        response    = lv_body
+        http_status = 500 ).
+
+    cl_abap_unit_assert=>assert_true( ls_roundtrip-check_error ).
+    " the root cause - the last of the chain
+    cl_abap_unit_assert=>assert_equals( exp = `CX_SY_ZERODIVIDE`
+                                        act = ls_roundtrip-error_class ).
+    cl_abap_unit_assert=>assert_equals( exp = lv_body
+                                        act = ls_roundtrip-error_text ).
+    cl_abap_unit_assert=>assert_equals( exp = `CALC`
+                                        act = ls_roundtrip-event ).
+    " no app in a 500 body - run( ) takes it from the draft it started from
+    cl_abap_unit_assert=>assert_initial( ls_roundtrip-app ).
+    cl_abap_unit_assert=>assert_initial( ls_roundtrip-draft_id ).
+
+    " details hidden by the exit: no chain, no class
+    ls_roundtrip = z2ui5_cl_cockpit_wire=>roundtrip_of( request     = `{"S_FRONT":{"ID":"OLD"}}`
+                                                        response    = `Internal Server Error`
+                                                        http_status = 500 ).
+    cl_abap_unit_assert=>assert_initial( ls_roundtrip-error_class ).
+
+  ENDMETHOD.
+
+  METHOD milliseconds.
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = 1250
+        act = z2ui5_cl_cockpit_wire=>ms_between( ts_from = '20261008235959.5000000'
+                                                 ts_to   = '20261009000000.7500000' ) ).
+    " fractions a double holds exactly: the transpiled runtime computes the
+    " packed time stamp as a JS number, about 4 ms apart at this size - the
+    " system is exact
+    cl_abap_unit_assert=>assert_equals(
+        exp = 125
+        act = z2ui5_cl_cockpit_wire=>ms_between( ts_from = '20261008120000.1250000'
+                                                 ts_to   = '20261008120000.2500000' ) ).
+    " never negative
+    cl_abap_unit_assert=>assert_equals(
+        exp = 0
+        act = z2ui5_cl_cockpit_wire=>ms_between( ts_from = '20261008120001'
+                                                 ts_to   = '20261008120000' ) ).
 
   ENDMETHOD.
 

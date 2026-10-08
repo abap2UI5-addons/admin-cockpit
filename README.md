@@ -39,16 +39,33 @@ tabs follow with the first release.*
    | Your abap2UI5 | Branch | What you get |
    |---|---|---|
    | has `z2ui5_if_ui5_monitor` (the release after 1.146.0) | `main` | everything |
-   | 1.146.0 or later without the monitor hook | `standalone` | Installation & Security, Drafts & Housekeeping, Settings - the monitor tabs say what they need |
+   | 1.146.0 or later without the monitor hook | `standalone` | everything with the handler line of step 4 - only the phases of a roundtrip (load, main, render) need the hook |
 
 3. Start `z2ui5_cl_cockpit_app` right away: a cockpit without an
    administrator shows nothing but a **Claim the administrator role** screen -
    the first user who presses its button becomes the administrator (see
    [Security of the cockpit itself](#security-of-the-cockpit-itself)).
 
-4. **Switch the monitor on** in your user exit, once the pull is complete and
-   every object is active. abap2UI5 calls no monitor until the exit says so,
-   so a cockpit that does not activate cannot break your apps:
+4. **Hook the cockpit into your HTTP handler** - one line, on every
+   abap2UI5 release, once the pull is complete and every object is active.
+   In your own handler class (SICF, the service, tab *Handler List*), method
+   `if_http_extension~handle_request`, **replace** abap2UI5's call:
+
+   ```abap
+   METHOD if_http_extension~handle_request.
+     z2ui5_cl_cockpit_wire=>run( server ).  " instead of z2ui5_cl_ui5_http_handler=>run( server )
+   ENDMETHOD.
+   ```
+
+   It runs abap2UI5, takes the time and records the roundtrip - the usage,
+   error and performance tabs and the [recorder](#recorder---replay-what-the-user-saw)
+   with one line. Details and ABAP Cloud: [Where the line goes](#where-the-line-goes).
+
+   **Or the monitor hook** (abap2UI5 with `z2ui5_if_ui5_monitor`, branch
+   `main`) - it adds the phases of a roundtrip. Switch it on in your user exit;
+   abap2UI5 calls no monitor until the exit says so, so a cockpit that does
+   not activate cannot break your apps. With both, the hook counts and the
+   handler line only records the bodies - nothing is counted twice:
 
    ```abap
    METHOD z2ui5_if_ui5_exit~set_config_http_post.
@@ -62,8 +79,9 @@ tabs follow with the first release.*
    the monitor hook but not the field yet, the monitor runs as soon as the
    cockpit is installed.
 
-Once your abap2UI5 has the monitor hook, switch the abapGit repository from
-`standalone` to `main` and pull. Then switch the monitor on (step 4).
+Once your abap2UI5 has the monitor hook, you can switch the abapGit
+repository from `standalone` to `main` and pull, and switch the hook on
+(step 4) for the phases - the handler line can stay.
 
 ### Two packages, two branches
 
@@ -88,6 +106,12 @@ linting `src/01` against the released abap2UI5 (the tag `1.146.0`, pinned:
 `main` of abap2UI5 already carries the hook).
 
 ## How the monitor works
+
+Two ways feed the same statistics (`z2ui5_cl_cockpit_rec`): the handler line
+`z2ui5_cl_cockpit_wire=>run( )` (installation step 4, every release - see
+[Where the line goes](#where-the-line-goes)), and the monitor hook below,
+which adds the phases of a roundtrip. With both, the hook counts and the
+handler line only records the bodies.
 
 Once the user exit switches it on (`check_monitor_active`, installation step
 4), abap2UI5 finds `z2ui5_cl_cockpit_monitor` on its own - the first class
@@ -406,8 +430,9 @@ search in the drafts (`DRAFTS_SEARCH`) and every failure analysis
 
 The drafts show what an app *held* after each step. What the user *saw* and
 *did* - the screen, the button, the error box - never reaches a draft. The
-recorder takes it where it passes anyway: the HTTP handler. One line after
-the framework's own call stores the complete request and response of every
+recorder takes it where it passes anyway: the HTTP handler. The one line
+that hooks the cockpit in there (`z2ui5_cl_cockpit_wire=>run( server )`,
+installation step 4) stores the complete request and response of every
 roundtrip, untouched.
 
 ### Where the line goes
@@ -421,30 +446,43 @@ a class of the abap2UI5 repository (a pull would overwrite it):
 - **ABAP Cloud:** the HTTP service of your installation, its handler class,
   method `if_http_service_extension~handle_request`.
 
-There the call of abap2UI5 already stands. The new line goes right **after**
-it - the recorder reads the finished response:
+There the call of abap2UI5 already stands. **Replace it** with the cockpit's,
+which calls it - the one place the cockpit hooks in:
 
 ```abap
 " Standard ABAP
 METHOD if_http_extension~handle_request.
-  z2ui5_cl_ui5_http_handler=>run( server ).  " already there
-  z2ui5_cl_cockpit_wire=>record( server ).   " new
+  z2ui5_cl_cockpit_wire=>run( server ).
 ENDMETHOD.
 
 " ABAP Cloud
 METHOD if_http_service_extension~handle_request.
-  z2ui5_cl_ui5_http_handler=>run( req = request res = response ).  " already there
-  z2ui5_cl_cockpit_wire=>record( req = request res = response ).   " new
+  z2ui5_cl_cockpit_wire=>run( req = request res = response ).
 ENDMETHOD.
 ```
 
-An older installation calls `z2ui5_cl_http_handler=>run( server )` - the
-deprecated name that forwards to `z2ui5_cl_ui5_http_handler`. The line goes
-after it the same way.
+`run( )` calls `z2ui5_cl_ui5_http_handler=>run( )`, takes the time around it,
+and then, from the request and response it reads back:
 
-Add it only once the cockpit is pulled and **active**: the line runs on every
-request of every abap2UI5 app, and a class that does not activate is a short
-dump no `CATCH` stops - in all apps. `record( )` itself never raises.
+- records both bodies (the recorder, while its retention is not `0`);
+- feeds the roundtrip statistics as the monitor hook would - app, event,
+  drafts, duration, sizes, the browser time of the roundtrip before, and for
+  a failure the error text and the innermost exception class of the 500
+  body; the app of a failed roundtrip from the draft it started from. Only
+  the phases (load, main, render) stay 0 - they need the hook;
+- counts nothing twice: when the monitor hook recorded the roundtrip already,
+  it only records the bodies.
+
+An older installation calls `z2ui5_cl_http_handler=>run( server )` - the
+deprecated name that forwards to `z2ui5_cl_ui5_http_handler`; replace it the
+same way. To keep abap2UI5's own line, add `z2ui5_cl_cockpit_wire=>record( server )`
+right **after** it instead - the recorder only, without statistics (a line
+after the call cannot take its time).
+
+Change it only once the cockpit is pulled and **active**: the line runs on
+every request of every abap2UI5 app, and a class that does not activate is a
+short dump no `CATCH` stops - in all apps. The cockpit's own part never
+raises; only what abap2UI5 raises leaves `run( )`, as before.
 
 To check it: click through any app, then open the **Installation** tab - the
 row *Recorder of requests and responses* counts today's recordings.

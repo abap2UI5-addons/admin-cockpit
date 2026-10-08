@@ -54,6 +54,13 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING
         is_roundtrip TYPE ty_s_roundtrip.
 
+    "! How often record( ) ran in this roll area - z2ui5_cl_cockpit_wire=>run
+    "! compares it before and after abap2UI5 ran: a monitor that recorded
+    "! the roundtrip already is not counted twice.
+    CLASS-METHODS get_count
+      RETURNING
+        VALUE(result) TYPE i.
+
     "! The same without the commit and without the error handling - the
     "! unit of work a test or a forwarding monitor wants to control itself.
     CLASS-METHODS write
@@ -73,6 +80,7 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS c_buffer_max TYPE i VALUE 500.
 
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_roundtrip WITH EMPTY KEY.
+    CLASS-DATA gv_count TYPE i.
 
     CLASS-METHODS write_agg
       IMPORTING
@@ -121,7 +129,15 @@ ENDCLASS.
 
 CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
+  METHOD get_count.
+
+    result = gv_count.
+
+  ENDMETHOD.
+
   METHOD record.
+
+    gv_count = gv_count + 1.
 
     " The LUW this runs in, as z2ui5_if_ui5_monitor documents it:
     " - not sticky: empty - the framework committed its draft save on
