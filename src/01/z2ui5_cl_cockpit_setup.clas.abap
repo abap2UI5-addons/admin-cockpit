@@ -58,6 +58,9 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
         alert_min_cnt      TYPE i,
         " alerts: the window - the UTC hour running now plus this many before
         alert_hours        TYPE i,
+        " recorder (z2ui5_cl_cockpit_wire): requests and responses are kept
+        " this many days, 0 switches the recording off
+        wire_days          TYPE i,
         " the UTC day the own tables were last purged by the monitor
         last_purge         TYPE string,
       END OF ty_s_settings.
@@ -292,6 +295,9 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
         WHEN `ALERT_HOURS`.
           result-alert_hours = to_int( val      = ls_row-value
                                        fallback = result-alert_hours ).
+        WHEN `WIRE_DAYS`.
+          result-wire_days = to_int( val      = ls_row-value
+                                     fallback = result-wire_days ).
         WHEN `LAST_PURGE`.
           result-last_purge = ls_row-value.
       ENDCASE.
@@ -299,6 +305,10 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
     IF result-sample_pct < 1 OR result-sample_pct > 100.
       result-sample_pct = get_default( )-sample_pct.
+    ENDIF.
+    " 0 is off, as with the alert thresholds - only a negative value is wrong
+    IF result-wire_days < 0.
+      result-wire_days = get_default( )-wire_days.
     ENDIF.
     check_alerts( CHANGING cs_set = result ).
 
@@ -321,7 +331,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
                       alert_err_pct      = 5
                       alert_p95_ms       = 2000
                       alert_min_cnt      = 20
-                      alert_hours        = 1 ).
+                      alert_hours        = 1
+                      wire_days          = 2 ).
 
   ENDMETHOD.
 
@@ -360,6 +371,9 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
       ls_set-model_warn_kb = ls_def-model_warn_kb.
     ENDIF.
     check_alerts( CHANGING cs_set = ls_set ).
+    IF ls_set-wire_days < 0.
+      ls_set-wire_days = ls_def-wire_days.
+    ENDIF.
 
     row_save( name  = `MODE`
               value = ls_set-mode ).
@@ -387,6 +401,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
               value = |{ ls_set-alert_min_cnt }| ).
     row_save( name  = `ALERT_HOURS`
               value = |{ ls_set-alert_hours }| ).
+    row_save( name  = `WIRE_DAYS`
+              value = |{ ls_set-wire_days }| ).
 
     reset_buffer( ).
 

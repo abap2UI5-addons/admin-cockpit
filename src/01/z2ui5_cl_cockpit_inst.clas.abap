@@ -525,6 +525,24 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          fix    = `Settings tab: user tracking HASH or NONE.`
                CHANGING  checks = checks ).
 
+    " the recorder keeps whole requests and responses - what users typed and saw
+    DATA(lv_recorded) = z2ui5_cl_cockpit_wire=>count_records( ).
+    add_check( EXPORTING id     = `RECORDER`
+                         status = COND #( WHEN ls_set-wire_days > 7 THEN cs_status-warn
+                                          WHEN ls_set-wire_days > 0 AND lv_recorded = 0 THEN cs_status-info
+                                          ELSE cs_status-ok )
+                         title  = `Recorder of requests and responses`
+                         value  = COND #( WHEN ls_set-wire_days <= 0 THEN `off`
+                                          WHEN lv_recorded = 0 THEN |no recording today, kept { ls_set-wire_days } days|
+                                          ELSE |{ lv_recorded } today, kept { ls_set-wire_days } days| )
+                         text   = `Stores the complete request and response of each roundtrip - the values users ` &&
+                                  `typed, the messages and screens they saw - for the screen playback in the ` &&
+                                  `session viewer. Records only where the line below is added to the ICF handler.`
+                         fix    = `After z2ui5_cl_ui5_http_handler=>run( server ) add ` &&
+                                  `z2ui5_cl_cockpit_wire=>record( server ) - on ABAP Cloud record( req = request ` &&
+                                  `res = response ). Settings tab: retention in days, 0 switches it off; keep it short.`
+               CHANGING  checks = checks ).
+
   ENDMETHOD.
 
   METHOD get_addons.
