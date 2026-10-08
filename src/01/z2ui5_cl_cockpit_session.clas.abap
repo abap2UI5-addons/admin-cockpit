@@ -1933,7 +1933,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                        id    = ls_node-id
                                        time          = z2ui5_cl_cockpit_setup=>ts_text( ls_node-timestampl )
                                        state         = `None`
-                                       monitor_state = `None` ).
+                                       " never empty: UI5 rejects "" as a ValueState
+                                       " and terminates the app - with no recording
+                                       " fill_wire leaves these untouched
+                                       monitor_state  = `None`
+                                       shown_state    = `None`
+                                       messages_state = `None` ).
       INSERT VALUE #( id   = ls_node-id
                       step = ls_step-step ) INTO TABLE lt_index.
 
@@ -2334,7 +2339,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
 
     LOOP AT ct_step ASSIGNING FIELD-SYMBOL(<step>).
-      <step>-shown_state = `None`.
       " the screen the user saw before this step: the one of the step it continues
       CLEAR lv_screen.
       IF <step>-follows > 0.

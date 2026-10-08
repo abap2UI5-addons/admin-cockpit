@@ -740,6 +740,13 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                         act = lines( ls_steps-t_step ) ).
     cl_abap_unit_assert=>assert_equals( exp = `ZCL_ORDER`
                                         act = ls_steps-t_step[ 3 ]-app ).
+    " nothing recorded for these drafts - the states bound to an ObjectStatus
+    " are still a ValueState, an empty one terminates the app
+    LOOP AT ls_steps-t_step INTO DATA(ls_step).
+      cl_abap_unit_assert=>assert_not_initial( ls_step-shown_state ).
+      cl_abap_unit_assert=>assert_not_initial( ls_step-monitor_state ).
+      cl_abap_unit_assert=>assert_not_initial( ls_step-messages_state ).
+    ENDLOOP.
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = ls_steps-t_step[ 3 ]-kb ).
     cl_abap_unit_assert=>assert_equals( exp = 1
