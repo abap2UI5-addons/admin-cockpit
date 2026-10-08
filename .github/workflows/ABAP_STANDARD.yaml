@@ -22,6 +22,8 @@ jobs:
         node-version: '22'
         cache: 'npm'
     - run: npm ci
+    # the description in the .xml and the shorttext in the source agree
+    - run: npm run check:shorttext
     # main: both packages against abap2UI5 with the monitor hook
     - run: npx abaplint ./abaplint.jsonc
     # package 01 alone - the standalone branch - against the released abap2UI5
