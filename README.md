@@ -509,6 +509,21 @@ What it gives you, in the session viewer:
   click failed.
 - **Request / Response** - the raw bodies, the inputs, the view XML, and for
   a step whose next click ended in an HTTP 500 the failed request itself.
+- **Story** - the session told line by line, ready for a ticket, with a
+  copy button:
+
+  ```
+  10:02:11  [ZORDER] started
+  10:02:40  pressed Button "Save" (SAVE) -> error box: Date invalid (1.2 s server, 6.2 s waited)
+  10:03:20  [ZDELIVERY] event GO - next click failed: event SHIP
+  ```
+
+- **Signs of trouble** - in the session viewer, and as a column of the
+  session lists (Drafts & Housekeeping, Live) to find the sessions worth a
+  look: the same button three times within seconds, the same error box
+  again, a failed click, the same button again after a wait of 5 s or more,
+  a session that ended on an error. The lists read only ids and events of
+  the recordings, the viewer also the error boxes.
 - **Time per step** (with `run( )`) - the server's time for the roundtrip
   and how long the user waited for it in the browser (the frontend sends it
   with the next request), orange from the *slow roundtrip* setting: "1.4 s
