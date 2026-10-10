@@ -9,6 +9,7 @@
     "lint:standalone": "abaplint .github/abaplint/abap_standalone.jsonc",
     "lint:702": "abaplint .github/abaplint/abap_702.jsonc",
     "unit": "node .github/scripts/unit.mjs",
+    "test": "npm run unit",
     "check:shorttext": "node .github/scripts/shorttext.mjs",
     "check:abap2ui5": "abap2ui5lint",
     "fmt:chains": "abap2ui5lint --fix",
