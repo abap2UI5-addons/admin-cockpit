@@ -9,6 +9,7 @@
     "lint:standalone": "abaplint .github/abaplint/abap_standalone.jsonc",
     "lint:702": "abaplint .github/abaplint/abap_702.jsonc",
     "unit": "node .github/scripts/unit.mjs",
+    "test": "npm run unit",
     "check:shorttext": "node .github/scripts/shorttext.mjs",
     "check:abap2ui5": "abap2ui5lint",
     "fmt:chains": "abap2ui5lint --fix",
@@ -33,7 +34,7 @@
   "homepage": "https://github.com/abap2UI5-addons/admin-cockpit#readme",
   "devDependencies": {
     "@abap2ui5/linter": "^0.8.5",
-    "@abaplint/cli": "^2.120.71"
+    "@abaplint/cli": "^2.120.73"
   },
   "engines": {
     "node": ">=22"
