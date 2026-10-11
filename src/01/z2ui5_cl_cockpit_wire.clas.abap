@@ -352,7 +352,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! A recorded view made displayable again: its namespaces and its
     "! content, every binding replaced by the value of the model (a table
     "! bound by items repeated per row, at most 50), every event handler
-    "! emptied - a press in the copy fires nothing.
+    "! emptied - a press in the copy fires nothing - and nothing that runs
+    "! in the browser by itself (content_defused).
     "! @parameter xml        | the view XML of a display action (an mvc:View)
     "! @parameter it_model   | the model as path and value (json_flatten)
     "! @parameter event      | the event pressed next - its control marked (mark_pressed)
@@ -461,6 +462,31 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
 
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_ck_wir WITH EMPTY KEY.
+
+    "! The content of a copy without what runs in the browser by itself: a
+    "! sap.ui.core.HTML renders its content with the scripts and on...
+    "! handlers in it, XHTML and SVG elements carry handlers of their own,
+    "! and the framework's helper controls (z2ui5.cc) write the local
+    "! storage, push the browser history, open a socket - all of it in the
+    "! administrator's cockpit. An HTML control is sanitized
+    "! (sanitizeContent, whatever the app set), the others are left out.
+    "! @parameter xml     | the recorded view - its namespace declarations
+    "! @parameter content | the part of it the copy shows
+    CLASS-METHODS content_defused
+      IMPORTING
+        xml           TYPE string
+        content       TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! xml without the elements of a prefix, each with all it contains.
+    "! @parameter prefix | the prefix with its colon - html:
+    CLASS-METHODS elements_dropped
+      IMPORTING
+        xml           TYPE string
+        prefix        TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! The request and response of the roundtrip that just ran, read from
     "! the handler's objects by name. False when it was no POST or nothing
@@ -1597,7 +1623,199 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                             occ  = 0 ).
     ENDLOOP.
 
-    result-content = lv_content.
+    result-content = content_defused( xml     = xml
+                                      content = lv_content ).
+
+  ENDMETHOD.
+
+  METHOD content_defused.
+
+    DATA lt_html TYPE string_table.
+    DATA lt_drop TYPE string_table.
+    DATA lv_prefix TYPE string.
+    DATA lv_pos TYPE i.
+
+    result = content.
+
+    " the prefixes, from every declaration - xmlns:p="uri" or xmlns="uri"
+    DO.
+      DATA(lv_at) = find( val = xml
+                          sub = ` xmlns`
+                          off = lv_pos ).
+      IF lv_at < 0.
+        EXIT.
+      ENDIF.
+      DATA(lv_eq) = find( val = xml
+                          sub = `="`
+                          off = lv_at ).
+      IF lv_eq < 0.
+        EXIT.
+      ENDIF.
+      DATA(lv_end) = find( val = xml
+                           sub = `"`
+                           off = lv_eq + 2 ).
+      IF lv_end < 0.
+        EXIT.
+      ENDIF.
+      lv_pos = lv_end + 1.
+      DATA(lv_name) = substring( val = xml
+                                 off = lv_at + 6
+                                 len = lv_eq - lv_at - 6 ).
+      DATA(lv_uri) = substring( val = xml
+                                off = lv_eq + 2
+                                len = lv_end - lv_eq - 2 ).
+      CLEAR lv_prefix.
+      IF lv_name IS NOT INITIAL.
+        IF substring( val = lv_name
+                      len = 1 ) <> `:`.
+          CONTINUE.
+        ENDIF.
+        lv_prefix = |{ substring( val = lv_name
+                                  off = 1 ) }:|.
+      ENDIF.
+      CASE lv_uri.
+        WHEN `sap.ui.core`.
+          INSERT lv_prefix INTO TABLE lt_html.
+        WHEN `http://www.w3.org/1999/xhtml` OR `http://www.w3.org/2000/svg` OR `z2ui5.cc` OR `z2ui5`.
+          IF lv_prefix IS NOT INITIAL.
+            INSERT lv_prefix INTO TABLE lt_drop.
+          ENDIF.
+      ENDCASE.
+    ENDDO.
+
+    LOOP AT lt_drop INTO lv_prefix.
+      result = elements_dropped( xml    = result
+                                 prefix = lv_prefix ).
+    ENDLOOP.
+
+    " every HTML control: its own sanitizeContent goes, true comes in
+    LOOP AT lt_html INTO lv_prefix.
+      DATA(lv_tag) = |<{ lv_prefix }HTML|.
+      lv_pos = 0.
+      DO.
+        lv_at = find( val = result
+                      sub = lv_tag
+                      off = lv_pos ).
+        IF lv_at < 0.
+          EXIT.
+        ENDIF.
+        DATA(lv_after) = lv_at + strlen( lv_tag ).
+        lv_pos = lv_after.
+        lv_end = find( val = result
+                       sub = `>`
+                       off = lv_after ).
+        IF lv_end < 0.
+          EXIT.
+        ENDIF.
+        " <core:HTMLx is another control
+        DATA(lv_next) = substring( val = result
+                                   off = lv_after
+                                   len = 1 ).
+        IF lv_next <> ` ` AND lv_next <> `/` AND lv_next <> `>`
+            AND lv_next <> cl_abap_char_utilities=>newline AND lv_next <> cl_abap_char_utilities=>horizontal_tab.
+          CONTINUE.
+        ENDIF.
+        DATA(lv_attrs) = substring( val = result
+                                    off = lv_after
+                                    len = lv_end - lv_after ).
+        DO.
+          DATA(lv_san) = find( val = lv_attrs
+                               sub = `sanitizeContent=` ).
+          IF lv_san < 0 OR lv_san + 17 > strlen( lv_attrs ).
+            EXIT.
+          ENDIF.
+          DATA(lv_quote) = substring( val = lv_attrs
+                                      off = lv_san + 16
+                                      len = 1 ).
+          DATA(lv_close) = find( val = lv_attrs
+                                 sub = lv_quote
+                                 off = lv_san + 17 ).
+          IF lv_close < 0.
+            lv_close = strlen( lv_attrs ) - 1.
+          ENDIF.
+          " with the blank in front of it
+          IF lv_san > 0 AND substring( val = lv_attrs
+                                       off = lv_san - 1
+                                       len = 1 ) = ` `.
+            lv_san = lv_san - 1.
+          ENDIF.
+          lv_attrs = substring( val = lv_attrs
+                                len = lv_san ) && substring( val = lv_attrs
+                                                             off = lv_close + 1 ).
+        ENDDO.
+        result = substring( val = result
+                            len = lv_after ) && ` sanitizeContent="true"` && lv_attrs && substring( val = result
+                                                                                                    off = lv_end ).
+        lv_pos = lv_after + 1.
+      ENDDO.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD elements_dropped.
+
+    DATA lv_depth TYPE i.
+    DATA lv_gt TYPE i.
+
+    result = xml.
+    DATA(lv_open) = |<{ prefix }|.
+    DATA(lv_shut) = |</{ prefix }|.
+    DO.
+      DATA(lv_start) = find( val = result
+                             sub = lv_open ).
+      IF lv_start < 0.
+        EXIT.
+      ENDIF.
+      " to the end tag of the same depth - a self-closing one counts none
+      lv_depth = 0.
+      DATA(lv_pos) = lv_start.
+      DATA(lv_stop) = -1.
+      DO.
+        DATA(lv_o) = find( val = result
+                           sub = lv_open
+                           off = lv_pos ).
+        DATA(lv_c) = find( val = result
+                           sub = lv_shut
+                           off = lv_pos ).
+        IF lv_o >= 0 AND ( lv_c < 0 OR lv_o < lv_c ).
+          lv_gt = find( val = result
+                        sub = `>`
+                        off = lv_o ).
+          IF lv_gt < 0.
+            EXIT.
+          ENDIF.
+          IF substring( val = result
+                        off = lv_gt - 1
+                        len = 1 ) <> `/`.
+            lv_depth = lv_depth + 1.
+          ENDIF.
+        ELSEIF lv_c >= 0.
+          lv_gt = find( val = result
+                        sub = `>`
+                        off = lv_c ).
+          IF lv_gt < 0.
+            EXIT.
+          ENDIF.
+          lv_depth = lv_depth - 1.
+        ELSE.
+          EXIT.
+        ENDIF.
+        lv_pos = lv_gt + 1.
+        IF lv_depth <= 0.
+          lv_stop = lv_pos.
+          EXIT.
+        ENDIF.
+      ENDDO.
+      " no end: the rest goes with it
+      IF lv_stop < 0.
+        result = substring( val = result
+                            len = lv_start ).
+        EXIT.
+      ENDIF.
+      result = substring( val = result
+                          len = lv_start ) && substring( val = result
+                                                         off = lv_stop ).
+    ENDDO.
 
   ENDMETHOD.
 

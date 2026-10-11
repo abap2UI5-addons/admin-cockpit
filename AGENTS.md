@@ -101,7 +101,9 @@ sticky LUW, buffer otherwise, pseudonym unless `NAME`) and adds its own:
   needs.
 - **The playback fires nothing**: every `=".e..."` handler in a recorded view
   is emptied, every bound value goes in escaped (`xml_escape`, braces
-  included). Keep both when touching `screen_of`.
+  included), and nothing runs by itself (`content_defused`): a
+  `sap.ui.core.HTML` gets `sanitizeContent="true"`, XHTML, SVG and
+  `z2ui5.cc` elements are left out. Keep all three when touching `screen_of`.
 - Recordings are read by administrators only, inside a logged session.
 
 ## Framework internals only by name

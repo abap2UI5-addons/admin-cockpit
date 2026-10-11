@@ -24,6 +24,7 @@ CLASS ltcl_wire DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     METHODS control_pressed FOR TESTING.
     METHODS control_of_field FOR TESTING.
     METHODS screen_rebuilt FOR TESTING RAISING cx_static_check.
+    METHODS screen_runs_nothing FOR TESTING RAISING cx_static_check.
     METHODS popup_taken_apart FOR TESTING RAISING cx_static_check.
     METHODS pressed_marked FOR TESTING RAISING cx_static_check.
     METHODS escaped_once FOR TESTING RAISING cx_static_check.
@@ -197,6 +198,32 @@ CLASS ltcl_wire IMPLEMENTATION.
         exp = `<Page title="Orders"><Input value="0"/><Button text="Save" press=""/>` &&
               `<Table><items><ColumnListItem><cells><Text text="M1"/></cells></ColumnListItem>` &&
               `<ColumnListItem><cells><Text text="M&lt;2&gt;"/></cells></ColumnListItem></items></Table></Page>`
+        act = ls_screen-content ).
+
+  ENDMETHOD.
+
+  METHOD screen_runs_nothing.
+
+    " what would run in the cockpit by itself: the HTML control sanitized,
+    " XHTML and the framework's helper controls left out
+    DATA(lv_xml) = `<mvc:View xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:core="sap.ui.core" ` &&
+                   `xmlns:html="http://www.w3.org/1999/xhtml" xmlns:z2ui5="z2ui5.cc">` &&
+                   `<Page title="T"><core:HTML content="{/HTML}" sanitizeContent="false"/>` &&
+                   `<core:HTML sanitizeContent='false' content="b"></core:HTML>` &&
+                   `<html:div><html:img src="x" onerror="alert(1)"/><html:div><Text text="in"/></html:div></html:div>` &&
+                   `<core:Icon src="sap-icon://accept"/>` &&
+                   `<z2ui5:Storage type="local" key="k" value="v"/>` &&
+                   `<Text text="out"/></Page></mvc:View>`.
+    DATA(lt_model) = z2ui5_cl_cockpit_wire=>json_flatten( `{"HTML":"<img src=x onerror=alert(1)>"}` ).
+
+    DATA(ls_screen) = z2ui5_cl_cockpit_wire=>screen_of( xml      = lv_xml
+                                                       it_model = lt_model ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = `<Page title="T"><core:HTML sanitizeContent="true" content="&lt;img src=x onerror=alert(1)&gt;"/>` &&
+              `<core:HTML sanitizeContent="true" content="b"></core:HTML>` &&
+              `<core:Icon src="sap-icon://accept"/>` &&
+              `<Text text="out"/></Page>`
         act = ls_screen-content ).
 
   ENDMETHOD.

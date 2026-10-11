@@ -559,7 +559,10 @@ What it gives you, in the session viewer:
 - **Screen** - the screen of the step rebuilt from the recorded view XML and
   the model as the responses and inputs left it: the values in the fields,
   the rows of the tables (50 each), the popup on top with its buttons. Every
-  event handler is emptied, a press in the copy fires nothing. The control
+  event handler is emptied, a press in the copy fires nothing - and nothing
+  runs by itself: an HTML control shows its content sanitized, XHTML/SVG
+  elements and abap2UI5's helper controls (`z2ui5.cc`: storage, history,
+  timer, websocket, ...) are left out. The control
   the user pressed next is **outlined in orange** - on the popup when one
   was open. *Previous screen* / *Next screen* step through the session like
   a film, each screen with what the user did on it next - or that the next
