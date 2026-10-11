@@ -3793,10 +3793,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
           WHEN `ADMIN_REMOVE`.
             IF check_change( ) = abap_true.
-              IF lines( t_admins ) <= 1.
+              " counted as stored, not as this screen last showed them: two
+              " administrators each removing the other from a stale list left
+              " none, and the next user to open the cockpit could claim it
+              IF lines( z2ui5_cl_cockpit_setup=>get_admins( ) ) <= 1.
                 client->message_box_display( text = `The last administrator cannot be removed - the next ` &&
                                                     `user to open the cockpit could claim it.`
                                              type = `warning` ).
+                load_tab( ).
                 RETURN.
               ENDIF.
               DATA(lv_removed) = client->get_event_arg( ).

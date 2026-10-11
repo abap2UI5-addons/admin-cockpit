@@ -245,14 +245,18 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
     IF sy-subrc <> 0.
       " a claim row without an administrator is stale (the list was
       " emptied in the database) - drop it and claim once more
+      DATA(lv_claimed) = abap_false.
       SELECT SINGLE value FROM z2ui5_t_ck_set
         WHERE name = @c_claim_row
         INTO @lv_value.
       IF sy-subrc = 0 AND z2ui5_cl_cockpit_setup=>get_admins( ) IS INITIAL.
         DELETE FROM z2ui5_t_ck_set WHERE name = @c_claim_row AND value = @lv_value.
         INSERT z2ui5_t_ck_set FROM @ls_row.
+        lv_claimed = xsdbool( sy-subrc = 0 ).
       ENDIF.
-      IF sy-subrc <> 0.
+      " decided by the INSERT alone: the SELECT's return code let the
+      " loser of a race (claim row and administrator already there) through
+      IF lv_claimed = abap_false.
         " somebody else was faster
         ROLLBACK WORK.                                   "#EC CI_ROLLBACK
         RETURN.
