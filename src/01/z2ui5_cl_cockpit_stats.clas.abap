@@ -525,7 +525,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     TRY.
         SELECT SINGLE @abap_true FROM z2ui5_t_ck_agg
           WHERE utc_day >= @lv_from
-          INTO @result.
+          INTO @result. "#EC CI_NOORDER
       CATCH cx_root.
         CLEAR result.
     ENDTRY.

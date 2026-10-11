@@ -116,7 +116,7 @@ CLASS ltcl_rec IMPLEMENTATION.
       WHERE utc_day = @lv_day
         AND app     = @lv_app
         AND event   = @lv_event
-      INTO @result.
+      INTO @result. "#EC CI_NOORDER
     IF sy-subrc <> 0.
       CLEAR result.
     ENDIF.
