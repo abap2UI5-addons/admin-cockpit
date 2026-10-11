@@ -10,6 +10,10 @@
     },
     {
       "url": "https://github.com/abap2UI5/abap2UI5",
+      // main on purpose, declared rather than left off (abap2UI5 CONVENTIONS
+      // §9): src/02 names z2ui5_if_ui5_monitor, which no release has yet -
+      // abap_standalone.jsonc lints src/01 against the release
+      "branch": "main",
       "folder": "/../../.abaplint-deps/abap2UI5",
       "files": "/src/**/*.*"
     }
