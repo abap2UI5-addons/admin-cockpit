@@ -41,8 +41,9 @@ Good for:
 
 **Requirements**
 
-- ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; the 7.02
-  downport is linted in CI (`ABAP_702`). The UI runs on UI5 1.71 and later
+- ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; on
+  NetWeaver 7.02 - 7.40 the branch `702`, downported automatically from `main`
+  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as well. The UI runs on UI5 1.71 and later
   (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
   SAPUI5-only micro charts.
 - [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
