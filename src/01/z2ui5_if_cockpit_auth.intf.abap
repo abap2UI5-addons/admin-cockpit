@@ -7,7 +7,7 @@
 "! instead of its own administrator list.
 "!
 "! Without such a class the cockpit allows the users maintained on its
-"! Settings tab (table Z2UI5_T_CK_ADM). As long as that list is empty, the
+"! Settings tab (table Z2UI5_T_21). As long as that list is empty, the
 "! cockpit shows nothing but a "claim the administrator role" screen: the
 "! first user who presses its button becomes the administrator (logged in
 "! the cockpit's change log), everybody after that needs to be on the list.

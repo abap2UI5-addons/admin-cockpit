@@ -210,7 +210,7 @@ CLASS ltcl_privacy IMPLEMENTATION.
 ENDCLASS.
 
 
-"! The daily salt rotation, against Z2UI5_T_CK_SET: test days in the year
+"! The daily salt rotation, against Z2UI5_T_26: test days in the year
 "! 2099, nothing committed - teardown deletes the test rows and rolls back,
 "! which also brings back the salt of today that the rotation deletes.
 CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
@@ -243,9 +243,9 @@ CLASS ltcl_salt IMPLEMENTATION.
 
   METHOD teardown.
 
-    DATA lv_pattern TYPE z2ui5_t_ck_set-name.
+    DATA lv_pattern TYPE z2ui5_t_26-name.
     lv_pattern = `SALT_2099%`.
-    DELETE FROM z2ui5_t_ck_set WHERE name LIKE @lv_pattern.
+    DELETE FROM z2ui5_t_26 WHERE name LIKE @lv_pattern.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
     CLEAR z2ui5_cl_cockpit_setup=>gv_salt_day.
@@ -280,9 +280,9 @@ CLASS ltcl_salt IMPLEMENTATION.
 
   METHOD salt_exists.
 
-    DATA lv_value TYPE z2ui5_t_ck_set-value.
-    DATA(lv_name) = CONV z2ui5_t_ck_set-name( |SALT_{ day }| ).
-    SELECT SINGLE value FROM z2ui5_t_ck_set
+    DATA lv_value TYPE z2ui5_t_26-value.
+    DATA(lv_name) = CONV z2ui5_t_26-name( |SALT_{ day }| ).
+    SELECT SINGLE value FROM z2ui5_t_26
       WHERE name = @lv_name
       INTO @lv_value.
     result = xsdbool( sy-subrc = 0 ).

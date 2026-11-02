@@ -1,0 +1,28 @@
+{
+  "note": "abap2ui5-linter baseline: findings that existed when the linter was adopted. Suppressed on every run; NEW findings still fail, a STALE entry fails too. Regenerate with --update-baseline.",
+  "findings": {
+    "src/01/z2ui5_cl_cockpit_alert.clas.abap|non-released-api||src/01|z2ui5_t_23": 1,
+    "src/01/z2ui5_cl_cockpit_auth.clas.abap|non-released-api||src/01|z2ui5_t_24": 1,
+    "src/01/z2ui5_cl_cockpit_auth.clas.abap|non-released-api||src/01|z2ui5_t_26": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_20": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_22": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_23": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_24": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_25": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_27": 1,
+    "src/01/z2ui5_cl_cockpit_job.clas.abap|non-released-api||src/01|z2ui5_t_28": 1,
+    "src/01/z2ui5_cl_cockpit_rec.clas.abap|non-released-api||src/01|z2ui5_t_20": 1,
+    "src/01/z2ui5_cl_cockpit_rec.clas.abap|non-released-api||src/01|z2ui5_t_22": 1,
+    "src/01/z2ui5_cl_cockpit_rec.clas.abap|non-released-api||src/01|z2ui5_t_25": 1,
+    "src/01/z2ui5_cl_cockpit_rec.clas.abap|non-released-api||src/01|z2ui5_t_27": 1,
+    "src/01/z2ui5_cl_cockpit_session.clas.abap|non-released-api||src/01|z2ui5_t_25": 1,
+    "src/01/z2ui5_cl_cockpit_session.clas.abap|non-released-api||src/01|z2ui5_t_28": 1,
+    "src/01/z2ui5_cl_cockpit_setup.clas.abap|non-released-api||src/01|z2ui5_t_21": 1,
+    "src/01/z2ui5_cl_cockpit_setup.clas.abap|non-released-api||src/01|z2ui5_t_26": 1,
+    "src/01/z2ui5_cl_cockpit_stats.clas.abap|non-released-api||src/01|z2ui5_t_20": 1,
+    "src/01/z2ui5_cl_cockpit_stats.clas.abap|non-released-api||src/01|z2ui5_t_22": 1,
+    "src/01/z2ui5_cl_cockpit_stats.clas.abap|non-released-api||src/01|z2ui5_t_25": 1,
+    "src/01/z2ui5_cl_cockpit_stats.clas.abap|non-released-api||src/01|z2ui5_t_27": 1,
+    "src/01/z2ui5_cl_cockpit_wire.clas.abap|non-released-api||src/01|z2ui5_t_28": 1
+  }
+}

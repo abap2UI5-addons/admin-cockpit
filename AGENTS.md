@@ -19,7 +19,7 @@ README.md is the user documentation; keep it in step with every change.
 
 | Path | |
 |---|---|
-| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_CK_*`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), the request/response recorder and the screen playback (`_wire`, table `Z2UI5_T_CK_WIR`, called from the customer's ICF handler, never from the monitor), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_CK_ALR`); ABAP Unit tests in `*.clas.testclasses.abap` |
+| `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_20` - `Z2UI5_T_28`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), the request/response recorder and the screen playback (`_wire`, table `Z2UI5_T_28`, called from the customer's ICF handler, never from the monitor), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_23`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
 | `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `publish-standalone` |
@@ -123,12 +123,12 @@ copy, exactly like the core).
 No customer class (`z2ui5_if_cockpit_auth`) and no administrator means
 nobody gets in: `main( )` shows only the claim screen, and
 `z2ui5_cl_cockpit_auth=>claim( )` makes the first user who presses its button
-the administrator (an `INSERT` of a fixed-key row in `Z2UI5_T_CK_SET`, so a
+the administrator (an `INSERT` of a fixed-key row in `Z2UI5_T_26`, so a
 race has exactly one winner). `reset_admins( )` starts over. The decision
 itself is `z2ui5_cl_cockpit_auth=>decide( )`, pure and unit-tested - change
 it there. Every change made through the cockpit (claim, administrators,
 settings, deletions, purges, reproductions) is written with
-`z2ui5_cl_cockpit_auth=>log( )` to `Z2UI5_T_CK_AUD` before or with the commit
+`z2ui5_cl_cockpit_auth=>log( )` to `Z2UI5_T_24` before or with the commit
 of the change.
 
 ## Alerts
@@ -145,7 +145,7 @@ the other settings where a non-positive value falls back to the default.
 
 ## Optional addons only by name
 
-The agent addon (`Z2UI5_T_AG_LOG`, `Z2UI5_T_AG_SET`,
+The agent addon (`Z2UI5_T_14`, `Z2UI5_T_17`,
 `z2ui5_cl_agent_settings`, `z2ui5_if_agent_app`) and the headless frontend
 (`z2ui5_cl_frontend_simulator`) are optional - named in literals only, read
 with dynamic SQL / called with `CALL METHOD (class)=>(method)` inside `TRY`,
@@ -173,7 +173,8 @@ every interface method a double needs.
 - abaplint (`abaplint.jsonc`) is the style: upper-case keywords,
   `definitions_top`, no default keys, `omit_parameter_name`, types `ty_*`.
 - Object names: classes `z2ui5_cl_cockpit_*`, interfaces `z2ui5_if_cockpit_*`,
-  tables `z2ui5_t_ck_*` (≤ 16 characters); every object name ≤ 25 characters
+  tables `z2ui5_t_<nn>` - the next free number of the numbering all addons
+  share (`z2ui5_t_20` - `_28` here); every object name ≤ 25 characters
   (namespace rename budget).
 - ABAP Cloud and 7.50: released APIs only (`npm run lint:cloud`); the 7.02
   downport must lint (`ABAP_702`). After the downport the `@` escapes are

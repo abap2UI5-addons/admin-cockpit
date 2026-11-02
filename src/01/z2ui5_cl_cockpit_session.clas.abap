@@ -884,7 +884,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the failed roundtrips the monitor logged since the oldest draft, each
     " counted for the session of the draft it started from
     TRY.
-        SELECT draft_id_prev FROM z2ui5_t_ck_log
+        SELECT draft_id_prev FROM z2ui5_t_25
           WHERE check_error = @abap_true
             AND timestampl >= @lv_oldest
           INTO TABLE @lt_failed.
@@ -907,7 +907,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     TRY.
         " ORDER BY as in z2ui5_cl_cockpit_wire=>get_variants - without it the
         " 7.02 downport leaves this SELECT half converted
-        SELECT draft_id, draft_id_prev, event, http_status, timestampl FROM z2ui5_t_ck_wir
+        SELECT draft_id, draft_id_prev, event, http_status, timestampl FROM z2ui5_t_28
           WHERE timestampl >= @lv_oldest
           ORDER BY timestampl DESCENDING
           INTO CORRESPONDING FIELDS OF TABLE @lt_wire_row
@@ -1367,7 +1367,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the drafts a failed roundtrip started from - a session ending there
     " ended in an error
     TRY.
-        SELECT draft_id_prev FROM z2ui5_t_ck_log
+        SELECT draft_id_prev FROM z2ui5_t_25
           WHERE check_error = @abap_true
             AND timestampl >= @lv_oldest
           INTO TABLE @lt_ids.
@@ -2556,7 +2556,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       SELECT draft_id, draft_id_prev, event, check_error, check_slow, ms_total, error_class, error_head
-        FROM z2ui5_t_ck_log
+        FROM z2ui5_t_25
         WHERE draft_id IN @lt_range
            OR draft_id_prev IN @lt_range
         APPENDING CORRESPONDING FIELDS OF TABLE @lt_log.

@@ -5,7 +5,7 @@
 "! UTC hour running now plus a number of full hours before it (Settings
 "! tab). check( ) evaluates them live - the Overview tab shows the result.
 "! run( ) - called by the housekeeping job z2ui5_cl_cockpit_job=&gt;run( ) -
-"! keeps the history in Z2UI5_T_CK_ALR: an alert is raised by the first run
+"! keeps the history in Z2UI5_T_23: an alert is raised by the first run
 "! that finds the threshold exceeded and cleared by the first run that no
 "! longer finds it, and each of the two is handed to the customer class
 "! implementing z2ui5_if_cockpit_notify, if there is one.
@@ -58,7 +58,7 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_t_alert.
 
-    "! Evaluate, raise and clear in Z2UI5_T_CK_ALR, notify. No commit - the
+    "! Evaluate, raise and clear in Z2UI5_T_23, notify. No commit - the
     "! caller commits, which also sends what the notification queued.
     CLASS-METHODS run
       RETURNING
@@ -254,12 +254,12 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
     DATA lt_open TYPE ty_t_open.
     DATA lt_raised TYPE ty_t_alert.
     DATA lt_cleared TYPE ty_t_open.
-    DATA ls_row TYPE z2ui5_t_ck_alr.
+    DATA ls_row TYPE z2ui5_t_23.
     DATA lv_zero TYPE timestampl.
 
     DATA(lt_now) = check( ).
 
-    SELECT id, rule_id, app, raised, measured, threshold, cnt, note FROM z2ui5_t_ck_alr
+    SELECT id, rule_id, app, raised, measured, threshold, cnt, note FROM z2ui5_t_23
       WHERE cleared = @lv_zero
       INTO CORRESPONDING FIELDS OF TABLE @lt_open.
 
@@ -289,7 +289,7 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       ls_row-cnt       = ls_alert-roundtrips.
       ls_row-text      = ls_alert-text.
       ls_row-note      = notify( ls_alert ).
-      INSERT z2ui5_t_ck_alr FROM @ls_row.
+      INSERT z2ui5_t_23 FROM @ls_row.
       result-raised = result-raised + 1.
     ENDLOOP.
 
@@ -305,7 +305,7 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       ls_clear-text = |{ rule_text( ls_open-rule_id ) } { app_text( ls_open-app ) } is below | &&
                       |{ ls_open-threshold } again (raised { ls_clear-raised } UTC at { ls_open-measured })|.
       DATA(lv_note) = CONV ty_s_open-note( |{ ls_open-note }; cleared: { notify( ls_clear ) }| ).
-      UPDATE z2ui5_t_ck_alr
+      UPDATE z2ui5_t_23
         SET cleared = @lv_now,
             note    = @lv_note
         WHERE id = @ls_open-id.
@@ -338,9 +338,9 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   METHOD get_history.
 
-    DATA lt_rows TYPE STANDARD TABLE OF z2ui5_t_ck_alr WITH EMPTY KEY.
+    DATA lt_rows TYPE STANDARD TABLE OF z2ui5_t_23 WITH EMPTY KEY.
     TRY.
-        SELECT * FROM z2ui5_t_ck_alr
+        SELECT * FROM z2ui5_t_23
           ORDER BY raised DESCENDING
           INTO TABLE @lt_rows
           UP TO @max_rows ROWS.                         "#EC CI_NOWHERE

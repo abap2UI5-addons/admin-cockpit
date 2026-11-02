@@ -8,13 +8,13 @@
 "! implementer of z2ui5_if_ui5_monitor is called, so that one forwards here.
 "!
 "! What is written per roundtrip:
-"! - Z2UI5_T_CK_AGG - one row per UTC day, hour, app and event, updated
+"! - Z2UI5_T_22 - one row per UTC day, hour, app and event, updated
 "!   in place and lock-free (UPDATE ... SET col = col + n): counts, sums
 "!   (DEC 15, saturated), maxima and a latency histogram (p95)
-"! - Z2UI5_T_CK_USR - the user key per day and app, inserted once
-"! - Z2UI5_T_CK_ACT - the user key per app with the last-seen timestamp
+"! - Z2UI5_T_27 - the user key per day and app, inserted once
+"! - Z2UI5_T_20 - the user key per app with the last-seen timestamp
 "!   (the Live tab)
-"! - Z2UI5_T_CK_LOG - only for errors and for slow roundtrips: one raw row
+"! - Z2UI5_T_25 - only for errors and for slow roundtrips: one raw row
 "!   with the phase breakdown and the full error text
 CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
@@ -249,15 +249,15 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     " row when there is none, and the UPDATE runs once more when another work
     " process created it in between. No SELECT ... FOR UPDATE - nothing waits
     " for a row lock, and the statement is the same on ABAP Cloud.
-    DATA ls_agg TYPE z2ui5_t_ck_agg.
+    DATA ls_agg TYPE z2ui5_t_22.
     DATA lt_h TYPE STANDARD TABLE OF i WITH EMPTY KEY.
 
     " host variables named like no column - after the 7.02 downport drops
     " the @ escapes, a host variable named like a column compares it to itself
-    DATA(lv_day) = CONV z2ui5_t_ck_agg-utc_day( day ).
-    DATA(lv_hour) = CONV z2ui5_t_ck_agg-utc_hour( hour ).
-    DATA(lv_event) = CONV z2ui5_t_ck_agg-event( is_rt-event ).
-    DATA(lv_app) = CONV z2ui5_t_ck_agg-app( is_rt-app ).
+    DATA(lv_day) = CONV z2ui5_t_22-utc_day( day ).
+    DATA(lv_hour) = CONV z2ui5_t_22-utc_hour( hour ).
+    DATA(lv_event) = CONV z2ui5_t_22-event( is_rt-event ).
+    DATA(lv_app) = CONV z2ui5_t_22-app( is_rt-app ).
 
     " the increments - counts in INT4, sums in DEC 15, each saturated
     DATA(lv_cnt) = weight.
@@ -294,7 +294,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     DATA(lv_h09) = lt_h[ 9 ].
 
     DO 2 TIMES.
-      UPDATE z2ui5_t_ck_agg
+      UPDATE z2ui5_t_22
         SET cnt        = cnt + @lv_cnt,
             cnt_start  = cnt_start + @lv_start,
             cnt_err    = cnt_err + @lv_err,
@@ -352,7 +352,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
                         h07           = lv_h07
                         h08           = lv_h08
                         h09           = lv_h09 ).
-      INSERT z2ui5_t_ck_agg FROM @ls_agg.
+      INSERT z2ui5_t_22 FROM @ls_agg.
       IF sy-subrc = 0.
         " the maxima are in the new row already
         RETURN.
@@ -366,17 +366,17 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     DATA(lv_res_max) = is_rt-bytes_response.
     DATA(lv_mod_max) = is_rt-bytes_model.
     IF lv_ms_max > 0.
-      UPDATE z2ui5_t_ck_agg SET ms_max = @lv_ms_max
+      UPDATE z2ui5_t_22 SET ms_max = @lv_ms_max
         WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
           AND ms_max < @lv_ms_max.
     ENDIF.
     IF lv_res_max > 0.
-      UPDATE z2ui5_t_ck_agg SET bytes_res_max = @lv_res_max
+      UPDATE z2ui5_t_22 SET bytes_res_max = @lv_res_max
         WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
           AND bytes_res_max < @lv_res_max.
     ENDIF.
     IF lv_mod_max > 0.
-      UPDATE z2ui5_t_ck_agg SET bytes_mod_max = @lv_mod_max
+      UPDATE z2ui5_t_22 SET bytes_mod_max = @lv_mod_max
         WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
           AND bytes_mod_max < @lv_mod_max.
     ENDIF.
@@ -385,9 +385,9 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
   METHOD write_user.
 
-    DATA ls_act TYPE z2ui5_t_ck_act.
-    DATA ls_usr TYPE z2ui5_t_ck_usr.
-    DATA(lv_app) = CONV z2ui5_t_ck_usr-app( is_rt-app ).
+    DATA ls_act TYPE z2ui5_t_20.
+    DATA ls_usr TYPE z2ui5_t_27.
+    DATA(lv_app) = CONV z2ui5_t_27-app( is_rt-app ).
     DATA(lv_now) = z2ui5_cl_cockpit_setup=>now( ).
 
     IF user_key IS NOT INITIAL.
@@ -396,7 +396,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
       ls_usr-user_key   = user_key.
       ls_usr-first_seen = lv_now.
       " a duplicate key is the normal case - the user was counted already
-      INSERT z2ui5_t_ck_usr FROM @ls_usr ##SUBRC_OK.
+      INSERT z2ui5_t_27 FROM @ls_usr ##SUBRC_OK.
     ENDIF.
 
     ls_act-user_key  = user_key.
@@ -404,13 +404,13 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ls_act-last_seen = lv_now.
     ls_act-event     = is_rt-event.
     ls_act-cnt       = 1.
-    MODIFY z2ui5_t_ck_act FROM @ls_act.
+    MODIFY z2ui5_t_20 FROM @ls_act.
 
   ENDMETHOD.
 
   METHOD write_log.
 
-    DATA ls_log TYPE z2ui5_t_ck_log.
+    DATA ls_log TYPE z2ui5_t_25.
 
     ls_log-id             = cl_system_uuid=>create_uuid_c32_static( ).
     ls_log-timestampl     = is_rt-timestampl.
@@ -439,7 +439,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ls_log-error_head     = first_line( is_rt-error_text ).
     ls_log-error_text     = is_rt-error_text.
 
-    INSERT z2ui5_t_ck_log FROM @ls_log.
+    INSERT z2ui5_t_25 FROM @ls_log.
 
   ENDMETHOD.
 

@@ -31,5 +31,10 @@
     "non-released-api": { "exclude": ["z2ui5_cl_cockpit_monitor\\."] }
   },
 
+  // the addon's own tables: Z2UI5_T_20 - Z2UI5_T_28 sit in the numbering
+  // all addons share (2026-11), which the linter reads as the framework's
+  // z2ui5_t_<n> tables. Frozen here, nothing else.
+  "baseline": "abap2ui5lint-baseline.json",
+
   "failOn": "warning"
 }

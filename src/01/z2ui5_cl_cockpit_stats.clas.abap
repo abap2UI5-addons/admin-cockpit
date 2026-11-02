@@ -523,7 +523,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA lv_from TYPE c LENGTH 8.
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( 6 ).
     TRY.
-        SELECT SINGLE @abap_true FROM z2ui5_t_ck_agg
+        SELECT SINGLE @abap_true FROM z2ui5_t_22
           WHERE utc_day >= @lv_from
           INTO @result. "#EC CI_NOORDER
       CATCH cx_root.
@@ -553,7 +553,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     IF z2ui5_cl_cockpit_setup=>get( )-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-none.
       result-users = `-`.
     ELSE.
-      SELECT COUNT( DISTINCT user_key ) FROM z2ui5_t_ck_usr
+      SELECT COUNT( DISTINCT user_key ) FROM z2ui5_t_27
         WHERE utc_day = @lv_today
         INTO @lv_users.
       result-users = |{ lv_users }|.
@@ -612,7 +612,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       MODIFY TABLE lt_sum FROM ls_acc.
     ENDLOOP.
 
-    SELECT utc_day, COUNT( DISTINCT user_key ) AS cnt FROM z2ui5_t_ck_usr
+    SELECT utc_day, COUNT( DISTINCT user_key ) AS cnt FROM z2ui5_t_27
       WHERE utc_day >= @lv_from
       GROUP BY utc_day
       INTO CORRESPONDING FIELDS OF TABLE @lt_users.
@@ -683,7 +683,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       MODIFY TABLE lt_sum FROM ls_acc.
     ENDLOOP.
 
-    SELECT utc_day, app, COUNT( * ) AS cnt FROM z2ui5_t_ck_usr
+    SELECT utc_day, app, COUNT( * ) AS cnt FROM z2ui5_t_27
       WHERE utc_day >= @lv_from
       GROUP BY utc_day, app
       INTO CORRESPONDING FIELDS OF TABLE @lt_users.
@@ -765,7 +765,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( z2ui5_cl_cockpit_setup=>get( )-unused_days ).
 
-    SELECT app, MAX( utc_day ) AS utc_day FROM z2ui5_t_ck_agg
+    SELECT app, MAX( utc_day ) AS utc_day FROM z2ui5_t_22
       GROUP BY app
       INTO CORRESPONDING FIELDS OF TABLE @lt_last.      "#EC CI_NOWHERE
 
@@ -797,7 +797,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
-    SELECT timestampl, app, event, error_class, error_head FROM z2ui5_t_ck_log
+    SELECT timestampl, app, event, error_class, error_head FROM z2ui5_t_25
       WHERE utc_day >= @lv_from
         AND check_error = @abap_true
       ORDER BY timestampl DESCENDING
@@ -870,7 +870,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA(lv_head)  = is_error-error_head.
 
     SELECT id, timestampl, event, uname, user_key, draft_id, draft_id_prev, check_sticky, ms_total, check_start
-      FROM z2ui5_t_ck_log
+      FROM z2ui5_t_25
       WHERE utc_day >= @lv_from
         AND check_error = @abap_true
         AND app = @lv_app
@@ -906,8 +906,8 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_error_text.
 
-    DATA(lv_id) = CONV z2ui5_t_ck_log-id( id ).
-    SELECT SINGLE error_text FROM z2ui5_t_ck_log
+    DATA(lv_id) = CONV z2ui5_t_25-id( id ).
+    SELECT SINGLE error_text FROM z2ui5_t_25
       WHERE id = @lv_id
       INTO @result.
     IF sy-subrc <> 0.
@@ -918,13 +918,13 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_occurrence_owner.
 
-    DATA lv_uname TYPE z2ui5_t_ck_log-uname.
-    DATA lv_user_key TYPE z2ui5_t_ck_log-user_key.
-    DATA lv_day TYPE z2ui5_t_ck_log-utc_day.
+    DATA lv_uname TYPE z2ui5_t_25-uname.
+    DATA lv_user_key TYPE z2ui5_t_25-user_key.
+    DATA lv_day TYPE z2ui5_t_25-utc_day.
 
     result = z2ui5_cl_cockpit_repro=>cs_owner-unknown.
-    DATA(lv_id) = CONV z2ui5_t_ck_log-id( id ).
-    SELECT SINGLE uname, user_key, utc_day FROM z2ui5_t_ck_log
+    DATA(lv_id) = CONV z2ui5_t_25-id( id ).
+    SELECT SINGLE uname, user_key, utc_day FROM z2ui5_t_25
       WHERE id = @lv_id
       INTO (@lv_uname, @lv_user_key, @lv_day).
     IF sy-subrc <> 0.
@@ -951,13 +951,13 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_slowest.
 
-    DATA lt_log TYPE STANDARD TABLE OF z2ui5_t_ck_log WITH EMPTY KEY.
+    DATA lt_log TYPE STANDARD TABLE OF z2ui5_t_25 WITH EMPTY KEY.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
     SELECT id, timestampl, app, event, ms_total, ms_load, ms_main, ms_render, ms_client_prev,
            bytes_response, bytes_model, check_error
-      FROM z2ui5_t_ck_log
+      FROM z2ui5_t_25
       WHERE utc_day >= @lv_from
         AND check_slow = @abap_true
       ORDER BY ms_total DESCENDING
@@ -1186,7 +1186,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     result-users    = ls_draft-users_active.
 
     DATA(lv_since) = z2ui5_cl_cockpit_setup=>now_minus_seconds( minutes * 60 ).
-    SELECT app, COUNT( * ) AS users, MAX( last_seen ) AS last_seen FROM z2ui5_t_ck_act
+    SELECT app, COUNT( * ) AS users, MAX( last_seen ) AS last_seen FROM z2ui5_t_20
       WHERE last_seen >= @lv_since
       GROUP BY app
       INTO CORRESPONDING FIELDS OF TABLE @lt_act.
@@ -1225,7 +1225,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
            SUM( ms_sum ) AS ms_sum, MAX( ms_max ) AS ms_max,
            SUM( h01 ) AS h01, SUM( h02 ) AS h02, SUM( h03 ) AS h03, SUM( h04 ) AS h04, SUM( h05 ) AS h05,
            SUM( h06 ) AS h06, SUM( h07 ) AS h07, SUM( h08 ) AS h08, SUM( h09 ) AS h09
-      FROM z2ui5_t_ck_agg
+      FROM z2ui5_t_22
       WHERE utc_day >= @lv_from_day
       GROUP BY utc_day, utc_hour, app
       INTO CORRESPONDING FIELDS OF TABLE @lt_rows.
@@ -1270,7 +1270,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
              SUM( kb_res ) AS kb_res, MAX( bytes_res_max ) AS res_max, MAX( bytes_mod_max ) AS mod_max,
              SUM( h01 ) AS h01, SUM( h02 ) AS h02, SUM( h03 ) AS h03, SUM( h04 ) AS h04, SUM( h05 ) AS h05,
              SUM( h06 ) AS h06, SUM( h07 ) AS h07, SUM( h08 ) AS h08, SUM( h09 ) AS h09
-        FROM z2ui5_t_ck_agg
+        FROM z2ui5_t_22
         WHERE utc_day >= @from_day
           AND app = @lv_app
         GROUP BY utc_day, event
@@ -1287,7 +1287,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
              SUM( kb_res ) AS kb_res, MAX( bytes_res_max ) AS res_max, MAX( bytes_mod_max ) AS mod_max,
              SUM( h01 ) AS h01, SUM( h02 ) AS h02, SUM( h03 ) AS h03, SUM( h04 ) AS h04, SUM( h05 ) AS h05,
              SUM( h06 ) AS h06, SUM( h07 ) AS h07, SUM( h08 ) AS h08, SUM( h09 ) AS h09
-        FROM z2ui5_t_ck_agg
+        FROM z2ui5_t_22
         WHERE utc_day >= @from_day
         GROUP BY utc_day, app
         INTO CORRESPONDING FIELDS OF TABLE @result.

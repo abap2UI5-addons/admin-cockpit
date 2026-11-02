@@ -1,8 +1,8 @@
 "! <p class="shorttext synchronized">admin cockpit - settings</p>
 "!
 "! The settings of the cockpit and of its roundtrip monitor, kept as
-"! name/value rows in Z2UI5_T_CK_SET, plus the administrators in
-"! Z2UI5_T_CK_ADM. Read once per roll area - the monitor asks on every
+"! name/value rows in Z2UI5_T_26, plus the administrators in
+"! Z2UI5_T_21. Read once per roll area - the monitor asks on every
 "! roundtrip, and the settings change a few times a year.
 "!
 "! Privacy is part of the settings, not an afterthought: user_tracking
@@ -245,7 +245,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     result = get_default( ).
 
     TRY.
-        SELECT name, value FROM z2ui5_t_ck_set
+        SELECT name, value FROM z2ui5_t_26
           INTO TABLE @lt_rows.                          "#EC CI_NOWHERE
       CATCH cx_root ##NO_HANDLER.
         " a table that is not there yet (half-imported addon) means defaults
@@ -418,17 +418,17 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD row_save.
 
-    DATA(ls_row) = VALUE z2ui5_t_ck_set( name  = name
+    DATA(ls_row) = VALUE z2ui5_t_26( name  = name
                                          value = value ).
-    MODIFY z2ui5_t_ck_set FROM @ls_row.
+    MODIFY z2ui5_t_26 FROM @ls_row.
 
   ENDMETHOD.
 
   METHOD get_admins.
 
-    DATA lt_names TYPE STANDARD TABLE OF z2ui5_t_ck_adm-uname WITH EMPTY KEY.
+    DATA lt_names TYPE STANDARD TABLE OF z2ui5_t_21-uname WITH EMPTY KEY.
     TRY.
-        SELECT uname FROM z2ui5_t_ck_adm
+        SELECT uname FROM z2ui5_t_21
           ORDER BY uname
           INTO TABLE @lt_names.
       CATCH cx_root ##NO_HANDLER.
@@ -442,7 +442,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD add_admin.
 
-    DATA ls_row TYPE z2ui5_t_ck_adm.
+    DATA ls_row TYPE z2ui5_t_21.
     DATA(lv_name) = to_upper( condense( uname ) ).
     IF lv_name IS INITIAL.
       RETURN.
@@ -451,14 +451,14 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     ls_row-uname      = lv_name.
     ls_row-created_by = sy-uname.
     ls_row-created_at = now( ).
-    MODIFY z2ui5_t_ck_adm FROM @ls_row.
+    MODIFY z2ui5_t_21 FROM @ls_row.
 
   ENDMETHOD.
 
   METHOD remove_admin.
 
     DATA(lv_name) = to_upper( condense( uname ) ).
-    DELETE FROM z2ui5_t_ck_adm WHERE uname = @lv_name.
+    DELETE FROM z2ui5_t_21 WHERE uname = @lv_name.
 
   ENDMETHOD.
 
@@ -505,7 +505,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
     DATA(lv_name) = CONV ty_s_row-name( |SALT_{ day }| ).
 
-    SELECT SINGLE value FROM z2ui5_t_ck_set
+    SELECT SINGLE value FROM z2ui5_t_26
       WHERE name = @lv_name
       INTO @lv_value.
     IF sy-subrc <> 0.
@@ -514,16 +514,16 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
         CATCH cx_uuid_error.
           RETURN.
       ENDTRY.
-      DATA(ls_row) = VALUE z2ui5_t_ck_set( name  = lv_name
+      DATA(ls_row) = VALUE z2ui5_t_26( name  = lv_name
                                            value = lv_value ).
-      INSERT z2ui5_t_ck_set FROM @ls_row.
+      INSERT z2ui5_t_26 FROM @ls_row.
       IF sy-subrc <> 0.
         " another work process created it a moment ago - use that one
-        SELECT SINGLE value FROM z2ui5_t_ck_set
+        SELECT SINGLE value FROM z2ui5_t_26
           WHERE name = @lv_name
           INTO @lv_value.
       ELSE.
-        DELETE FROM z2ui5_t_ck_set
+        DELETE FROM z2ui5_t_26
           WHERE name LIKE 'SALT_%'
             AND name <> @lv_name.
       ENDIF.

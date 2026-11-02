@@ -12,8 +12,12 @@ CLASS z2ui5_cl_cockpit_agent DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
 
-    CONSTANTS c_log_table      TYPE string VALUE `Z2UI5_T_AG_LOG`.
-    CONSTANTS c_set_table      TYPE string VALUE `Z2UI5_T_AG_SET`.
+    CONSTANTS c_log_table      TYPE string VALUE `Z2UI5_T_14`.
+    CONSTANTS c_set_table      TYPE string VALUE `Z2UI5_T_17`.
+    " the names of the two tables before the agent addon renumbered them -
+    " an install that has not pulled the rename still has these
+    CONSTANTS c_log_table_old  TYPE string VALUE `Z2UI5_T_AG_LOG`.
+    CONSTANTS c_set_table_old  TYPE string VALUE `Z2UI5_T_AG_SET`.
     CONSTANTS c_settings_class TYPE string VALUE `Z2UI5_CL_AGENT_SETTINGS`.
     CONSTANTS c_app_intf       TYPE string VALUE `Z2UI5_IF_AGENT_APP`.
     " the most audit rows one display reads
@@ -43,7 +47,7 @@ CLASS z2ui5_cl_cockpit_agent DEFINITION PUBLIC FINAL CREATE PUBLIC.
       END OF ty_s_setup.
 
     TYPES:
-      "! A row of Z2UI5_T_AG_SET, as far as the cockpit reads it.
+      "! A row of Z2UI5_T_17, as far as the cockpit reads it.
       BEGIN OF ty_s_set,
         kind  TYPE c LENGTH 10,
         app   TYPE c LENGTH 60,
@@ -53,7 +57,7 @@ CLASS z2ui5_cl_cockpit_agent DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_t_set TYPE STANDARD TABLE OF ty_s_set WITH EMPTY KEY.
 
     TYPES:
-      "! A row of Z2UI5_T_AG_LOG, as far as the cockpit reads it.
+      "! A row of Z2UI5_T_14, as far as the cockpit reads it.
       BEGIN OF ty_s_row,
         timestampl TYPE timestampl,
         uname      TYPE c LENGTH 12,
@@ -163,6 +167,15 @@ CLASS z2ui5_cl_cockpit_agent DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
+    "! the table name as installed: the current one, or the one before the
+    "! agent addon renumbered its tables
+    CLASS-METHODS table_name
+      IMPORTING
+        current       TYPE string
+        old           TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
+
     CLASS-METHODS count_add
       IMPORTING
         name  TYPE clike
@@ -188,12 +201,14 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     DATA lv_tab TYPE string.
 
     result-installed = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( c_settings_class ) = abap_true
-                                OR z2ui5_cl_cockpit_inst=>check_type_exists( c_log_table ) = abap_true ).
+                                OR z2ui5_cl_cockpit_inst=>check_type_exists( c_log_table ) = abap_true
+                                OR z2ui5_cl_cockpit_inst=>check_type_exists( c_log_table_old ) = abap_true ).
     IF result-installed = abap_false.
       RETURN.
     ENDIF.
 
-    lv_tab = c_set_table.
+    lv_tab = table_name( current = c_set_table
+                         old     = c_set_table_old ).
     TRY.
         SELECT kind, app, item, value FROM (lv_tab)
           INTO CORRESPONDING FIELDS OF TABLE @lt_set.   "#EC CI_NOWHERE
@@ -278,7 +293,8 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     ENDIF.
 
     DATA(lv_from) = day_start( z2ui5_cl_cockpit_setup=>day_minus( days - 1 ) ).
-    lv_tab = c_log_table.
+    lv_tab = table_name( current = c_log_table
+                         old     = c_log_table_old ).
     TRY.
         SELECT timestampl, uname, app, operation, event, outcome, text, mcp_client
           FROM (lv_tab)
@@ -288,7 +304,7 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
           UP TO @c_max_rows ROWS.
       CATCH cx_root INTO DATA(lx).
         result-strip_type = `Warning`.
-        result-text = |The agent addon is installed, but its audit log { c_log_table } could not be read: { lx->get_text( ) }|.
+        result-text = |The agent addon is installed, but its audit log { lv_tab } could not be read: { lx->get_text( ) }|.
         RETURN.
     ENDTRY.
 
@@ -429,6 +445,16 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     DATA lv_time TYPE t.
     lv_date = day.
     CONVERT DATE lv_date TIME lv_time INTO TIME STAMP result TIME ZONE `UTC`.
+
+  ENDMETHOD.
+
+  METHOD table_name.
+
+    result = current.
+    IF z2ui5_cl_cockpit_inst=>check_type_exists( current ) = abap_false
+        AND z2ui5_cl_cockpit_inst=>check_type_exists( old ) = abap_true.
+      result = old.
+    ENDIF.
 
   ENDMETHOD.
 

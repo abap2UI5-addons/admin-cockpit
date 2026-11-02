@@ -461,7 +461,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
-    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_ck_wir WITH EMPTY KEY.
+    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
 
     "! The content of a copy without what runs in the browser by itself: a
     "! sap.ui.core.HTML renders its content with the scripts and on...
@@ -516,7 +516,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_sticky  TYPE abap_bool
         ms_total      TYPE i DEFAULT 0
       RETURNING
-        VALUE(result) TYPE z2ui5_t_ck_wir
+        VALUE(result) TYPE z2ui5_t_28
       RAISING
         cx_static_check.
 
@@ -818,7 +818,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD record_bodies.
 
-    DATA ls_row TYPE z2ui5_t_ck_wir.
+    DATA ls_row TYPE z2ui5_t_28.
 
     TRY.
         DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
@@ -850,7 +850,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         CLEAR gt_buffer.
         APPEND ls_row TO lt_buffer.
         LOOP AT lt_buffer INTO DATA(ls_buffered).
-          INSERT z2ui5_t_ck_wir FROM @ls_buffered.
+          INSERT z2ui5_t_28 FROM @ls_buffered.
         ENDLOOP.
         COMMIT WORK.
       CATCH cx_root.
@@ -958,7 +958,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
             CONTINUE.
           ENDIF.
           SELECT id, timestampl, app, event, draft_id, draft_id_prev, http_status, ms_total
-            FROM z2ui5_t_ck_wir
+            FROM z2ui5_t_28
             WHERE draft_id IN @lt_range
                OR draft_id_prev IN @lt_range
             APPENDING CORRESPONDING FIELDS OF TABLE @lt_rows.
@@ -990,7 +990,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     CLEAR response.
     lv_id = id.
     TRY.
-        SELECT SINGLE req_body, res_body FROM z2ui5_t_ck_wir
+        SELECT SINGLE req_body, res_body FROM z2ui5_t_28
           WHERE id = @lv_id
           INTO (@request, @response).
         IF sy-subrc <> 0.
@@ -1007,12 +1007,12 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD get_detail.
 
     DATA lv_id TYPE c LENGTH 32.
-    DATA ls_row TYPE z2ui5_t_ck_wir.
+    DATA ls_row TYPE z2ui5_t_28.
     DATA lv_input TYPE string.
 
     lv_id = id.
     TRY.
-        SELECT SINGLE * FROM z2ui5_t_ck_wir
+        SELECT SINGLE * FROM z2ui5_t_28
           WHERE id = @lv_id
           INTO @ls_row.
         IF sy-subrc <> 0.
@@ -1071,7 +1071,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, res_body FROM z2ui5_t_ck_wir
+        SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, res_body FROM z2ui5_t_28
           WHERE utc_day >= @lv_from
           ORDER BY timestampl DESCENDING
           INTO CORRESPONDING FIELDS OF TABLE @lt_rows
@@ -1131,7 +1131,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_from TYPE c LENGTH 8.
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT COUNT( * ) FROM z2ui5_t_ck_wir
+        SELECT COUNT( * ) FROM z2ui5_t_28
           WHERE utc_day >= @lv_from
           INTO @result.
       CATCH cx_root.
@@ -1851,7 +1851,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           DATA(lv_index) = sy-tabix.
           lv_id = lv_rec.
           CLEAR ls_row.
-          SELECT SINGLE id, req_body, res_body FROM z2ui5_t_ck_wir
+          SELECT SINGLE id, req_body, res_body FROM z2ui5_t_28
             WHERE id = @lv_id
             INTO CORRESPONDING FIELDS OF @ls_row.
           IF sy-subrc <> 0.
@@ -2058,7 +2058,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, http_status, req_body, res_body FROM z2ui5_t_ck_wir
+        SELECT app, http_status, req_body, res_body FROM z2ui5_t_28
           WHERE utc_day >= @lv_from
           ORDER BY timestampl DESCENDING
           INTO CORRESPONDING FIELDS OF TABLE @lt_rows
@@ -2366,7 +2366,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     TRY.
         " no body - ids, app and event are columns of their own
         SELECT id, timestampl, app, event, uname, user_key, draft_id, draft_id_prev, http_status
-          FROM z2ui5_t_ck_wir
+          FROM z2ui5_t_28
           WHERE utc_day >= @lv_from
           ORDER BY timestampl DESCENDING
           INTO CORRESPONDING FIELDS OF TABLE @lt_rows

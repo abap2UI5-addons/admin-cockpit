@@ -707,7 +707,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
     " what the monitor logged: the slow roundtrip that wrote step 3, and a
     " failed one that started from step 2
-    DATA(ls_log) = VALUE z2ui5_t_ck_log( id            = `ZZCKUTLOG1`
+    DATA(ls_log) = VALUE z2ui5_t_25( id            = `ZZCKUTLOG1`
                                          timestampl    = `20991231100105.0`
                                          utc_day       = `20991231`
                                          app           = c_app
@@ -716,7 +716,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                          draft_id_prev = `ZZCKUT2`
                                          check_slow    = abap_true
                                          ms_total      = 2500 ).
-    INSERT z2ui5_t_ck_log FROM @ls_log.
+    INSERT z2ui5_t_25 FROM @ls_log.
     ls_log = VALUE #( id            = `ZZCKUTLOG2`
                       timestampl    = `20991231100030.0`
                       utc_day       = `20991231`
@@ -726,7 +726,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
                       check_error   = abap_true
                       error_class   = `CX_SY_ZERODIVIDE`
                       error_head    = `Division by zero` ).
-    INSERT z2ui5_t_ck_log FROM @ls_log.
+    INSERT z2ui5_t_25 FROM @ls_log.
 
   ENDMETHOD.
 
@@ -737,10 +737,10 @@ CLASS ltcl_session_db IMPLEMENTATION.
     lv_tab = c_table.
     lv_pattern = `ZZCKUT%`.
     DELETE FROM (lv_tab) WHERE id LIKE @lv_pattern.
-    DATA(lv_app) = CONV z2ui5_t_ck_log-app( c_app ).
-    DELETE FROM z2ui5_t_ck_log WHERE app = @lv_app.
-    DATA(lv_wire_app) = CONV z2ui5_t_ck_wir-app( c_app ).
-    DELETE FROM z2ui5_t_ck_wir WHERE app = @lv_wire_app.
+    DATA(lv_app) = CONV z2ui5_t_25-app( c_app ).
+    DELETE FROM z2ui5_t_25 WHERE app = @lv_app.
+    DATA(lv_wire_app) = CONV z2ui5_t_28-app( c_app ).
+    DELETE FROM z2ui5_t_28 WHERE app = @lv_wire_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
 
@@ -895,7 +895,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
     " the recorder saw step 2 display the screen and step 3 come from a
     " press on Save with a customer typed - and answer with an error
     DATA(lt_wire) = VALUE z2ui5_cl_cockpit_session=>ty_t_id( ).
-    DATA(ls_wire) = VALUE z2ui5_t_ck_wir(
+    DATA(ls_wire) = VALUE z2ui5_t_28(
         id            = `ZZCKUTWS2`
         timestampl    = `20991231100005.0`
         utc_day       = `20991231`
@@ -909,7 +909,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
                         `<Page title=\"Order\"><Label text=\"Customer\"/><Input value=\"{/MV_CUSTOMER}\"/>` &&
                         `<Button text=\"Save\" press=\".eB(['SAVE'])\"/></Page></mvc:View>"]]}},` &&
                         `"MODEL":{"MV_CUSTOMER":"4711"}}` ).
-    INSERT z2ui5_t_ck_wir FROM @ls_wire.
+    INSERT z2ui5_t_28 FROM @ls_wire.
     APPEND ls_wire-id TO lt_wire.
     ls_wire = VALUE #( id            = `ZZCKUTWS3`
                        timestampl    = `20991231100105.0`
@@ -922,7 +922,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
                        req_body      = `{"S_FRONT":{"ID":"ZZCKUT2","EVENT":"SAVE"},"MODEL":{"MV_CUSTOMER":"4712"}}`
                        res_body      = `{"S_FRONT":{"ID":"ZZCKUT3","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":` &&
                                        `{"T_CUSTOM":[["MESSAGE_BOX","error","Customer 4712 is blocked"]]}}}` ).
-    INSERT z2ui5_t_ck_wir FROM @ls_wire.
+    INSERT z2ui5_t_28 FROM @ls_wire.
     APPEND ls_wire-id TO lt_wire.
 
     DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
