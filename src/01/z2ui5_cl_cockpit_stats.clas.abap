@@ -1201,7 +1201,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     result-apps = lines( result-t_app ).
 
     " the lock-manager addon is a hint only, never a dependency
-    result-check_lock = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( `Z2UI5_CL_APP_SM12` ) = abap_true ).
+    " Z2UI5_CL_APP_SM12: its name before lock-manager renamed it
+    result-check_lock = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( `Z2UI5_CL_LOCK_APP_SM12` ) = abap_true
+                              OR z2ui5_cl_cockpit_inst=>check_class_exists( `Z2UI5_CL_APP_SM12` ) = abap_true ).
 
   ENDMETHOD.
 

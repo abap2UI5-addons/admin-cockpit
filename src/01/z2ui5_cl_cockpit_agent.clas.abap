@@ -1,7 +1,7 @@
 "! <p class="shorttext synchronized">admin cockpit - agent endpoint</p>
 "!
 "! The Agents tab and the agent line of the traffic light: what the agent
-"! addon (abap2UI5-addons/agent, an MCP endpoint that lets AI agents operate
+"! addon (abap2UI5-addons/abap-agent-runtime, an MCP endpoint that lets AI agents operate
 "! abap2UI5 apps) is set up to do and what agents did - calls per day, app
 "! and client, refusals, the last entries of its audit log.
 "!
@@ -272,7 +272,7 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     result-installed = ls_setup-installed.
     IF ls_setup-installed = abap_false.
       result-strip_type = `Information`.
-      result-text = `The agent addon (github.com/abap2UI5-addons/agent) is not installed - nothing to show. ` &&
+      result-text = `The agent addon (github.com/abap2UI5-addons/abap-agent-runtime) is not installed - nothing to show. ` &&
                     `It is an MCP endpoint that lets AI agents operate abap2UI5 apps as the calling user.`.
       RETURN.
     ENDIF.

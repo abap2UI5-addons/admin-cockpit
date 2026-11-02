@@ -36,6 +36,9 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       BEGIN OF ty_s_addon,
         name      TYPE string,
         marker    TYPE string,
+        " the marker's name before the addon renamed it - an install that
+        " has not pulled the rename is still found by it
+        marker_old TYPE string,
         kind      TYPE string,
         installed TYPE abap_bool,
         status    TYPE string,
@@ -558,7 +561,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     result = VALUE #(
       ( name = `popups`                   marker = `Z2UI5_CL_POPUP_CONTEXT`         kind = `library` )
       ( name = `layout-management`        marker = `Z2UI5_CL_LAYO_MANAGER`          kind = `library` )
-      ( name = `selection-screen`         marker = `Z2UI5_CL_SEL_SCREEN`            kind = `library` )
+      ( name = `range-filter`             marker = `Z2UI5_CL_SEL_MULTISEL`          kind = `library` )
       ( name = `abap-cloud-gui`           marker = `Z2UI5_CL_CGUI_CONTEXT`          kind = `library` )
       ( name = `custom-controls`          marker = `Z2UI5_CL_CCI`                   kind = `library` )
       ( name = `custom-controls-customer` marker = `Z2UI5_CL_CCC`                   kind = `library` )
@@ -568,10 +571,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       ( name = `open-source-libs`         marker = `Z2UI5_CL_OSL_VALIDATOR`         kind = `library` )
       ( name = `launchpad-kpi`            marker = `Z2UI5_CL_LP_KPI_HELLO_WORLD`    kind = `library` )
       ( name = `headless-frontend`        marker = `Z2UI5_CL_FRONTEND_SIMULATOR`    kind = `test tool` )
-      ( name = `agent`                    marker = `Z2UI5_CL_AGENT_SETTINGS`        kind = `agent endpoint` )
+      ( name = `abap-agent-runtime`       marker = `Z2UI5_CL_AGENT_SETTINGS`        kind = `agent endpoint` )
       ( name = `http-connector`           marker = `Z2UI5_CL_HTTP_CON_HANDLER`      kind = `connector` )
       ( name = `rfc-connector`            marker = `Z2UI5_CL_RFC_CONNECTOR_HANDLER` kind = `connector` )
-      ( name = `sql-console`              marker = `Z2UI5_SQL_CL_APP_01`            kind = `developer tool` )
+      ( name = `sql-console`              marker = `Z2UI5_CL_SQL_APP_01`            kind = `developer tool`
+        marker_old = `Z2UI5_SQL_CL_APP_01` )
       ( name = `se16n`                    marker = `Z2UI5_CL_SE16_CONTEXT`          kind = `developer tool` )
       ( name = `table-maintenance`        marker = `Z2UI5_CL_TM_001`                kind = `developer tool` )
       ( name = `table-content-loader`     marker = `Z2UI5_CL_TCL_CONTEXT`           kind = `developer tool` )
@@ -584,6 +588,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       describe( EXPORTING name  = <addon>-marker
                 IMPORTING found = <addon>-installed
                           error = lv_error ).
+      IF <addon>-installed = abap_false AND lv_error IS INITIAL AND <addon>-marker_old IS NOT INITIAL.
+        describe( EXPORTING name  = <addon>-marker_old
+                  IMPORTING found = <addon>-installed
+                            error = lv_error ).
+      ENDIF.
       IF <addon>-installed = abap_true.
         <addon>-status = `installed`.
         <addon>-state = COND #( WHEN <addon>-kind = `developer tool`
