@@ -17,7 +17,7 @@ their phases, the draft table and a security traffic light of the
 installation. It is itself an abap2UI5 app, installed with abapGit next to
 abap2UI5, for the administrators and IT leads who run it.
 
-> Part of [abap2UI5-addons](https://github.com/abap2UI5-addons) - addons and apps for [abap2UI5](https://github.com/abap2UI5/abap2UI5), installed with [abapGit](https://abapgit.org).
+> Part of [abap2UI5-addons](https://github.com/abap2UI5-addons) - addons and apps for [abap2UI5](https://github.com/abap2UI5/abap2UI5), installed with [abapGit](https://abapgit.org). Documentation: [abap2ui5-addons.github.io/admin-cockpit](https://abap2ui5-addons.github.io/admin-cockpit/).
 
 ## Why
 
@@ -43,12 +43,12 @@ Good for:
 
 - ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; on
   NetWeaver 7.02 - 7.40 the branch `702`, downported automatically from `main`
-  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as well. The UI runs on UI5 1.71 and later
-  (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
+  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as
+  well. The UI runs on UI5 1.71 and later (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
   SAPUI5-only micro charts.
 - [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
-  branch `main` an abap2UI5 with the monitor hook `z2ui5_if_ui5_monitor`
-  (see the table below).
+  branch `main` 1.147.0 or later, the first release with the monitor hook
+  `z2ui5_if_ui5_monitor` (see the table below).
 - Optional: [abap2UI5-addons/abap-agent-runtime](https://github.com/abap2UI5-addons/abap-agent-runtime)
   for the [Agents](#agents) tab, the [headless frontend](https://github.com/abap2UI5/headless-frontend)
   for [Reproduce](#reproduce-an-error), [abap2UI5-addons/lock-manager](https://github.com/abap2UI5-addons/lock-manager)
@@ -77,8 +77,8 @@ COMMIT WORK.
 
    | Your abap2UI5 | Branch | What you get |
    |---|---|---|
-   | has `z2ui5_if_ui5_monitor` (the release after 1.146.0) | `main` | everything |
-   | 1.146.0 or later without the monitor hook | `standalone` | everything with the handler line of step 4 - only the phases of a roundtrip (load, main, render) need the hook |
+   | 1.147.0 or later - has `z2ui5_if_ui5_monitor` | `main` | everything |
+   | 1.146.0 - without the monitor hook | `standalone` | everything with the handler line of step 4 - only the phases of a roundtrip (load, main, render) need the hook |
 
 3. Start `z2ui5_cl_cockpit_app` right away: a cockpit without an
    administrator shows nothing but a **Claim the administrator role** screen -
@@ -230,8 +230,8 @@ them saturated at the largest `INT4` - and whatever a database still refuses,
 **It never breaks an app.** Everything is caught; the core swallows anything a
 monitor raises anyway. A syntax error is the one thing no `CATCH` stops - a
 class that does not activate dumps whoever calls it - which is why the core
-calls no monitor until the exit switches it on. **Commit semantics** follow the interface: for an app
-that is not sticky the LUW is empty when the monitor runs (the framework
+calls no monitor until the exit switches it on. **Commit semantics** follow
+the interface: for an app that is not sticky the LUW is empty when the monitor runs (the framework
 committed its draft save, or rolled back a failed roundtrip right before the
 call), so the recorder writes its rows and issues `COMMIT WORK` itself - the
 core offers no commit helper. For a sticky (stateful) app the LUW belongs to
@@ -335,7 +335,7 @@ top of `main( )`:
 2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_21`).
    Only the users on it get in; everybody else sees "No authorization".
 3. **As long as that list is empty, the cockpit shows only the claim
-   screen** - one button, *Claim the administrator role for <you>*, and nothing
+   screen** - one button, *Claim the administrator role for &lt;you&gt;*, and nothing
    of the system. The first user who presses it becomes the administrator; the
    claim is a row with a fixed key, so of two users claiming at the same moment
    exactly one wins. The claim is written to the change log (Settings tab).
@@ -503,8 +503,8 @@ administrators only (`CHANGE`), and every opened or exported session is
 written to the change log (`SESSION_VIEW`, `SESSION_EXPORT`), with the
 session's first draft, its app and the user as the list shows it; so is every
 search in the drafts (`DRAFTS_SEARCH`) and every failure analysis
-(`ERROR_ANALYSIS`). Agree it with your works council like the rest of the monitoring
-(see [Privacy](#privacy-and-the-works-council)).
+(`ERROR_ANALYSIS`). Agree it with your works council like the rest of the
+monitoring (see [Privacy](#privacy-and-the-works-council)).
 
 ## Recorder - replay what the user saw
 
@@ -583,9 +583,13 @@ What it gives you, in the session viewer:
   the model as the responses and inputs left it: the values in the fields,
   the rows of the tables (50 each), the popup on top with its buttons. Every
   event handler is emptied, a press in the copy fires nothing - and nothing
-  runs by itself: an HTML control shows its content sanitized, XHTML/SVG
-  elements and abap2UI5's helper controls (`z2ui5.cc`: storage, history,
-  timer, websocket, ...) are left out. The control
+  runs by itself: an HTML control shows its content sanitized, and only the
+  controls of the standard UI5 libraries (`sap.m`, `sap.f`, `sap.ui.core`,
+  `sap.ui.layout` and its forms, `sap.ui.table`, `sap.ui.unified`,
+  `sap.uxap`, `sap.tnt`, `sap.suite.ui.microchart`) are shown - XHTML/SVG
+  elements, abap2UI5's helper controls (`z2ui5.cc`: storage, history,
+  timer, websocket, ...), custom controls of addons or third parties are
+  left out. The control
   the user pressed next is **outlined in orange** - on the popup when one
   was open. *Previous screen* / *Next screen* step through the session like
   a film, each screen with what the user did on it next - or that the next
@@ -782,6 +786,8 @@ npm run lint:standalone # package 01 against the released abap2UI5
 npm run lint:702        # after npm run downport (rewrites src/ - CI only)
 npm run check:abap2ui5  # the abap2UI5 linter: views, bindings, chain layout
 npm run unit            # the ABAP Unit tests on abap2UI5's transpiled runtime
+npm run check           # what the pull request workflows run: the short-text
+                        # check, the three lints, the abap2UI5 linter, the rename
 ```
 
 **Unit tests.** The pure logic has ABAP Unit tests (`*.clas.testclasses.abap`):
@@ -790,7 +796,8 @@ the privacy modes and the daily salt rotation, the recorder's aggregation,
 the security traffic light and the agent check from given structures, the
 access decision, the Agents figures, when an error can be reproduced, and the
 alert rules with what a run raises and clears. The
-classes that touch the database (`ltcl_salt`, `ltcl_rec`) are `RISK LEVEL
+classes that touch the database (`ltcl_salt`, `ltcl_rec`, `ltcl_session_db`,
+`ltcl_wire_db`) are `RISK LEVEL
 DANGEROUS`: they write rows of the test app `ZZ_COCKPIT_UNIT_TEST` on days in
 2099, never commit, and delete and roll back in `teardown`. Without a system
 they run on abap2UI5's transpiled runtime (SQLite behind the database
@@ -811,8 +818,9 @@ monitor interface (abap2UI5/linter#140, merged), `abap2ui5lint.jsonc` waives
 
 ## Contributing
 
-Issues and pull requests are welcome. See [AGENTS.md](AGENTS.md) for the
-conventions of this repository.
+Issues and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md)
+and, for the rules of the code, [AGENTS.md](AGENTS.md). Security issues:
+[SECURITY.md](SECURITY.md).
 
 ## License
 

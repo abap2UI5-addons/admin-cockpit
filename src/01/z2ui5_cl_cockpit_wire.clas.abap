@@ -466,10 +466,12 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! The content of a copy without what runs in the browser by itself: a
     "! sap.ui.core.HTML renders its content with the scripts and on...
     "! handlers in it, XHTML and SVG elements carry handlers of their own,
-    "! and the framework's helper controls (z2ui5.cc) write the local
-    "! storage, push the browser history, open a socket - all of it in the
-    "! administrator's cockpit. An HTML control is sanitized
-    "! (sanitizeContent, whatever the app set), the others are left out.
+    "! the framework's helper controls (z2ui5.cc) write the local storage,
+    "! push the browser history, open a socket, and custom controls of the
+    "! addons or a third party load scripts and render HTML - all of it in
+    "! the administrator's cockpit. An HTML control is sanitized
+    "! (sanitizeContent, whatever the app set); only the elements of an
+    "! allowlist of UI5 libraries are kept, every other one is left out.
     "! @parameter xml     | the recorded view - its namespace declarations
     "! @parameter content | the part of it the copy shows
     CLASS-METHODS content_defused
@@ -479,12 +481,13 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
-    "! xml without the elements of a prefix, each with all it contains.
-    "! @parameter prefix | the prefix with its colon - html:
+    "! xml without the elements of every prefix not kept, each with all it
+    "! contains - an element of the default namespace has the prefix ``.
+    "! @parameter it_keep | the prefixes kept, each with its colon - m:
     CLASS-METHODS elements_dropped
       IMPORTING
         xml           TYPE string
-        prefix        TYPE string
+        it_keep       TYPE string_table
       RETURNING
         VALUE(result) TYPE string.
 
@@ -1470,7 +1473,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                        off = lv_start + 1 ).
     ENDWHILE.
     IF lv_start < 0.
-      result-error = `The recorded view is no XML.`.
+      result-error = `The recorded view is not XML.`.
       RETURN.
     ENDIF.
     DATA(lv_root_end) = find( val = xml
@@ -1631,39 +1634,117 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD content_defused.
 
     DATA lt_html TYPE string_table.
-    DATA lt_drop TYPE string_table.
+    DATA lt_keep TYPE string_table.
+    DATA lt_lib TYPE string_table.
+    DATA lt_ok TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA lt_bad TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lv_prefix TYPE string.
     DATA lv_pos TYPE i.
+    DATA lv_at TYPE i.
+    DATA lv_end TYPE i.
+    DATA lv_ws TYPE string.
 
     result = content.
+    lv_ws = | \t\n\r|.
 
-    " the prefixes, from every declaration - xmlns:p="uri" or xmlns="uri"
+    " an allowlist: the UI5 libraries whose controls show what their
+    " properties say and run nothing of their own - sap.ui.core for its
+    " HTML control sanitized below. Everything else is left out: XHTML, SVG,
+    " the framework's helper controls (z2ui5.cc), the addons' custom
+    " controls (z2ui5_cci.cc, ...), any third-party library
+    lt_lib = VALUE #( ( `sap.m` )
+                      ( `sap.f` )
+                      ( `sap.ui.core` )
+                      ( `sap.ui.core.mvc` )
+                      ( `sap.ui.layout` )
+                      ( `sap.ui.layout.form` )
+                      ( `sap.ui.table` )
+                      ( `sap.ui.unified` )
+                      ( `sap.uxap` )
+                      ( `sap.tnt` )
+                      ( `sap.suite.ui.microchart` ) ).
+
+    " the prefixes, from every declaration - xmlns:p="uri" or xmlns='uri';
+    " a prefix (or the default namespace) declared once with another uri
+    " is left out wherever it is used
     DO.
-      DATA(lv_at) = find( val = xml
-                          sub = ` xmlns`
-                          off = lv_pos ).
+      lv_at = find( val = xml
+                    sub = `xmlns`
+                    off = lv_pos ).
       IF lv_at < 0.
         EXIT.
       ENDIF.
-      DATA(lv_eq) = find( val = xml
-                          sub = `="`
-                          off = lv_at ).
-      IF lv_eq < 0.
+      lv_pos = lv_at + 5.
+      IF lv_at = 0.
+        CONTINUE.
+      ENDIF.
+      IF find( val = lv_ws
+               sub = substring( val = xml
+                                off = lv_at - 1
+                                len = 1 ) ) < 0.
+        CONTINUE.
+      ENDIF.
+      " the name up to a blank or the = (find( ) with off and regex is not
+      " transpiled, the unit tests could not run it)
+      lv_end = lv_pos.
+      WHILE lv_end < strlen( xml ).
+        DATA(lv_char) = substring( val = xml
+                                   off = lv_end
+                                   len = 1 ).
+        IF lv_char = `=` OR find( val = lv_ws
+                                  sub = lv_char ) >= 0.
+          EXIT.
+        ENDIF.
+        lv_end = lv_end + 1.
+      ENDWHILE.
+      IF lv_end >= strlen( xml ).
         EXIT.
       ENDIF.
-      DATA(lv_end) = find( val = xml
-                           sub = `"`
-                           off = lv_eq + 2 ).
+      DATA(lv_name) = substring( val = xml
+                                 off = lv_pos
+                                 len = lv_end - lv_pos ).
+      " the = and the quote, blanks allowed around the =
+      lv_pos = lv_end.
+      WHILE lv_pos < strlen( xml ) AND find( val = lv_ws
+                                             sub = substring( val = xml
+                                                              off = lv_pos
+                                                              len = 1 ) ) >= 0.
+        lv_pos = lv_pos + 1.
+      ENDWHILE.
+      IF lv_pos >= strlen( xml ).
+        EXIT.
+      ENDIF.
+      IF substring( val = xml
+                    off = lv_pos
+                    len = 1 ) <> `=`.
+        CONTINUE.
+      ENDIF.
+      lv_pos = lv_pos + 1.
+      WHILE lv_pos < strlen( xml ) AND find( val = lv_ws
+                                             sub = substring( val = xml
+                                                              off = lv_pos
+                                                              len = 1 ) ) >= 0.
+        lv_pos = lv_pos + 1.
+      ENDWHILE.
+      IF lv_pos >= strlen( xml ).
+        EXIT.
+      ENDIF.
+      DATA(lv_delim) = substring( val = xml
+                                  off = lv_pos
+                                  len = 1 ).
+      IF lv_delim <> `"` AND lv_delim <> `'`.
+        CONTINUE.
+      ENDIF.
+      lv_end = find( val = xml
+                     sub = lv_delim
+                     off = lv_pos + 1 ).
       IF lv_end < 0.
         EXIT.
       ENDIF.
-      lv_pos = lv_end + 1.
-      DATA(lv_name) = substring( val = xml
-                                 off = lv_at + 6
-                                 len = lv_eq - lv_at - 6 ).
       DATA(lv_uri) = substring( val = xml
-                                off = lv_eq + 2
-                                len = lv_end - lv_eq - 2 ).
+                                off = lv_pos + 1
+                                len = lv_end - lv_pos - 1 ).
+      lv_pos = lv_end + 1.
       CLEAR lv_prefix.
       IF lv_name IS NOT INITIAL.
         IF substring( val = lv_name
@@ -1673,20 +1754,23 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         lv_prefix = |{ substring( val = lv_name
                                   off = 1 ) }:|.
       ENDIF.
-      CASE lv_uri.
-        WHEN `sap.ui.core`.
+      IF line_exists( lt_lib[ table_line = lv_uri ] ).               "#EC CI_SORTSEQ
+        INSERT lv_prefix INTO TABLE lt_ok.
+        IF lv_uri = `sap.ui.core`.
           INSERT lv_prefix INTO TABLE lt_html.
-        WHEN `http://www.w3.org/1999/xhtml` OR `http://www.w3.org/2000/svg` OR `z2ui5.cc` OR `z2ui5`.
-          IF lv_prefix IS NOT INITIAL.
-            INSERT lv_prefix INTO TABLE lt_drop.
-          ENDIF.
-      ENDCASE.
+        ENDIF.
+      ELSE.
+        INSERT lv_prefix INTO TABLE lt_bad.
+      ENDIF.
     ENDDO.
 
-    LOOP AT lt_drop INTO lv_prefix.
-      result = elements_dropped( xml    = result
-                                 prefix = lv_prefix ).
+    LOOP AT lt_ok INTO lv_prefix.
+      IF NOT line_exists( lt_bad[ table_line = lv_prefix ] ).
+        INSERT lv_prefix INTO TABLE lt_keep.
+      ENDIF.
     ENDLOOP.
+    result = elements_dropped( xml     = result
+                               it_keep = lt_keep ).
 
     " every HTML control: its own sanitizeContent goes, true comes in
     LOOP AT lt_html INTO lv_prefix.
@@ -1754,68 +1838,176 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD elements_dropped.
 
+    DATA lv_pos TYPE i.
+    DATA lv_from TYPE i.
     DATA lv_depth TYPE i.
-    DATA lv_gt TYPE i.
+    DATA lv_end TYPE i.
+    DATA lv_prefix TYPE string.
+    DATA lv_ws TYPE string.
+    DATA lv_next_dq TYPE i VALUE -2.
+    DATA lv_next_sq TYPE i VALUE -2.
+    DATA lv_next_gt TYPE i VALUE -2.
 
-    result = xml.
-    DATA(lv_open) = |<{ prefix }|.
-    DATA(lv_shut) = |</{ prefix }|.
+    DATA(lv_len) = strlen( xml ).
+    lv_ws = | \t\n\r|.
+
     DO.
-      DATA(lv_start) = find( val = result
-                             sub = lv_open ).
-      IF lv_start < 0.
+      DATA(lv_lt) = find( val = xml
+                          sub = `<`
+                          off = lv_pos ).
+      IF lv_lt < 0 OR lv_lt + 1 >= lv_len.
         EXIT.
       ENDIF.
-      " to the end tag of the same depth - a self-closing one counts none
-      lv_depth = 0.
-      DATA(lv_pos) = lv_start.
-      DATA(lv_stop) = -1.
+      DATA(lv_next) = substring( val = xml
+                                 off = lv_lt + 1
+                                 len = 1 ).
+
+      " a comment, CDATA or a processing instruction is no element
+      IF lv_next = `!` OR lv_next = `?`.
+        lv_end = find( val = xml
+                       sub = `>`
+                       off = lv_lt ).
+        IF find( val = xml
+                 sub = `<!--`
+                 off = lv_lt ) = lv_lt.
+          lv_end = find( val = xml
+                         sub = `-->`
+                         off = lv_lt + 4 ).
+        ENDIF.
+        IF find( val = xml
+                 sub = `<![CDATA[`
+                 off = lv_lt ) = lv_lt.
+          lv_end = find( val = xml
+                         sub = `]]>`
+                         off = lv_lt + 9 ).
+        ENDIF.
+        IF lv_end < 0.
+          lv_pos = lv_len.
+          EXIT.
+        ENDIF.
+        lv_pos = find( val = xml
+                       sub = `>`
+                       off = lv_end ) + 1.
+        CONTINUE.
+      ENDIF.
+
+      " the end of the tag - a > inside a quoted value does not end it; the
+      " next ", ' and > are kept until passed, the scan stays linear
+      DATA(lv_gt) = -1.
+      DATA(lv_scan) = lv_lt + 1.
       DO.
-        DATA(lv_o) = find( val = result
-                           sub = lv_open
-                           off = lv_pos ).
-        DATA(lv_c) = find( val = result
-                           sub = lv_shut
-                           off = lv_pos ).
-        IF lv_o >= 0 AND ( lv_c < 0 OR lv_o < lv_c ).
-          lv_gt = find( val = result
-                        sub = `>`
-                        off = lv_o ).
-          IF lv_gt < 0.
-            EXIT.
-          ENDIF.
-          IF substring( val = result
-                        off = lv_gt - 1
-                        len = 1 ) <> `/`.
-            lv_depth = lv_depth + 1.
-          ENDIF.
-        ELSEIF lv_c >= 0.
-          lv_gt = find( val = result
-                        sub = `>`
-                        off = lv_c ).
-          IF lv_gt < 0.
-            EXIT.
-          ENDIF.
-          lv_depth = lv_depth - 1.
-        ELSE.
+        IF lv_next_dq <> -1 AND lv_next_dq < lv_scan.
+          lv_next_dq = find( val = xml
+                             sub = `"`
+                             off = lv_scan ).
+        ENDIF.
+        IF lv_next_sq <> -1 AND lv_next_sq < lv_scan.
+          lv_next_sq = find( val = xml
+                             sub = `'`
+                             off = lv_scan ).
+        ENDIF.
+        IF lv_next_gt <> -1 AND lv_next_gt < lv_scan.
+          lv_next_gt = find( val = xml
+                             sub = `>`
+                             off = lv_scan ).
+        ENDIF.
+        DATA(lv_hit) = lv_next_gt.
+        IF lv_next_dq >= 0 AND ( lv_hit < 0 OR lv_next_dq < lv_hit ).
+          lv_hit = lv_next_dq.
+        ENDIF.
+        IF lv_next_sq >= 0 AND ( lv_hit < 0 OR lv_next_sq < lv_hit ).
+          lv_hit = lv_next_sq.
+        ENDIF.
+        IF lv_hit < 0.
           EXIT.
         ENDIF.
-        lv_pos = lv_gt + 1.
-        IF lv_depth <= 0.
-          lv_stop = lv_pos.
+        DATA(lv_char) = substring( val = xml
+                                   off = lv_hit
+                                   len = 1 ).
+        IF lv_char = `>`.
+          lv_gt = lv_hit.
           EXIT.
         ENDIF.
+        lv_end = find( val = xml
+                       sub = lv_char
+                       off = lv_hit + 1 ).
+        IF lv_end < 0.
+          EXIT.
+        ENDIF.
+        lv_scan = lv_end + 1.
       ENDDO.
-      " no end: the rest goes with it
-      IF lv_stop < 0.
-        result = substring( val = result
-                            len = lv_start ).
-        EXIT.
+      " a tag without its end: the rest goes
+      IF lv_gt < 0.
+        IF lv_depth = 0.
+          result = result && substring( val = xml
+                                        off = lv_from
+                                        len = lv_lt - lv_from ).
+        ENDIF.
+        RETURN.
       ENDIF.
-      result = substring( val = result
-                          len = lv_start ) && substring( val = result
-                                                         off = lv_stop ).
+      lv_pos = lv_gt + 1.
+
+      DATA(lv_closing) = xsdbool( lv_next = `/` ).
+      DATA(lv_empty) = xsdbool( lv_closing = abap_false AND substring( val = xml
+                                                                        off = lv_gt - 1
+                                                                        len = 1 ) = `/` ).
+      IF lv_depth > 0.
+        IF lv_closing = abap_true.
+          lv_depth = lv_depth - 1.
+          IF lv_depth = 0.
+            lv_from = lv_pos.
+          ENDIF.
+        ELSEIF lv_empty = abap_false.
+          lv_depth = lv_depth + 1.
+        ENDIF.
+        CONTINUE.
+      ENDIF.
+      IF lv_closing = abap_true.
+        CONTINUE.
+      ENDIF.
+
+      " the prefix of the element - empty for the default namespace
+      lv_end = lv_lt + 1.
+      WHILE lv_end < lv_gt.
+        lv_char = substring( val = xml
+                             off = lv_end
+                             len = 1 ).
+        IF lv_char = `/` OR find( val = lv_ws
+                                  sub = lv_char ) >= 0.
+          EXIT.
+        ENDIF.
+        lv_end = lv_end + 1.
+      ENDWHILE.
+      DATA(lv_name) = substring( val = xml
+                                 off = lv_lt + 1
+                                 len = lv_end - lv_lt - 1 ).
+      CLEAR lv_prefix.
+      DATA(lv_colon) = find( val = lv_name
+                             sub = `:` ).
+      IF lv_colon >= 0.
+        lv_prefix = substring( val = lv_name
+                               len = lv_colon + 1 ).
+      ENDIF.
+      IF line_exists( it_keep[ table_line = lv_prefix ] ).            "#EC CI_SORTSEQ
+        CONTINUE.
+      ENDIF.
+
+      " left out with all it contains
+      result = result && substring( val = xml
+                                    off = lv_from
+                                    len = lv_lt - lv_from ).
+      IF lv_empty = abap_true.
+        lv_from = lv_pos.
+      ELSE.
+        lv_depth = 1.
+      ENDIF.
     ENDDO.
+
+    " an element without its end: the rest goes with it
+    IF lv_depth = 0.
+      result = result && substring( val = xml
+                                    off = lv_from ).
+    ENDIF.
 
   ENDMETHOD.
 
