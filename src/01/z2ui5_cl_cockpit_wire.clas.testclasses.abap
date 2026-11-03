@@ -205,15 +205,22 @@ CLASS ltcl_wire IMPLEMENTATION.
   METHOD screen_runs_nothing.
 
     " what would run in the cockpit by itself: the HTML control sanitized,
-    " XHTML and the framework's helper controls left out
+    " only the elements of the allowed UI5 libraries kept - XHTML, SVG, the
+    " framework's helper controls, an addon's custom control, an undeclared
+    " prefix and one declared twice are left out
     DATA(lv_xml) = `<mvc:View xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:core="sap.ui.core" ` &&
-                   `xmlns:html="http://www.w3.org/1999/xhtml" xmlns:z2ui5="z2ui5.cc">` &&
+                   `xmlns:html="http://www.w3.org/1999/xhtml" xmlns:z2ui5="z2ui5.cc" xmlns:f="sap.ui.layout.form"` &&
+                   ` xmlns:cci='z2ui5_cci.cc'` && |\n| && `xmlns:svg = "http://www.w3.org/2000/svg">` &&
                    `<Page title="T"><core:HTML content="{/HTML}" sanitizeContent="false"/>` &&
                    `<core:HTML sanitizeContent='false' content="b"></core:HTML>` &&
                    `<html:div><html:img src="x" onerror="alert(1)"/><html:div><Text text="in"/></html:div></html:div>` &&
                    `<core:Icon src="sap-icon://accept"/>` &&
                    `<z2ui5:Storage type="local" key="k" value="v"/>` &&
-                   `<Text text="out"/></Page></mvc:View>`.
+                   `<cci:Script src="https://evil.example/x.js"><cci:content><Text text="a > b"/></cci:content></cci:Script>` &&
+                   `<svg:svg><svg:script>alert(1)</svg:script></svg:svg>` &&
+                   `<x:Thing/><f:SimpleForm><Label text="L"/></f:SimpleForm>` &&
+                   `<VBox xmlns:f="third.party.lib"><f:Widget/></VBox>` &&
+                   `<!-- <cci:Script/> --><Text text="out"/></Page></mvc:View>`.
     DATA(lt_model) = z2ui5_cl_cockpit_wire=>json_flatten( `{"HTML":"<img src=x onerror=alert(1)>"}` ).
 
     DATA(ls_screen) = z2ui5_cl_cockpit_wire=>screen_of( xml      = lv_xml
@@ -223,8 +230,17 @@ CLASS ltcl_wire IMPLEMENTATION.
         exp = `<Page title="T"><core:HTML sanitizeContent="true" content="&lt;img src=x onerror=alert(1)&gt;"/>` &&
               `<core:HTML sanitizeContent="true" content="b"></core:HTML>` &&
               `<core:Icon src="sap-icon://accept"/>` &&
-              `<Text text="out"/></Page>`
+              `<VBox xmlns:f="third.party.lib"></VBox>` &&
+              `<!-- <cci:Script/> --><Text text="out"/></Page>`
         act = ls_screen-content ).
+
+    " a default namespace that is not allowed: its elements are left out
+    lv_xml = `<mvc:View xmlns="z2ui5_cci.cc" xmlns:mvc="sap.ui.core.mvc" xmlns:m="sap.m">` &&
+             `<m:Text text="kept"/><Script src="x.js"><m:Text text="in"/></Script><Frame/></mvc:View>`.
+    ls_screen = z2ui5_cl_cockpit_wire=>screen_of( xml      = lv_xml
+                                                 it_model = VALUE #( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `<m:Text text="kept"/>`
+                                        act = ls_screen-content ).
 
   ENDMETHOD.
 

@@ -102,8 +102,17 @@ sticky LUW, buffer otherwise, pseudonym unless `NAME`) and adds its own:
 - **The playback fires nothing**: every `=".e..."` handler in a recorded view
   is emptied, every bound value goes in escaped (`xml_escape`, braces
   included), and nothing runs by itself (`content_defused`): a
-  `sap.ui.core.HTML` gets `sanitizeContent="true"`, XHTML, SVG and
-  `z2ui5.cc` elements are left out. Keep all three when touching `screen_of`.
+  `sap.ui.core.HTML` gets `sanitizeContent="true"`, and only the elements of
+  an **allowlist** of UI5 libraries are kept - `sap.m`, `sap.f`,
+  `sap.ui.core`, `sap.ui.core.mvc`, `sap.ui.layout`, `sap.ui.layout.form`,
+  `sap.ui.table`, `sap.ui.unified`, `sap.uxap`, `sap.tnt`,
+  `sap.suite.ui.microchart`. Every other element is left out with all it
+  contains: XHTML, SVG, `z2ui5.cc`, the addons' custom controls
+  (`z2ui5_cci.cc`, ...), any third-party library, an undeclared prefix, a
+  default namespace outside the list, and a prefix declared anywhere with a
+  URI outside it. Never turn the list into a denylist, and add a library
+  only when none of its controls loads scripts or renders HTML of its own.
+  Keep all three when touching `screen_of`.
 - Recordings are read by administrators only, inside a logged session.
 
 ## Framework internals only by name
