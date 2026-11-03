@@ -17,7 +17,7 @@ their phases, the draft table and a security traffic light of the
 installation. It is itself an abap2UI5 app, installed with abapGit next to
 abap2UI5, for the administrators and IT leads who run it.
 
-> Part of [abap2UI5-addons](https://github.com/abap2UI5-addons) - addons and apps for [abap2UI5](https://github.com/abap2UI5/abap2UI5), installed with [abapGit](https://abapgit.org).
+> Part of [abap2UI5-addons](https://github.com/abap2UI5-addons) - addons and apps for [abap2UI5](https://github.com/abap2UI5/abap2UI5), installed with [abapGit](https://abapgit.org). Documentation: [abap2ui5-addons.github.io/admin-cockpit](https://abap2ui5-addons.github.io/admin-cockpit/).
 
 ## Why
 
@@ -335,7 +335,7 @@ top of `main( )`:
 2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_21`).
    Only the users on it get in; everybody else sees "No authorization".
 3. **As long as that list is empty, the cockpit shows only the claim
-   screen** - one button, *Claim the administrator role for <you>*, and nothing
+   screen** - one button, *Claim the administrator role for &lt;you&gt;*, and nothing
    of the system. The first user who presses it becomes the administrator; the
    claim is a row with a fixed key, so of two users claiming at the same moment
    exactly one wins. The claim is written to the change log (Settings tab).
