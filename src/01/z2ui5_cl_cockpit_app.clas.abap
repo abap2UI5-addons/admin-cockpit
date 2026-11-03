@@ -3215,7 +3215,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->tag( `Button`
             )->a( n = `text`  v = `Copy`
             )->a( n = `icon`  v = `sap-icon://copy`
-            )->a( n = `press` v = client->_event_client( val   = z2ui5_if_client=>cs_event-clipboard_copy
+            )->a( n = `press` v = client->follow_up_action( val   = z2ui5_if_client=>cs_event-clipboard_copy
                                                          t_arg = VALUE #( ( |${ client->_bind( story_text ) }| ) ) )
         )->tag( `Button`
             )->a( n = `text`  v = `Back to the steps`
@@ -3243,12 +3243,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
     DATA(dialog) = popup->ele( `Dialog`
-            )->a( n = `title`         t = |{ COND #( WHEN lv_id = ls_step-wire_fail_id THEN `Failed click after step`
+        )->a( n = `title`         t = |{ COND #( WHEN lv_id = ls_step-wire_fail_id THEN `Failed click after step`
                                                 ELSE `Request and response of step` ) } { step_index }|
-            )->a( n = `contentWidth`  v = `90%`
-            )->a( n = `contentHeight` v = `85%`
-            )->a( n = `resizable`     v = `true`
-            )->a( n = `draggable`     v = `true` ).
+        )->a( n = `contentWidth`  v = `90%`
+        )->a( n = `contentHeight` v = `85%`
+        )->a( n = `resizable`     v = `true`
+        )->a( n = `draggable`     v = `true` ).
 
         DATA(content) = dialog->ele( `content`
             )->ele( `VBox`
@@ -3257,9 +3257,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
         IF s_wire-error IS NOT INITIAL.
           content->tag( `MessageStrip`
-                    )->a( n = `text`     v = client->_bind( s_wire-error )
-                    )->a( n = `type`     v = `Error`
-                    )->a( n = `showIcon` v = `true` ).
+              )->a( n = `text`     v = client->_bind( s_wire-error )
+              )->a( n = `type`     v = `Error`
+              )->a( n = `showIcon` v = `true` ).
               ELSE.
                 content->tag( `MessageStrip`
                     )->a( n = `text`     t = |{ s_wire-time } UTC - { s_wire-app } - event { s_wire-event } - | &&
@@ -3270,56 +3270,56 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ENDIF.
 
               content->tag( `Label`
-                    )->a( n = `text` v = `What the user saw`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-shown )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `2`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `What the user typed and sent`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-input )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `4`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `View XML of the response`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-view_xml )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `6`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `Request`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-request )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `6`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `Response`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-response )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `10` ).
+                  )->a( n = `text` v = `What the user saw`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-shown )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `2`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `What the user typed and sent`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-input )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `4`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `View XML of the response`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-view_xml )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `6`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `Request`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-request )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `6`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `Response`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-response )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `10` ).
 
                     dialog->ele( `buttons`
-                    )->tag( `Button`
-                        )->a( n = `text`    v = `Failed click after this step`
-                        )->a( n = `icon`    v = `sap-icon://error`
-                        )->a( n = `visible` b = xsdbool( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id )
-                        )->a( n = `press`   v = client->_event( `WIRE_FAILED` )
-                    )->tag( `Button`
-                        )->a( n = `text`    v = `Screen`
-                        )->a( n = `icon`    v = `sap-icon://display`
-                        )->a( n = `enabled` b = xsdbool( ls_step-wire_id IS NOT INITIAL )
-                        )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
-                    )->tag( `Button`
-                        )->a( n = `text`  v = `Back to the steps`
-                        )->a( n = `type`  v = `Emphasized`
-                        )->a( n = `press` v = client->_event( `SCREEN_BACK` ) ).
+                        )->tag( `Button`
+                            )->a( n = `text`    v = `Failed click after this step`
+                            )->a( n = `icon`    v = `sap-icon://error`
+                            )->a( n = `visible` b = xsdbool( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id )
+                            )->a( n = `press`   v = client->_event( `WIRE_FAILED` )
+                        )->tag( `Button`
+                            )->a( n = `text`    v = `Screen`
+                            )->a( n = `icon`    v = `sap-icon://display`
+                            )->a( n = `enabled` b = xsdbool( ls_step-wire_id IS NOT INITIAL )
+                            )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
+                        )->tag( `Button`
+                            )->a( n = `text`  v = `Back to the steps`
+                            )->a( n = `type`  v = `Emphasized`
+                            )->a( n = `press` v = client->_event( `SCREEN_BACK` ) ).
 
                 client->popup_display( popup->stringify( ) ).
 
