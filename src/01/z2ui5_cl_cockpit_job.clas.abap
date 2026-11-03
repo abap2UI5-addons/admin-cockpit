@@ -87,25 +87,25 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     " the live table only answers "who is active now" - a day is plenty
     DATA(lv_act_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( 86400 ).
 
-    DELETE FROM z2ui5_t_ck_log WHERE timestampl < @lv_log_ts.
+    DELETE FROM z2ui5_t_25 WHERE timestampl < @lv_log_ts.
     result-log_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_ck_usr WHERE utc_day < @lv_usr_day.
+    DELETE FROM z2ui5_t_27 WHERE utc_day < @lv_usr_day.
     result-usr_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_ck_agg WHERE utc_day < @lv_agg_day.
+    DELETE FROM z2ui5_t_22 WHERE utc_day < @lv_agg_day.
     result-agg_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_ck_act WHERE last_seen < @lv_act_ts.
+    DELETE FROM z2ui5_t_20 WHERE last_seen < @lv_act_ts.
     result-act_deleted = sy-dbcnt.
     " the change log follows the long retention of the aggregates
     DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-agg_retention_days * 86400 ).
-    DELETE FROM z2ui5_t_ck_aud WHERE timestampl < @lv_aud_ts.
+    DELETE FROM z2ui5_t_24 WHERE timestampl < @lv_aud_ts.
     result-aud_deleted = sy-dbcnt.
     " and so does the alert history
-    DELETE FROM z2ui5_t_ck_alr WHERE raised < @lv_aud_ts.
+    DELETE FROM z2ui5_t_23 WHERE raised < @lv_aud_ts.
     result-alr_deleted = sy-dbcnt.
     " the recorder's raw requests and responses are the biggest and the most
     " sensitive rows - their own, short retention; 0 days deletes them all
     DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-wire_days * 86400 ).
-    DELETE FROM z2ui5_t_ck_wir WHERE timestampl < @lv_wir_ts.
+    DELETE FROM z2ui5_t_28 WHERE timestampl < @lv_wir_ts.
     result-wir_deleted = sy-dbcnt.
 
   ENDMETHOD.

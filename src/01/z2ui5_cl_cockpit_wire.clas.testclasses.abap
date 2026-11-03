@@ -575,7 +575,7 @@ CLASS ltcl_wire_db IMPLEMENTATION.
     ls_set-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-name.
     z2ui5_cl_cockpit_setup=>set_buffer( ls_set ).
 
-    DATA(ls_row) = VALUE z2ui5_t_ck_wir(
+    DATA(ls_row) = VALUE z2ui5_t_28(
         id            = `ZZCKUTWIRE1`
         timestampl    = z2ui5_cl_cockpit_setup=>now( )
         utc_day       = z2ui5_cl_cockpit_setup=>day_minus( 0 )
@@ -588,15 +588,15 @@ CLASS ltcl_wire_db IMPLEMENTATION.
         req_body      = `{"S_FRONT":{"ID":"ZZCKUTW1","EVENT":"SAVE"},"MODEL":{"QTY":"0"}}`
         res_body      = `{"S_FRONT":{"ID":"ZZCKUTW2","APP":"ZZ_COCKPIT_UNIT_TEST","PROTOCOL":2,"S_ACTION":` &&
                         `{"T_CUSTOM":[["MESSAGE_BOX","error","Quantity must be greater than 0"]]}}}` ).
-    INSERT z2ui5_t_ck_wir FROM @ls_row.
+    INSERT z2ui5_t_28 FROM @ls_row.
     mv_id = ls_row-id.
 
   ENDMETHOD.
 
   METHOD teardown.
 
-    DATA(lv_app) = CONV z2ui5_t_ck_wir-app( c_app ).
-    DELETE FROM z2ui5_t_ck_wir WHERE app = @lv_app.
+    DATA(lv_app) = CONV z2ui5_t_28-app( c_app ).
+    DELETE FROM z2ui5_t_28 WHERE app = @lv_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     CLEAR z2ui5_cl_cockpit_wire=>gt_buffer.
     z2ui5_cl_cockpit_setup=>reset_buffer( ).

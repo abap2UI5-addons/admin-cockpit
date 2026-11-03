@@ -11,7 +11,7 @@ CLASS ltcl_rec DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
     CONSTANTS c_app TYPE string VALUE `ZZ_COCKPIT_UNIT_TEST`.
     CONSTANTS c_day TYPE string VALUE `20990101`.
 
-    TYPES ty_t_log TYPE STANDARD TABLE OF z2ui5_t_ck_log WITH EMPTY KEY.
+    TYPES ty_t_log TYPE STANDARD TABLE OF z2ui5_t_25 WITH EMPTY KEY.
 
     METHODS setup.
     METHODS teardown.
@@ -43,7 +43,7 @@ CLASS ltcl_rec DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
       IMPORTING
         event         TYPE string DEFAULT `SAVE`
       RETURNING
-        VALUE(result) TYPE z2ui5_t_ck_agg.
+        VALUE(result) TYPE z2ui5_t_22.
 
     METHODS log_rows
       RETURNING
@@ -63,12 +63,12 @@ CLASS ltcl_rec IMPLEMENTATION.
 
   METHOD teardown.
 
-    DATA lv_app TYPE z2ui5_t_ck_agg-app.
+    DATA lv_app TYPE z2ui5_t_22-app.
     lv_app = c_app.
-    DELETE FROM z2ui5_t_ck_agg WHERE app = @lv_app.
-    DELETE FROM z2ui5_t_ck_usr WHERE app = @lv_app.
-    DELETE FROM z2ui5_t_ck_act WHERE app = @lv_app.
-    DELETE FROM z2ui5_t_ck_log WHERE app = @lv_app.
+    DELETE FROM z2ui5_t_22 WHERE app = @lv_app.
+    DELETE FROM z2ui5_t_27 WHERE app = @lv_app.
+    DELETE FROM z2ui5_t_20 WHERE app = @lv_app.
+    DELETE FROM z2ui5_t_25 WHERE app = @lv_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     CLEAR z2ui5_cl_cockpit_rec=>gt_buffer.
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
@@ -106,13 +106,13 @@ CLASS ltcl_rec IMPLEMENTATION.
 
   METHOD agg.
 
-    DATA lv_app TYPE z2ui5_t_ck_agg-app.
-    DATA lv_day TYPE z2ui5_t_ck_agg-utc_day.
-    DATA lv_event TYPE z2ui5_t_ck_agg-event.
+    DATA lv_app TYPE z2ui5_t_22-app.
+    DATA lv_day TYPE z2ui5_t_22-utc_day.
+    DATA lv_event TYPE z2ui5_t_22-event.
     lv_app = c_app.
     lv_day = c_day.
     lv_event = event.
-    SELECT SINGLE * FROM z2ui5_t_ck_agg
+    SELECT SINGLE * FROM z2ui5_t_22
       WHERE utc_day = @lv_day
         AND app     = @lv_app
         AND event   = @lv_event
@@ -125,9 +125,9 @@ CLASS ltcl_rec IMPLEMENTATION.
 
   METHOD log_rows.
 
-    DATA lv_app TYPE z2ui5_t_ck_log-app.
+    DATA lv_app TYPE z2ui5_t_25-app.
     lv_app = c_app.
-    SELECT * FROM z2ui5_t_ck_log
+    SELECT * FROM z2ui5_t_25
       WHERE app = @lv_app
       ORDER BY timestampl
       INTO TABLE @result.
@@ -228,8 +228,8 @@ CLASS ltcl_rec IMPLEMENTATION.
   METHOD name_mode_keeps_user.
 
     DATA lv_count TYPE i.
-    DATA lv_app TYPE z2ui5_t_ck_usr-app.
-    DATA lv_day TYPE z2ui5_t_ck_usr-utc_day.
+    DATA lv_app TYPE z2ui5_t_27-app.
+    DATA lv_day TYPE z2ui5_t_27-utc_day.
 
     use( tracking = z2ui5_cl_cockpit_setup=>cs_users-name ).
     DATA(ls_rt) = roundtrip( 10 ).
@@ -242,7 +242,7 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     lv_app = c_app.
     lv_day = c_day.
-    SELECT COUNT( * ) FROM z2ui5_t_ck_usr
+    SELECT COUNT( * ) FROM z2ui5_t_27
       WHERE app = @lv_app
         AND utc_day = @lv_day
       INTO @lv_count.

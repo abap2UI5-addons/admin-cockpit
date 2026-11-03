@@ -41,8 +41,9 @@ Good for:
 
 **Requirements**
 
-- ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; the 7.02
-  downport is linted in CI (`ABAP_702`). The UI runs on UI5 1.71 and later
+- ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; on
+  NetWeaver 7.02 - 7.40 the branch `702`, downported automatically from `main`
+  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as well. The UI runs on UI5 1.71 and later
   (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
   SAPUI5-only micro charts.
 - [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
@@ -53,6 +54,18 @@ Good for:
   for [Reproduce](#reproduce-an-error), [abap2UI5-addons/lock-manager](https://github.com/abap2UI5-addons/lock-manager)
   for its monitor on the Live tab. All are found at run time - the cockpit
   activates without them.
+
+**Renumbered tables (2026-11).** The tables follow the numbering all addons share now: `Z2UI5_T_CK_ACT` is `Z2UI5_T_20`, `Z2UI5_T_CK_ADM` is `Z2UI5_T_21`, `Z2UI5_T_CK_AGG` is `Z2UI5_T_22`, `Z2UI5_T_CK_ALR` is `Z2UI5_T_23`, `Z2UI5_T_CK_AUD` is `Z2UI5_T_24`, `Z2UI5_T_CK_LOG` is `Z2UI5_T_25`, `Z2UI5_T_CK_SET` is `Z2UI5_T_26`, `Z2UI5_T_CK_USR` is `Z2UI5_T_27`, `Z2UI5_T_CK_WIR` is `Z2UI5_T_28`. The pull creates the new tables empty, and the data stays in the old ones. Copy it once per client before you delete an old table - for each pair, in a scratch report:
+
+```abap
+DATA lr_rows TYPE REF TO data.
+FIELD-SYMBOLS <rows> TYPE STANDARD TABLE.
+CREATE DATA lr_rows TYPE STANDARD TABLE OF ('Z2UI5_T_20').
+ASSIGN lr_rows->* TO <rows>.
+SELECT * FROM ('Z2UI5_T_CK_ACT') INTO TABLE <rows>.
+MODIFY ('Z2UI5_T_20') FROM TABLE <rows>.
+COMMIT WORK.
+```
 
 **Steps** - with [abapGit](https://abapgit.org):
 
@@ -136,6 +149,16 @@ leaves the class inactive and shows it as a diff on every pull. The
 linting `src/01` against the released abap2UI5 (the tag `1.146.0`, pinned:
 `main` of abap2UI5 already carries the hook).
 
+### Parallel installation (namespace rename)
+
+To run a second copy next to the original in the same system, rename it the
+way abap2UI5 itself is renamed: run the workflow **build-rename** (Actions →
+build-rename → Run workflow) with the name your abap2UI5 installation was
+renamed to - e.g. `ZMYUI5` or `/CA2UI5/`. It pushes the branch `rename_<name>`, in
+which every object and every reference to abap2UI5 and to the addons this one
+needs carries that name; pull it with abapGit. Rename abap2UI5 and every addon
+of the installation with the same name.
+
 ## Usage
 
 ```
@@ -181,14 +204,14 @@ which decides by the settings what is persisted:
 
 | Table | Written | Content |
 |---|---|---|
-| `Z2UI5_T_CK_AGG` | every recorded roundtrip, updated in place, lock-free | per UTC day, hour, app and event: count, app starts, errors, slow ones, sum and max of the total and of each phase, request/response KB, largest response and model, browser time, and a latency histogram of nine buckets (the p95 is interpolated from it) |
-| `Z2UI5_T_CK_USR` | once per user, day and app | the user key (see privacy) - distinct users per day |
-| `Z2UI5_T_CK_ACT` | every recorded roundtrip | user key and app with the last-seen time - the Live tab |
-| `Z2UI5_T_CK_LOG` | errors and slow roundtrips only | one raw row: timings per phase, sizes, draft ids, exception class, first line and full chain |
-| `Z2UI5_T_CK_SET` | settings | name/value |
-| `Z2UI5_T_CK_ADM` | administrators | user names |
-| `Z2UI5_T_CK_AUD` | every change made in the cockpit | change log: time, user, action, details - kept as long as the aggregates |
-| `Z2UI5_T_CK_ALR` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - kept as long as the aggregates |
+| `Z2UI5_T_22` | every recorded roundtrip, updated in place, lock-free | per UTC day, hour, app and event: count, app starts, errors, slow ones, sum and max of the total and of each phase, request/response KB, largest response and model, browser time, and a latency histogram of nine buckets (the p95 is interpolated from it) |
+| `Z2UI5_T_27` | once per user, day and app | the user key (see privacy) - distinct users per day |
+| `Z2UI5_T_20` | every recorded roundtrip | user key and app with the last-seen time - the Live tab |
+| `Z2UI5_T_25` | errors and slow roundtrips only | one raw row: timings per phase, sizes, draft ids, exception class, first line and full chain |
+| `Z2UI5_T_26` | settings | name/value |
+| `Z2UI5_T_21` | administrators | user names |
+| `Z2UI5_T_24` | every change made in the cockpit | change log: time, user, action, details - kept as long as the aggregates |
+| `Z2UI5_T_23` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - kept as long as the aggregates |
 
 **Lock-free and overflow-safe.** A roundtrip is added to the row of its hour
 with one `UPDATE ... SET cnt = cnt + 1, ms_sum = ms_sum + n, ...` - atomic on
@@ -309,7 +332,7 @@ top of `main( )`:
    `action` is `DISPLAY` (open the cockpit) or `CHANGE` (delete drafts, purge
    logs, change settings and administrators, reproduce errors). A class that
    cannot be created denies.
-2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_CK_ADM`).
+2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_21`).
    Only the users on it get in; everybody else sees "No authorization".
 3. **As long as that list is empty, the cockpit shows only the claim
    screen** - one button, *Claim the administrator role for <you>*, and nothing
@@ -343,7 +366,7 @@ its activation.
 
 The detail of an error group offers **Reproduce...** for the selected
 occurrence when the [headless frontend](https://github.com/abap2UI5/headless-frontend)
-(`z2ui5_cl_frontend_simulator`) is installed. It resumes the draft the failed
+(`z2ui5_cl_frontend_sim`) is installed. It resumes the draft the failed
 request came with (`draft_id_prev` of the log entry) and fires the same event
 again, through the simulator - the app runs exactly as it ran for the user,
 and the cockpit shows the exception chain, the messages the app showed and the
@@ -644,7 +667,7 @@ short and agree it with your works council like the rest of the monitoring.
 
 When the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime) is installed
 (detected by its class `z2ui5_cl_agent_settings` or its audit table
-`Z2UI5_T_AG_LOG`), the Agents tab reads its audit log and settings - with
+`Z2UI5_T_14`), the Agents tab reads its audit log and settings - with
 dynamic SQL inside `TRY`, so there is no dependency either way:
 
 - endpoint enabled yes/no, with the opted-in apps (implementers of
@@ -676,7 +699,7 @@ before it (default: 1, so 60 to 120 minutes), per app and over all apps:
 
 The Overview tab evaluates the rules live: what is exceeded right now, and the
 history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
-history in `Z2UI5_T_CK_ALR`: an alert is *raised* by the first run that finds
+history in `Z2UI5_T_23`: an alert is *raised* by the first run that finds
 the threshold exceeded and *cleared* by the first run that no longer finds it -
 so a broken app costs one notification when it breaks and one when it is fine
 again, not one per run. Schedule the job every 15 minutes (see

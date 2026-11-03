@@ -36,6 +36,9 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       BEGIN OF ty_s_addon,
         name      TYPE string,
         marker    TYPE string,
+        " the marker's name before the addon renamed it - an install that
+        " has not pulled the rename is still found by it
+        marker_old TYPE string,
         kind      TYPE string,
         installed TYPE abap_bool,
         status    TYPE string,
@@ -86,6 +89,17 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
         is_agent      TYPE z2ui5_cl_cockpit_agent=>ty_s_setup
       RETURNING
         VALUE(result) TYPE ty_t_check.
+
+    "! The name of an abap2UI5 object in this installation: val behind the
+    "! prefix the cockpit itself carries - Z2UI5_, or the name a namespace
+    "! rename gave the installation (ZMYUI5_, /CA2UI5/). Every object the
+    "! cockpit names in a literal goes through it: a rename rewrites
+    "! references, never a literal.
+    CLASS-METHODS obj_name
+      IMPORTING
+        val           TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! The known addons of abap2UI5-addons and whether they are installed,
     "! detected by the existence of a marker class.
@@ -150,6 +164,8 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PROTECTED SECTION.
 
   PRIVATE SECTION.
+
+    CLASS-DATA gv_prefix TYPE string.
 
     "! RTTI lookup of a class or type: found, or why it could not be loaded
     "! (error stays empty when it does not exist).
@@ -556,34 +572,47 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     DATA lv_error TYPE string.
 
     result = VALUE #(
-      ( name = `popups`                   marker = `Z2UI5_CL_POPUP_CONTEXT`         kind = `library` )
-      ( name = `layout-management`        marker = `Z2UI5_CL_LAYO_MANAGER`          kind = `library` )
-      ( name = `selection-screen`         marker = `Z2UI5_CL_SEL_SCREEN`            kind = `library` )
-      ( name = `abap-cloud-gui`           marker = `Z2UI5_CL_CGUI_CONTEXT`          kind = `library` )
-      ( name = `custom-controls`          marker = `Z2UI5_CL_CCI`                   kind = `library` )
-      ( name = `custom-controls-customer` marker = `Z2UI5_CL_CCC`                   kind = `library` )
-      ( name = `lock-manager`             marker = `Z2UI5_CL_LOCK_MANAGER`          kind = `library` )
-      ( name = `config-management`        marker = `Z2UI5_CL_CONFIG_SERVICE`        kind = `library` )
-      ( name = `rap-ext`                  marker = `Z2UI5_CL_RAP_UTIL`              kind = `library` )
-      ( name = `open-source-libs`         marker = `Z2UI5_CL_OSL_VALIDATOR`         kind = `library` )
-      ( name = `launchpad-kpi`            marker = `Z2UI5_CL_LP_KPI_HELLO_WORLD`    kind = `library` )
-      ( name = `headless-frontend`        marker = `Z2UI5_CL_FRONTEND_SIMULATOR`    kind = `test tool` )
-      ( name = `agent`                    marker = `Z2UI5_CL_AGENT_SETTINGS`        kind = `agent endpoint` )
-      ( name = `http-connector`           marker = `Z2UI5_CL_HTTP_CON_HANDLER`      kind = `connector` )
-      ( name = `rfc-connector`            marker = `Z2UI5_CL_RFC_CONNECTOR_HANDLER` kind = `connector` )
-      ( name = `sql-console`              marker = `Z2UI5_SQL_CL_APP_01`            kind = `developer tool` )
-      ( name = `se16n`                    marker = `Z2UI5_CL_SE16_CONTEXT`          kind = `developer tool` )
-      ( name = `table-maintenance`        marker = `Z2UI5_CL_TM_001`                kind = `developer tool` )
-      ( name = `table-content-loader`     marker = `Z2UI5_CL_TCL_CONTEXT`           kind = `developer tool` )
+      " the markers without the prefix - obj_name( ) puts it in front below
+      ( name = `popups`                   marker = `CL_POPUP_CONTEXT`         kind = `library` )
+      ( name = `layout-management`        marker = `CL_LAYO_MANAGER`          kind = `library` )
+      ( name = `range-filter`             marker = `CL_SEL_MULTISEL`          kind = `library` )
+      ( name = `abap-cloud-gui`           marker = `CL_CGUI_CONTEXT`          kind = `library` )
+      ( name = `custom-controls`          marker = `CL_CCI`                   kind = `library` )
+      ( name = `custom-controls-customer` marker = `CL_CCC`                   kind = `library` )
+      ( name = `lock-manager`             marker = `CL_LOCK_MANAGER`          kind = `library` )
+      ( name = `config-management`        marker = `CL_CONFIG_SERVICE`        kind = `library` )
+      ( name = `rap-ext`                  marker = `CL_RAP_UTIL`              kind = `library` )
+      ( name = `open-source-libs`         marker = `CL_OSL_VALIDATOR`         kind = `library` )
+      ( name = `launchpad-kpi`            marker = `CL_LP_KPI_HELLO_WORLD`    kind = `library` )
+      ( name = `headless-frontend`        marker = `CL_FRONTEND_SIM`          kind = `test tool` )
+      ( name = `abap-agent-runtime`       marker = `CL_AGENT_SETTINGS`        kind = `agent endpoint` )
+      ( name = `http-connector`           marker = `CL_HTTP_CON_HANDLER`      kind = `connector` )
+      ( name = `rfc-connector`            marker = `CL_RFC_CONNECTOR_HANDLER` kind = `connector` )
+      ( name = `sql-console`              marker = `CL_SQL_APP_01`            kind = `developer tool`
+        marker_old = `SQL_CL_APP_01` )
+      ( name = `se16n`                    marker = `CL_SE16_CONTEXT`          kind = `developer tool` )
+      ( name = `table-maintenance`        marker = `CL_TM_001`                kind = `developer tool` )
+      ( name = `table-content-loader`     marker = `CL_TCL_CONTEXT`           kind = `developer tool` )
       ( name = `sapgui (SE80, SE38, SE16N, ...)` marker = `ZCL_SAPGUI_A2UI5`        kind = `developer tool` ) ).
 
     LOOP AT result ASSIGNING FIELD-SYMBOL(<addon>).
+      IF <addon>-marker CP `CL_*`.
+        <addon>-marker = obj_name( <addon>-marker ).
+      ENDIF.
+      IF <addon>-marker_old IS NOT INITIAL.
+        <addon>-marker_old = obj_name( <addon>-marker_old ).
+      ENDIF.
       <addon>-url = |https://github.com/abap2UI5-addons/{ segment( val   = <addon>-name
                                                                     index = 1
                                                                     sep   = ` ` ) }|.
       describe( EXPORTING name  = <addon>-marker
                 IMPORTING found = <addon>-installed
                           error = lv_error ).
+      IF <addon>-installed = abap_false AND lv_error IS INITIAL AND <addon>-marker_old IS NOT INITIAL.
+        describe( EXPORTING name  = <addon>-marker_old
+                  IMPORTING found = <addon>-installed
+                            error = lv_error ).
+      ENDIF.
       IF <addon>-installed = abap_true.
         <addon>-status = `installed`.
         <addon>-state = COND #( WHEN <addon>-kind = `developer tool`
@@ -612,7 +641,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
     " exactly what the framework does per request: one instance per roll
     " area, holding the defaults and the user exit it found
-    CALL METHOD (`Z2UI5_CL_UI5_USER_EXIT`)=>(`GET_INSTANCE`)
+    DATA(lv_class) = obj_name( `CL_UI5_USER_EXIT` ).
+    CALL METHOD (lv_class)=>(`GET_INSTANCE`)
       RECEIVING
         result = result.
     IF result IS NOT BOUND.
@@ -639,8 +669,9 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_user_exit_class.
 
+    DATA(lv_class) = obj_name( `CL_UI5_USER_EXIT` ).
     TRY.
-        CALL METHOD (`Z2UI5_CL_UI5_USER_EXIT`)=>(`GET_USER_EXIT_CLASS`)
+        CALL METHOD (lv_class)=>(`GET_USER_EXIT_CLASS`)
           RECEIVING
             result = result.
       CATCH cx_root.
@@ -702,8 +733,9 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       END OF ty_s_class.
     DATA lt_classes TYPE STANDARD TABLE OF ty_s_class WITH EMPTY KEY.
 
+    DATA(lv_class) = obj_name( `CL_UI5_UTIL_CONTEXT` ).
     TRY.
-        CALL METHOD (`Z2UI5_CL_UI5_UTIL_CONTEXT`)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
+        CALL METHOD (lv_class)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
           EXPORTING
             val    = intf
           RECEIVING
@@ -760,6 +792,23 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD obj_name.
+
+    DATA lr_self TYPE REF TO z2ui5_cl_cockpit_inst.
+    DATA lo_ref TYPE REF TO cl_abap_refdescr.
+
+    IF gv_prefix IS INITIAL.
+      " this class's own name, which a rename carries along, minus the part
+      " after the prefix
+      lo_ref ?= cl_abap_typedescr=>describe_by_data( lr_self ).
+      gv_prefix = lo_ref->get_referenced_type( )->get_relative_name( ).
+      gv_prefix = substring( val = gv_prefix
+                             len = strlen( gv_prefix ) - strlen( `CL_COCKPIT_INST` ) ).
+    ENDIF.
+    result = gv_prefix && to_upper( val ).
 
   ENDMETHOD.
 

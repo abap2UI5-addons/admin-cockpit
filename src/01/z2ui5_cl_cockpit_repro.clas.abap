@@ -2,7 +2,7 @@
 "!
 "! "Reproduce" on the Errors tab: resume the draft a failed roundtrip came
 "! with and fire the same event again, through the headless frontend
-"! (abap2UI5-addons/headless-frontend, z2ui5_cl_frontend_simulator) - the
+"! (abap2UI5-addons/headless-frontend, z2ui5_cl_frontend_sim) - the
 "! app logic RUNS AGAIN, for real, as the current user.
 "!
 "! The simulator is optional and never a dependency: it is named in literals
@@ -19,7 +19,8 @@ CLASS z2ui5_cl_cockpit_repro DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
 
-    CONSTANTS c_simulator TYPE string VALUE `Z2UI5_CL_FRONTEND_SIMULATOR`.
+    " without the prefix - z2ui5_cl_cockpit_inst=>obj_name( ) puts it in front
+    CONSTANTS c_simulator TYPE string VALUE `CL_FRONTEND_SIM`.
 
     CONSTANTS:
       BEGIN OF cs_owner,
@@ -111,7 +112,7 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
 
   METHOD check_available.
 
-    result = z2ui5_cl_cockpit_inst=>check_class_exists( c_simulator ).
+    result = z2ui5_cl_cockpit_inst=>check_class_exists( z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) ).
 
   ENDMETHOD.
 
@@ -138,9 +139,10 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
 
     lv_id = draft_id_prev.
     lv_event = event.
+    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( c_simulator ).
 
     TRY.
-        CALL METHOD (c_simulator)=>(`RESUME`)
+        CALL METHOD (lv_class)=>(`RESUME`)
           EXPORTING
             id     = lv_id
           RECEIVING
@@ -246,11 +248,11 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
   METHOD create_type.
 
     " the relative name first, the absolute one where a runtime knows only that
-    DATA(lv_relative) = |{ c_simulator }=>{ name }|.
+    DATA(lv_relative) = |{ z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) }=>{ name }|.
     TRY.
         CREATE DATA result TYPE (lv_relative).
       CATCH cx_sy_create_data_error.
-        DATA(lv_absolute) = |\\CLASS={ c_simulator }\\TYPE={ name }|.
+        DATA(lv_absolute) = |\\CLASS={ z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) }\\TYPE={ name }|.
         CREATE DATA result TYPE (lv_absolute).
     ENDTRY.
 

@@ -11,7 +11,9 @@ CLASS z2ui5_cl_cockpit_draft DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
 
-    CONSTANTS c_table TYPE string VALUE `Z2UI5_T_01`.
+    " the framework's draft table without the prefix -
+    " z2ui5_cl_cockpit_inst=>obj_name( ) puts it in front
+    CONSTANTS c_table TYPE string VALUE `T_01`.
 
     TYPES:
       BEGIN OF ty_s_user,
@@ -138,7 +140,7 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     DATA lv_max TYPE timestampl.
     DATA lv_tab TYPE string.
 
-    lv_tab = c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
     result-expiry_hours = get_expiry_hours( ).
     DATA(lv_cutoff) = cutoff( ).
     result-cutoff = z2ui5_cl_cockpit_setup=>ts_text( lv_cutoff ).
@@ -206,7 +208,7 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     DATA lt_app TYPE SORTED TABLE OF ty_s_app WITH UNIQUE KEY app.
     DATA lv_bytes_total TYPE p LENGTH 16 DECIMALS 0.
 
-    lv_tab = c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
 
     DO.
       CLEAR lt_rows.
@@ -314,15 +316,17 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     DATA(lv_before) = count_rows( lv_cutoff ).
 
     DATA lo_store TYPE REF TO object.
+    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_SRV_DRAFT` ).
+    DATA(lv_cleanup) = z2ui5_cl_cockpit_inst=>obj_name( `IF_UI5_DRAFT_STORE~CLEANUP` ).
     TRY.
-        CALL METHOD (`Z2UI5_CL_UI5_SRV_DRAFT`)=>(`GET_INSTANCE`)
+        CALL METHOD (lv_class)=>(`GET_INSTANCE`)
           RECEIVING
             result = lo_store.
-        CALL METHOD lo_store->(`Z2UI5_IF_UI5_DRAFT_STORE~CLEANUP`).
+        CALL METHOD lo_store->(lv_cleanup).
       CATCH cx_root.
         " the framework's store is not reachable under that name - delete
         " directly, with the same cutoff
-        lv_tab = c_table.
+        lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
         DELETE FROM (lv_tab) WHERE timestampl < @lv_cutoff.
         COMMIT WORK.
     ENDTRY.
@@ -346,7 +350,7 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
   METHOD count_rows.
 
     DATA lv_tab TYPE string.
-    lv_tab = c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
     IF before IS SUPPLIED.
       SELECT COUNT( * ) FROM (lv_tab)
         WHERE timestampl < @before

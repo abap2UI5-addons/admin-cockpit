@@ -156,8 +156,6 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! recorder - with what the user did there and what came next.
     METHODS popup_screen.
 
-    "! The recorded request and response of the current step.
-    "! @parameter check_failed | the failed click after the step instead
     "! The process variants of variants_app, from the recordings.
     METHODS popup_variants.
 
@@ -169,6 +167,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS session_open_draft
       IMPORTING
         draft TYPE clike.
+    "! The recorded request and response of the current step.
+    "! @parameter check_failed | the failed click after the step instead
     METHODS popup_wire
       IMPORTING
         check_failed TYPE abap_bool DEFAULT abap_false.
@@ -3062,12 +3062,25 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_variants.
 
+    DATA lv_capped TYPE string.
+    DATA lv_runs   TYPE string.
+
     DATA(lv_days) = get_days( ).
     s_variants = z2ui5_cl_cockpit_wire=>get_variants( app  = variants_app
                                                       days = lv_days ).
     variants_has_app = xsdbool( variants_app IS NOT INITIAL ).
     variants_title = |Process variants - { COND #( WHEN variants_app IS NOT INITIAL THEN variants_app
                                                      ELSE `all apps` ) }, last { lv_days } day(s)|.
+    " built ahead of the COND: inside it the 7.02 downport writes the whole
+    " concatenation on one line, longer than the 255 characters a line has
+    IF s_variants-check_capped = abap_true.
+      lv_capped = ` (the newest)`.
+    ENDIF.
+    lv_runs = |{ s_variants-runs } runs in { lines( s_variants-t_variant ) } variants, from { s_variants-records } | &&
+              |recorded roundtrips{ lv_capped }. | &&
+              |{ s_variants-failed_runs } runs ended in a failed click (red); orange: a click failed on the way, | &&
+              |the user got through. A run goes from the start of a session to where nothing continued it - | &&
+              |"(repeated)" is the same event several times in a row. Select one for its newest run.|.
     variants_text = COND #(
         WHEN s_variants-error IS NOT INITIAL
         THEN |The recordings could not be read: { s_variants-error }|
@@ -3076,11 +3089,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
              `your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, says where exactly.`
         WHEN s_variants-t_variant IS INITIAL
         THEN |No run passed { variants_app } in { s_variants-records } recorded roundtrips.|
-        ELSE |{ s_variants-runs } runs in { lines( s_variants-t_variant ) } variants, from { s_variants-records } | &&
-             |recorded roundtrips{ COND #( WHEN s_variants-check_capped = abap_true THEN ` (the newest)` ) }. | &&
-             |{ s_variants-failed_runs } runs ended in a failed click (red); orange: a click failed on the way, | &&
-             |the user got through. A run goes from the start of a session to where nothing continued it - | &&
-             |"(repeated)" is the same event several times in a row. Select one for its newest run.| ).
+        ELSE lv_runs ).
 
     DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
@@ -3215,7 +3224,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->tag( `Button`
             )->a( n = `text`  v = `Copy`
             )->a( n = `icon`  v = `sap-icon://copy`
-            )->a( n = `press` v = client->_event_client( val   = z2ui5_if_client=>cs_event-clipboard_copy
+            )->a( n = `press` v = client->follow_up_action( val   = z2ui5_if_client=>cs_event-clipboard_copy
                                                          t_arg = VALUE #( ( |${ client->_bind( story_text ) }| ) ) )
         )->tag( `Button`
             )->a( n = `text`  v = `Back to the steps`
@@ -3243,12 +3252,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
     DATA(dialog) = popup->ele( `Dialog`
-            )->a( n = `title`         t = |{ COND #( WHEN lv_id = ls_step-wire_fail_id THEN `Failed click after step`
+        )->a( n = `title`         t = |{ COND #( WHEN lv_id = ls_step-wire_fail_id THEN `Failed click after step`
                                                 ELSE `Request and response of step` ) } { step_index }|
-            )->a( n = `contentWidth`  v = `90%`
-            )->a( n = `contentHeight` v = `85%`
-            )->a( n = `resizable`     v = `true`
-            )->a( n = `draggable`     v = `true` ).
+        )->a( n = `contentWidth`  v = `90%`
+        )->a( n = `contentHeight` v = `85%`
+        )->a( n = `resizable`     v = `true`
+        )->a( n = `draggable`     v = `true` ).
 
         DATA(content) = dialog->ele( `content`
             )->ele( `VBox`
@@ -3257,9 +3266,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
         IF s_wire-error IS NOT INITIAL.
           content->tag( `MessageStrip`
-                    )->a( n = `text`     v = client->_bind( s_wire-error )
-                    )->a( n = `type`     v = `Error`
-                    )->a( n = `showIcon` v = `true` ).
+              )->a( n = `text`     v = client->_bind( s_wire-error )
+              )->a( n = `type`     v = `Error`
+              )->a( n = `showIcon` v = `true` ).
               ELSE.
                 content->tag( `MessageStrip`
                     )->a( n = `text`     t = |{ s_wire-time } UTC - { s_wire-app } - event { s_wire-event } - | &&
@@ -3270,56 +3279,56 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ENDIF.
 
               content->tag( `Label`
-                    )->a( n = `text` v = `What the user saw`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-shown )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `2`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `What the user typed and sent`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-input )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `4`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `View XML of the response`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-view_xml )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `6`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `Request`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-request )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `6`
-                    )->tag( `Label`
-                        )->a( n = `text` v = `Response`
-                    )->tag( `TextArea`
-                        )->a( n = `value`    v = client->_bind( s_wire-response )
-                        )->a( n = `editable` v = `false`
-                        )->a( n = `width`    v = `100%`
-                        )->a( n = `rows`     v = `10` ).
+                  )->a( n = `text` v = `What the user saw`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-shown )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `2`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `What the user typed and sent`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-input )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `4`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `View XML of the response`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-view_xml )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `6`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `Request`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-request )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `6`
+                  )->tag( `Label`
+                      )->a( n = `text` v = `Response`
+                  )->tag( `TextArea`
+                      )->a( n = `value`    v = client->_bind( s_wire-response )
+                      )->a( n = `editable` v = `false`
+                      )->a( n = `width`    v = `100%`
+                      )->a( n = `rows`     v = `10` ).
 
                     dialog->ele( `buttons`
-                    )->tag( `Button`
-                        )->a( n = `text`    v = `Failed click after this step`
-                        )->a( n = `icon`    v = `sap-icon://error`
-                        )->a( n = `visible` b = xsdbool( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id )
-                        )->a( n = `press`   v = client->_event( `WIRE_FAILED` )
-                    )->tag( `Button`
-                        )->a( n = `text`    v = `Screen`
-                        )->a( n = `icon`    v = `sap-icon://display`
-                        )->a( n = `enabled` b = xsdbool( ls_step-wire_id IS NOT INITIAL )
-                        )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
-                    )->tag( `Button`
-                        )->a( n = `text`  v = `Back to the steps`
-                        )->a( n = `type`  v = `Emphasized`
-                        )->a( n = `press` v = client->_event( `SCREEN_BACK` ) ).
+                        )->tag( `Button`
+                            )->a( n = `text`    v = `Failed click after this step`
+                            )->a( n = `icon`    v = `sap-icon://error`
+                            )->a( n = `visible` b = xsdbool( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id )
+                            )->a( n = `press`   v = client->_event( `WIRE_FAILED` )
+                        )->tag( `Button`
+                            )->a( n = `text`    v = `Screen`
+                            )->a( n = `icon`    v = `sap-icon://display`
+                            )->a( n = `enabled` b = xsdbool( ls_step-wire_id IS NOT INITIAL )
+                            )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
+                        )->tag( `Button`
+                            )->a( n = `text`  v = `Back to the steps`
+                            )->a( n = `type`  v = `Emphasized`
+                            )->a( n = `press` v = client->_event( `SCREEN_BACK` ) ).
 
                 client->popup_display( popup->stringify( ) ).
 
@@ -3665,6 +3674,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD on_event.
 
+    DATA lv_flows TYPE string.
+
     TRY.
         CASE client->get_event( ).
 
@@ -3899,11 +3910,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `DRAFTS_FLOWS`.
             s_flows = z2ui5_cl_cockpit_session=>get_flows( ).
             flows_shown = abap_true.
+            " built ahead of the COND: inside it the 7.02 downport writes the
+            " whole concatenation on one line, longer than 255 characters
+            lv_flows = |How users move between apps, from { s_flows-drafts } drafts - "(start)" is | &&
+                       |where a session began, "(end)" where a session without a step for 30 minutes | &&
+                       |stopped, "(end after an error)" where it stopped right after a failed roundtrip|.
             flows_text = COND #( WHEN s_flows-error IS NOT INITIAL
                                  THEN |The draft table could not be read: { s_flows-error }|
-                                 ELSE |How users move between apps, from { s_flows-drafts } drafts - "(start)" is | &&
-                                      |where a session began, "(end)" where a session without a step for 30 minutes | &&
-                                      |stopped, "(end after an error)" where it stopped right after a failed roundtrip| ).
+                                 ELSE lv_flows ).
 
           WHEN `OVERVIEW_FAILED`.
             IF check_change( ) = abap_true.
@@ -4046,6 +4060,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD load_tab.
 
+    DATA lv_capped TYPE string.
+    DATA lv_inputs TYPE string.
+
     DATA(lv_days) = get_days( ).
 
     CASE tab.
@@ -4085,13 +4102,18 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                                          OR app CS wire_message_search ).
           ENDIF.
           s_wire_inputs = z2ui5_cl_cockpit_wire=>get_input_errors( lv_days ).
+          " built ahead of the COND: inside it the 7.02 downport writes the
+          " whole concatenation on one line, longer than 255 characters
+          IF s_wire_inputs-check_capped = abap_true.
+            lv_capped = ` (the newest)`.
+          ENDIF.
+          lv_inputs = |Inputs right before an error - the fields users typed in a roundtrip that answered with an | &&
+                      |error box or failed, and how often that happened when they typed them, of | &&
+                      |{ s_wire_inputs-records } recorded roundtrips{ lv_capped }|.
           wire_inputs_text = COND #(
               WHEN s_wire_inputs-error IS NOT INITIAL
               THEN |Inputs right before an error - the recordings could not be read: { s_wire_inputs-error }|
-              ELSE |Inputs right before an error - the fields users typed in a roundtrip that answered with an | &&
-                   |error box or failed, and how often that happened when they typed them, of | &&
-                   |{ s_wire_inputs-records } recorded roundtrips{ COND #( WHEN s_wire_inputs-check_capped = abap_true
-                                                                          THEN ` (the newest)` ) }| ).
+              ELSE lv_inputs ).
         ENDIF.
       WHEN `PERF`.
         t_hints = z2ui5_cl_cockpit_stats=>get_hints( lv_days ).
@@ -4154,10 +4176,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD nav_lock_monitor.
 
-    " the lock-manager addon is optional: created by name, never referenced
+    " the lock-manager addon is optional: created by name, never referenced -
+    " Z2UI5_CL_APP_SM12 is its name before lock-manager renamed it
     DATA lo_app TYPE REF TO z2ui5_if_app.
+    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( `CL_LOCK_APP_SM12` ).
     TRY.
-        CREATE OBJECT lo_app TYPE (`Z2UI5_CL_APP_SM12`).
+        IF z2ui5_cl_cockpit_inst=>check_class_exists( lv_class ) = abap_false.
+          lv_class = z2ui5_cl_cockpit_inst=>obj_name( `CL_APP_SM12` ).
+        ENDIF.
+        CREATE OBJECT lo_app TYPE (lv_class).
         client->nav_app_call( lo_app ).
       CATCH cx_root.
         client->message_box_display( text = `The lock monitor of the lock-manager addon could not be started.`
