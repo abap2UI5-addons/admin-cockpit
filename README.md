@@ -47,8 +47,8 @@ Good for:
   (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
   SAPUI5-only micro charts.
 - [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
-  branch `main` an abap2UI5 with the monitor hook `z2ui5_if_ui5_monitor`
-  (see the table below).
+  branch `main` 1.147.0 or later, the first release with the monitor hook
+  `z2ui5_if_ui5_monitor` (see the table below).
 - Optional: [abap2UI5-addons/abap-agent-runtime](https://github.com/abap2UI5-addons/abap-agent-runtime)
   for the [Agents](#agents) tab, the [headless frontend](https://github.com/abap2UI5/headless-frontend)
   for [Reproduce](#reproduce-an-error), [abap2UI5-addons/lock-manager](https://github.com/abap2UI5-addons/lock-manager)
@@ -77,8 +77,8 @@ COMMIT WORK.
 
    | Your abap2UI5 | Branch | What you get |
    |---|---|---|
-   | has `z2ui5_if_ui5_monitor` (the release after 1.146.0) | `main` | everything |
-   | 1.146.0 or later without the monitor hook | `standalone` | everything with the handler line of step 4 - only the phases of a roundtrip (load, main, render) need the hook |
+   | 1.147.0 or later - has `z2ui5_if_ui5_monitor` | `main` | everything |
+   | 1.146.0 - without the monitor hook | `standalone` | everything with the handler line of step 4 - only the phases of a roundtrip (load, main, render) need the hook |
 
 3. Start `z2ui5_cl_cockpit_app` right away: a cockpit without an
    administrator shows nothing but a **Claim the administrator role** screen -
