@@ -584,7 +584,7 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       ( name = `rap-ext`                  marker = `CL_RAP_UTIL`              kind = `library` )
       ( name = `open-source-libs`         marker = `CL_OSL_VALIDATOR`         kind = `library` )
       ( name = `launchpad-kpi`            marker = `CL_LP_KPI_HELLO_WORLD`    kind = `library` )
-      ( name = `headless-frontend`        marker = `CL_FRONTEND_SIMULATOR`    kind = `test tool` )
+      ( name = `headless-frontend`        marker = `CL_FRONTEND_SIM`          kind = `test tool` )
       ( name = `abap-agent-runtime`       marker = `CL_AGENT_SETTINGS`        kind = `agent endpoint` )
       ( name = `http-connector`           marker = `CL_HTTP_CON_HANDLER`      kind = `connector` )
       ( name = `rfc-connector`            marker = `CL_RFC_CONNECTOR_HANDLER` kind = `connector` )

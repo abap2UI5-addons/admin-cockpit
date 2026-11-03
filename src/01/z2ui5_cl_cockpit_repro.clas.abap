@@ -2,7 +2,7 @@
 "!
 "! "Reproduce" on the Errors tab: resume the draft a failed roundtrip came
 "! with and fire the same event again, through the headless frontend
-"! (abap2UI5-addons/headless-frontend, z2ui5_cl_frontend_simulator) - the
+"! (abap2UI5-addons/headless-frontend, z2ui5_cl_frontend_sim) - the
 "! app logic RUNS AGAIN, for real, as the current user.
 "!
 "! The simulator is optional and never a dependency: it is named in literals
@@ -20,7 +20,7 @@ CLASS z2ui5_cl_cockpit_repro DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
 
     " without the prefix - z2ui5_cl_cockpit_inst=>obj_name( ) puts it in front
-    CONSTANTS c_simulator TYPE string VALUE `CL_FRONTEND_SIMULATOR`.
+    CONSTANTS c_simulator TYPE string VALUE `CL_FRONTEND_SIM`.
 
     CONSTANTS:
       BEGIN OF cs_owner,

@@ -366,7 +366,7 @@ its activation.
 
 The detail of an error group offers **Reproduce...** for the selected
 occurrence when the [headless frontend](https://github.com/abap2UI5/headless-frontend)
-(`z2ui5_cl_frontend_simulator`) is installed. It resumes the draft the failed
+(`z2ui5_cl_frontend_sim`) is installed. It resumes the draft the failed
 request came with (`draft_id_prev` of the log entry) and fires the same event
 again, through the simulator - the app runs exactly as it ran for the user,
 and the cockpit shows the exception chain, the messages the app showed and the

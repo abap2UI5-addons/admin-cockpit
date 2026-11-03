@@ -147,7 +147,7 @@ the other settings where a non-positive value falls back to the default.
 
 The agent addon (`Z2UI5_T_14`, `Z2UI5_T_17`,
 `z2ui5_cl_agent_settings`, `z2ui5_if_agent_app`) and the headless frontend
-(`z2ui5_cl_frontend_simulator`) are optional - named in literals only, read
+(`z2ui5_cl_frontend_sim`) are optional - named in literals only, read
 with dynamic SQL / called with `CALL METHOD (class)=>(method)` inside `TRY`,
 their types created by name and their components read by name. The
 simulator's public API used is `resume`, `click`, `get_messages`,
