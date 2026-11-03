@@ -4157,10 +4157,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     " the lock-manager addon is optional: created by name, never referenced -
     " Z2UI5_CL_APP_SM12 is its name before lock-manager renamed it
     DATA lo_app TYPE REF TO z2ui5_if_app.
-    DATA lv_class TYPE string VALUE `Z2UI5_CL_LOCK_APP_SM12`.
+    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( `CL_LOCK_APP_SM12` ).
     TRY.
         IF z2ui5_cl_cockpit_inst=>check_class_exists( lv_class ) = abap_false.
-          lv_class = `Z2UI5_CL_APP_SM12`.
+          lv_class = z2ui5_cl_cockpit_inst=>obj_name( `CL_APP_SM12` ).
         ENDIF.
         CREATE OBJECT lo_app TYPE (lv_class).
         client->nav_app_call( lo_app ).

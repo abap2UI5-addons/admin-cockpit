@@ -22,8 +22,9 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         handler      TYPE string VALUE `HANDLER`,
       END OF cs_monitor.
 
-    CONSTANTS c_monitor_intf  TYPE string VALUE `Z2UI5_IF_UI5_MONITOR`.
-    CONSTANTS c_monitor_class TYPE string VALUE `Z2UI5_CL_COCKPIT_MONITOR`.
+    " without the prefix - z2ui5_cl_cockpit_inst=>obj_name( ) puts it in front
+    CONSTANTS c_monitor_intf  TYPE string VALUE `IF_UI5_MONITOR`.
+    CONSTANTS c_monitor_class TYPE string VALUE `CL_COCKPIT_MONITOR`.
 
     TYPES:
       BEGIN OF ty_s_monitor,
@@ -455,8 +456,8 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     lv_handler_line = `Or replace abap2UI5's call in your HTTP handler class by z2ui5_cl_cockpit_wire=>run( server ) - ` &&
                       `it records on every abap2UI5 release (Installation tab, row Recorder, says where).`.
 
-    DATA(lv_hook) = xsdbool( z2ui5_cl_cockpit_inst=>check_type_exists( c_monitor_intf ) = abap_true
-                             AND z2ui5_cl_cockpit_inst=>check_class_exists( c_monitor_class ) = abap_true ).
+    DATA(lv_hook) = xsdbool( z2ui5_cl_cockpit_inst=>check_type_exists( z2ui5_cl_cockpit_inst=>obj_name( c_monitor_intf ) ) = abap_true
+                             AND z2ui5_cl_cockpit_inst=>check_class_exists( z2ui5_cl_cockpit_inst=>obj_name( c_monitor_class ) ) = abap_true ).
 
     " without the hook the numbers come from the handler line - recent ones
     " show that it is in place
@@ -477,29 +478,29 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF z2ui5_cl_cockpit_inst=>check_type_exists( c_monitor_intf ) = abap_false.
+    IF z2ui5_cl_cockpit_inst=>check_type_exists( z2ui5_cl_cockpit_inst=>obj_name( c_monitor_intf ) ) = abap_false.
       result = VALUE #( state      = cs_monitor-no_interface
                         strip_type = `Information`
-                        text       = |Nothing recorded yet. The roundtrip monitor hook { c_monitor_intf } ships with | &&
+                        text       = |Nothing recorded yet. The roundtrip monitor hook { z2ui5_cl_cockpit_inst=>obj_name( c_monitor_intf ) } ships with | &&
                                      |the abap2UI5 release after { z2ui5_if_app=>version }. { lv_handler_line } | &&
                                      |Installation & Security and Drafts work already.| ).
       RETURN.
     ENDIF.
 
-    IF z2ui5_cl_cockpit_inst=>check_class_exists( c_monitor_class ) = abap_false.
+    IF z2ui5_cl_cockpit_inst=>check_class_exists( z2ui5_cl_cockpit_inst=>obj_name( c_monitor_class ) ) = abap_false.
       result = VALUE #( state      = cs_monitor-no_class
                         strip_type = `Information`
                         text       = |Your abap2UI5 offers the monitor hook, but the cockpit's monitor class | &&
-                                     |{ c_monitor_class } (package 02) is not installed - pull the main branch | &&
+                                     |{ z2ui5_cl_cockpit_inst=>obj_name( c_monitor_class ) } (package 02) is not installed - pull the main branch | &&
                                      |of the admin cockpit. { lv_handler_line }| ).
       RETURN.
     ENDIF.
 
     result-check_data = abap_true.
-    DATA(lt_impl) = z2ui5_cl_cockpit_inst=>get_implementers( c_monitor_intf ).
+    DATA(lt_impl) = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( c_monitor_intf ) ).
     result-active_class = VALUE #( lt_impl[ 1 ] OPTIONAL ).
 
-    IF result-active_class IS NOT INITIAL AND result-active_class <> c_monitor_class.
+    IF result-active_class IS NOT INITIAL AND result-active_class <> z2ui5_cl_cockpit_inst=>obj_name( c_monitor_class ).
       result-state      = cs_monitor-other.
       result-strip_type = `Warning`.
       result-text       = |{ result-active_class } is the active monitor - abap2UI5 calls only the first | &&
@@ -769,7 +770,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       GROUP BY app
       INTO CORRESPONDING FIELDS OF TABLE @lt_last.      "#EC CI_NOWHERE
 
-    result = unused_of( it_impl   = z2ui5_cl_cockpit_inst=>get_implementers( `Z2UI5_IF_APP` )
+    result = unused_of( it_impl   = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( `IF_APP` ) )
                         it_last   = lt_last
                         from_day  = lv_from ).
 
@@ -1202,8 +1203,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     " the lock-manager addon is a hint only, never a dependency
     " Z2UI5_CL_APP_SM12: its name before lock-manager renamed it
-    result-check_lock = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( `Z2UI5_CL_LOCK_APP_SM12` ) = abap_true
-                              OR z2ui5_cl_cockpit_inst=>check_class_exists( `Z2UI5_CL_APP_SM12` ) = abap_true ).
+    result-check_lock = xsdbool(
+      z2ui5_cl_cockpit_inst=>check_class_exists( z2ui5_cl_cockpit_inst=>obj_name( `CL_LOCK_APP_SM12` ) ) = abap_true
+      OR z2ui5_cl_cockpit_inst=>check_class_exists( z2ui5_cl_cockpit_inst=>obj_name( `CL_APP_SM12` ) ) = abap_true ).
 
   ENDMETHOD.
 

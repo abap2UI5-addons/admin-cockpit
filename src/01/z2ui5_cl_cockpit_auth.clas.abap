@@ -222,8 +222,9 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( `Z2UI5_IF_COCKPIT_AUTH` ).
-    DELETE lt_classes WHERE table_line = `Z2UI5_CL_COCKPIT_AUTH`.
+    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( `IF_COCKPIT_AUTH` ) ).
+    DATA(lv_default) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_AUTH` ).
+    DELETE lt_classes WHERE table_line = lv_default.
     gv_custom_class = VALUE #( lt_classes[ 1 ] OPTIONAL ).
     gv_custom_known = abap_true.
     result = gv_custom_class.

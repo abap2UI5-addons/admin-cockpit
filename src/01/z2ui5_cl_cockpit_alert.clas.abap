@@ -95,7 +95,8 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
-    CONSTANTS c_notify_intf TYPE string VALUE `Z2UI5_IF_COCKPIT_NOTIFY`.
+    " without the prefix - z2ui5_cl_cockpit_inst=>obj_name( ) puts it in front
+    CONSTANTS c_notify_intf TYPE string VALUE `IF_COCKPIT_NOTIFY`.
 
     TYPES:
       BEGIN OF ty_s_open,
@@ -404,7 +405,7 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( c_notify_intf ).
+    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( c_notify_intf ) ).
     gv_notifier = VALUE #( lt_classes[ 1 ] OPTIONAL ).
     gv_notifier_known = abap_true.
     result = gv_notifier.

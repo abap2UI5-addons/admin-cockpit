@@ -149,6 +149,16 @@ leaves the class inactive and shows it as a diff on every pull. The
 linting `src/01` against the released abap2UI5 (the tag `1.146.0`, pinned:
 `main` of abap2UI5 already carries the hook).
 
+### Parallel installation (namespace rename)
+
+To run a second copy next to the original in the same system, rename it the
+way abap2UI5 itself is renamed: run the workflow **build-rename** (Actions →
+build-rename → Run workflow) with the name your abap2UI5 installation was
+renamed to - e.g. `ZMYUI5` or `/CA2UI5/`. It pushes the branch `rename_<name>`, in
+which every object and every reference to abap2UI5 and to the addons this one
+needs carries that name; pull it with abapGit. Rename abap2UI5 and every addon
+of the installation with the same name.
+
 ## Usage
 
 ```

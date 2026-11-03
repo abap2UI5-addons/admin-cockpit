@@ -12,14 +12,14 @@ CLASS z2ui5_cl_cockpit_agent DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
 
-    CONSTANTS c_log_table      TYPE string VALUE `Z2UI5_T_14`.
-    CONSTANTS c_set_table      TYPE string VALUE `Z2UI5_T_17`.
+    CONSTANTS c_log_table      TYPE string VALUE `T_14`.
+    CONSTANTS c_set_table      TYPE string VALUE `T_17`.
     " the names of the two tables before the agent addon renumbered them -
     " an install that has not pulled the rename still has these
-    CONSTANTS c_log_table_old  TYPE string VALUE `Z2UI5_T_AG_LOG`.
-    CONSTANTS c_set_table_old  TYPE string VALUE `Z2UI5_T_AG_SET`.
-    CONSTANTS c_settings_class TYPE string VALUE `Z2UI5_CL_AGENT_SETTINGS`.
-    CONSTANTS c_app_intf       TYPE string VALUE `Z2UI5_IF_AGENT_APP`.
+    CONSTANTS c_log_table_old  TYPE string VALUE `T_AG_LOG`.
+    CONSTANTS c_set_table_old  TYPE string VALUE `T_AG_SET`.
+    CONSTANTS c_settings_class TYPE string VALUE `CL_AGENT_SETTINGS`.
+    CONSTANTS c_app_intf       TYPE string VALUE `IF_AGENT_APP`.
     " the most audit rows one display reads
     CONSTANTS c_max_rows       TYPE i VALUE 20000.
 
@@ -200,15 +200,18 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     DATA lt_set TYPE ty_t_set.
     DATA lv_tab TYPE string.
 
-    result-installed = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( c_settings_class ) = abap_true
-                                OR z2ui5_cl_cockpit_inst=>check_type_exists( c_log_table ) = abap_true
-                                OR z2ui5_cl_cockpit_inst=>check_type_exists( c_log_table_old ) = abap_true ).
+    DATA(lv_settings) = z2ui5_cl_cockpit_inst=>obj_name( c_settings_class ).
+    DATA(lv_log) = z2ui5_cl_cockpit_inst=>obj_name( c_log_table ).
+    DATA(lv_log_old) = z2ui5_cl_cockpit_inst=>obj_name( c_log_table_old ).
+    result-installed = xsdbool( z2ui5_cl_cockpit_inst=>check_class_exists( lv_settings ) = abap_true
+                                OR z2ui5_cl_cockpit_inst=>check_type_exists( lv_log ) = abap_true
+                                OR z2ui5_cl_cockpit_inst=>check_type_exists( lv_log_old ) = abap_true ).
     IF result-installed = abap_false.
       RETURN.
     ENDIF.
 
-    lv_tab = table_name( current = c_set_table
-                         old     = c_set_table_old ).
+    lv_tab = table_name( current = z2ui5_cl_cockpit_inst=>obj_name( c_set_table )
+                         old     = z2ui5_cl_cockpit_inst=>obj_name( c_set_table_old ) ).
     TRY.
         SELECT kind, app, item, value FROM (lv_tab)
           INTO CORRESPONDING FIELDS OF TABLE @lt_set.   "#EC CI_NOWHERE
@@ -223,7 +226,7 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     result-admins    = ls_setup-admins.
     result-app_rules = ls_setup-app_rules.
     result-allow_all = ls_setup-allow_all.
-    result-opted_in  = lines( z2ui5_cl_cockpit_inst=>get_implementers( c_app_intf ) ).
+    result-opted_in  = lines( z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( c_app_intf ) ) ).
 
   ENDMETHOD.
 
@@ -293,8 +296,8 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
     ENDIF.
 
     DATA(lv_from) = day_start( z2ui5_cl_cockpit_setup=>day_minus( days - 1 ) ).
-    lv_tab = table_name( current = c_log_table
-                         old     = c_log_table_old ).
+    lv_tab = table_name( current = z2ui5_cl_cockpit_inst=>obj_name( c_log_table )
+                         old     = z2ui5_cl_cockpit_inst=>obj_name( c_log_table_old ) ).
     TRY.
         SELECT timestampl, uname, app, operation, event, outcome, text, mcp_client
           FROM (lv_tab)

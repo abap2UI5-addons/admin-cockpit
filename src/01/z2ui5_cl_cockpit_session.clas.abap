@@ -1256,7 +1256,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the serialized text escapes <, > and &, so a term with one of them
     " is only found in the decoded fields - every draft is taken apart then
     DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
-    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
       CLEAR lt_rows.
       TRY.
@@ -1333,7 +1333,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_last TYPE c LENGTH 32.
     DATA lv_tab TYPE string.
 
-    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
       CLEAR lt_rows.
       TRY.
@@ -2003,7 +2003,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     LOOP AT it_skip INTO DATA(lv_skip).
       INSERT lv_skip INTO TABLE lt_skip.
     ENDLOOP.
-    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
       CLEAR lt_rows.
       SELECT id, data FROM (lv_tab)
@@ -2264,7 +2264,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_idle TYPE i.
     DATA lv_messages TYPE string.
 
-    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     LOOP AT cs_steps-t_step INTO DATA(ls_step).
       lv_done = lv_done + 1.
       APPEND VALUE #( sign   = `I`
@@ -3101,7 +3101,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD read_nodes.
 
     DATA lv_tab TYPE string.
-    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     SELECT id, id_prev, uname, timestampl FROM (lv_tab)
       ORDER BY timestampl DESCENDING
       INTO CORRESPONDING FIELDS OF TABLE @result
@@ -3123,7 +3123,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lv_tab TYPE string.
     DATA lv_id TYPE c LENGTH 32.
-    lv_tab = z2ui5_cl_cockpit_draft=>c_table.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     lv_id = id.
     SELECT SINGLE data FROM (lv_tab)
       WHERE id = @lv_id
