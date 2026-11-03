@@ -3646,7 +3646,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
 
     IF z2ui5_cl_cockpit_repro=>check_available( ) = abap_false.
-      repro_hint = `Reproduce needs the headless frontend (github.com/abap2UI5-addons/headless-frontend).`.
+      repro_hint = `Reproduce needs the headless frontend (github.com/abap2UI5/headless-frontend).`.
       RETURN.
     ENDIF.
     IF s_head-can_change = abap_false.

@@ -22,7 +22,7 @@ README.md is the user documentation; keep it in step with every change.
 | `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_20` - `Z2UI5_T_28`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), the request/response recorder and the screen playback (`_wire`, table `Z2UI5_T_28`, called from the customer's ICF handler, never from the monitor), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_23`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
-| `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `publish-standalone` |
+| `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `check-rename`, `build-rename`, `publish-standalone`, `publish-702` (and `abap-702`, which lints the generated `702` branch), `bump-deps`, `deploy-pages` |
 | `.github/scripts/unit.mjs` | `npm run unit` - the ABAP Unit tests on abap2UI5's transpiled runtime, in `.unit/` (git-ignored); `ABAP_UNIT` runs it |
 | `abaplint.jsonc` | Standard ABAP 7.50, the strict rule set |
 | `abap2ui5lint.jsonc` | the abap2UI5 linter (UI5 1.71 floor, `chain-house-layout`) |

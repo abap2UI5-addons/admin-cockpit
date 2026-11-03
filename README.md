@@ -43,8 +43,8 @@ Good for:
 
 - ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; on
   NetWeaver 7.02 - 7.40 the branch `702`, downported automatically from `main`
-  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as well. The UI runs on UI5 1.71 and later
-  (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
+  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as
+  well. The UI runs on UI5 1.71 and later (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
   SAPUI5-only micro charts.
 - [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
   branch `main` 1.147.0 or later, the first release with the monitor hook
@@ -230,8 +230,8 @@ them saturated at the largest `INT4` - and whatever a database still refuses,
 **It never breaks an app.** Everything is caught; the core swallows anything a
 monitor raises anyway. A syntax error is the one thing no `CATCH` stops - a
 class that does not activate dumps whoever calls it - which is why the core
-calls no monitor until the exit switches it on. **Commit semantics** follow the interface: for an app
-that is not sticky the LUW is empty when the monitor runs (the framework
+calls no monitor until the exit switches it on. **Commit semantics** follow
+the interface: for an app that is not sticky the LUW is empty when the monitor runs (the framework
 committed its draft save, or rolled back a failed roundtrip right before the
 call), so the recorder writes its rows and issues `COMMIT WORK` itself - the
 core offers no commit helper. For a sticky (stateful) app the LUW belongs to
@@ -503,8 +503,8 @@ administrators only (`CHANGE`), and every opened or exported session is
 written to the change log (`SESSION_VIEW`, `SESSION_EXPORT`), with the
 session's first draft, its app and the user as the list shows it; so is every
 search in the drafts (`DRAFTS_SEARCH`) and every failure analysis
-(`ERROR_ANALYSIS`). Agree it with your works council like the rest of the monitoring
-(see [Privacy](#privacy-and-the-works-council)).
+(`ERROR_ANALYSIS`). Agree it with your works council like the rest of the
+monitoring (see [Privacy](#privacy-and-the-works-council)).
 
 ## Recorder - replay what the user saw
 
@@ -786,6 +786,8 @@ npm run lint:standalone # package 01 against the released abap2UI5
 npm run lint:702        # after npm run downport (rewrites src/ - CI only)
 npm run check:abap2ui5  # the abap2UI5 linter: views, bindings, chain layout
 npm run unit            # the ABAP Unit tests on abap2UI5's transpiled runtime
+npm run check           # what the pull request workflows run: the short-text
+                        # check, the three lints, the abap2UI5 linter, the rename
 ```
 
 **Unit tests.** The pure logic has ABAP Unit tests (`*.clas.testclasses.abap`):
@@ -794,7 +796,8 @@ the privacy modes and the daily salt rotation, the recorder's aggregation,
 the security traffic light and the agent check from given structures, the
 access decision, the Agents figures, when an error can be reproduced, and the
 alert rules with what a run raises and clears. The
-classes that touch the database (`ltcl_salt`, `ltcl_rec`) are `RISK LEVEL
+classes that touch the database (`ltcl_salt`, `ltcl_rec`, `ltcl_session_db`,
+`ltcl_wire_db`) are `RISK LEVEL
 DANGEROUS`: they write rows of the test app `ZZ_COCKPIT_UNIT_TEST` on days in
 2099, never commit, and delete and roll back in `teardown`. Without a system
 they run on abap2UI5's transpiled runtime (SQLite behind the database
@@ -815,8 +818,9 @@ monitor interface (abap2UI5/linter#140, merged), `abap2ui5lint.jsonc` waives
 
 ## Contributing
 
-Issues and pull requests are welcome. See [AGENTS.md](AGENTS.md) for the
-conventions of this repository.
+Issues and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md)
+and, for the rules of the code, [AGENTS.md](AGENTS.md). Security issues:
+[SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -2,7 +2,7 @@
 "!
 "! "Reproduce" on the Errors tab: resume the draft a failed roundtrip came
 "! with and fire the same event again, through the headless frontend
-"! (abap2UI5-addons/headless-frontend, z2ui5_cl_frontend_sim) - the
+"! (abap2UI5/headless-frontend, z2ui5_cl_frontend_sim) - the
 "! app logic RUNS AGAIN, for real, as the current user.
 "!
 "! The simulator is optional and never a dependency: it is named in literals

@@ -20,7 +20,7 @@ green run locally is a green run there.
 | --- | --- |
 | `npm run lint`, `npm run lint:cloud` | abaplint for Standard ABAP 7.50 and ABAP Cloud |
 | `npm run lint:standalone` | `src/01` against an abap2UI5 release without the monitor hook - the package split holds |
-| `npm run check:shorttext` | the short texts of the objects |
+| `npm run check:shorttext` | every class and interface has the same short text in its `.xml` (`<DESCRIPT>`) and in its `shorttext synchronized` ABAP Doc line |
 | `npm run check:abap2ui5` | the [abap2UI5-linter](https://github.com/abap2UI5/linter) over the app classes and their views |
 | `npm run rename` | the namespace rename still works |
 | `npm run unit` | the ABAP Unit tests on abap2UI5's transpiled runtime (not part of `check`: it builds a checkout of abap2UI5) |

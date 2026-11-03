@@ -1473,7 +1473,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                        off = lv_start + 1 ).
     ENDWHILE.
     IF lv_start < 0.
-      result-error = `The recorded view is no XML.`.
+      result-error = `The recorded view is not XML.`.
       RETURN.
     ENDIF.
     DATA(lv_root_end) = find( val = xml
