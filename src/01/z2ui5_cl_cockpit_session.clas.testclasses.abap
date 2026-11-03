@@ -892,6 +892,16 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
   METHOD playback_from_recordings.
 
+    DATA lv_res_body TYPE string.
+
+    " the body built ahead of the VALUE: inside it the 7.02 downport writes
+    " the whole concatenation on one line, longer than 255 characters
+    lv_res_body = `{"S_FRONT":{"ID":"ZZCKUT2","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":{"T_SYSTEM":` &&
+                  `[["VIEW_SLOTS","display","MAIN","<mvc:View xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\">` &&
+                  `<Page title=\"Order\"><Label text=\"Customer\"/><Input value=\"{/MV_CUSTOMER}\"/>` &&
+                  `<Button text=\"Save\" press=\".eB(['SAVE'])\"/></Page></mvc:View>"]]}},` &&
+                  `"MODEL":{"MV_CUSTOMER":"4711"}}`.
+
     " the recorder saw step 2 display the screen and step 3 come from a
     " press on Save with a customer typed - and answer with an error
     DATA(lt_wire) = VALUE z2ui5_cl_cockpit_session=>ty_t_id( ).
@@ -904,11 +914,7 @@ CLASS ltcl_session_db IMPLEMENTATION.
         draft_id_prev = `ZZCKUT1`
         http_status   = 200
         req_body      = `{"S_FRONT":{"ID":"ZZCKUT1"}}`
-        res_body      = `{"S_FRONT":{"ID":"ZZCKUT2","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":{"T_SYSTEM":` &&
-                        `[["VIEW_SLOTS","display","MAIN","<mvc:View xmlns=\"sap.m\" xmlns:mvc=\"sap.ui.core.mvc\">` &&
-                        `<Page title=\"Order\"><Label text=\"Customer\"/><Input value=\"{/MV_CUSTOMER}\"/>` &&
-                        `<Button text=\"Save\" press=\".eB(['SAVE'])\"/></Page></mvc:View>"]]}},` &&
-                        `"MODEL":{"MV_CUSTOMER":"4711"}}` ).
+        res_body      = lv_res_body ).
     INSERT z2ui5_t_28 FROM @ls_wire.
     APPEND ls_wire-id TO lt_wire.
     ls_wire = VALUE #( id            = `ZZCKUTWS3`
