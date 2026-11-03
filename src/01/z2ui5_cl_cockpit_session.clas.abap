@@ -2952,10 +2952,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
 
     LOOP AT lt_leaf INTO ls_leaf.
-      IF ls_leaf-root IS NOT INITIAL.
-        IF NOT line_exists( lt_visible[ table_line = ls_leaf-root ] ).
-          CONTINUE.
-        ENDIF.
+      IF ls_leaf-root IS NOT INITIAL AND NOT line_exists( lt_visible[ table_line = ls_leaf-root ] ).
+        CONTINUE.
       ENDIF.
       IF ls_leaf-href IS NOT INITIAL.
         READ TABLE lt_entry INTO ls_entry WITH TABLE KEY id = ls_leaf-href.

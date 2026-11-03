@@ -156,8 +156,6 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! recorder - with what the user did there and what came next.
     METHODS popup_screen.
 
-    "! The recorded request and response of the current step.
-    "! @parameter check_failed | the failed click after the step instead
     "! The process variants of variants_app, from the recordings.
     METHODS popup_variants.
 
@@ -169,6 +167,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS session_open_draft
       IMPORTING
         draft TYPE clike.
+    "! The recorded request and response of the current step.
+    "! @parameter check_failed | the failed click after the step instead
     METHODS popup_wire
       IMPORTING
         check_failed TYPE abap_bool DEFAULT abap_false.
