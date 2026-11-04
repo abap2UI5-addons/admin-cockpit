@@ -5,8 +5,8 @@ hero:
   name: "Admin Cockpit"
   text: "Usage, errors, performance and a security traffic light at a glance."
   image:
-    src: /favicon.png
-    alt: abap2UI5
+    src: /logo.svg
+    alt: abap2UI5 addons
   actions:
     - theme: brand
       text: Get started
