@@ -30,7 +30,7 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
         text   TYPE string,
         fix    TYPE string,
       END OF ty_s_check.
-    TYPES ty_t_check TYPE STANDARD TABLE OF ty_s_check WITH EMPTY KEY.
+    TYPES ty_t_check TYPE STANDARD TABLE OF ty_s_check WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_addon,
@@ -46,7 +46,7 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
         note      TYPE string,
         url       TYPE string,
       END OF ty_s_addon.
-    TYPES ty_t_addon TYPE STANDARD TABLE OF ty_s_addon WITH EMPTY KEY.
+    TYPES ty_t_addon TYPE STANDARD TABLE OF ty_s_addon WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_install,
@@ -217,11 +217,19 @@ ENDCLASS.
 CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_install.
+    DATA temp11 TYPE z2ui5_cl_cockpit_inst=>ty_s_install-platform.
+        DATA ls_get TYPE z2ui5_if_ui5_exit=>ty_s_http_config.
+        DATA ls_header LIKE LINE OF ls_get-t_security_header.
+        DATA lx TYPE REF TO cx_root.
 
     result-version  = z2ui5_if_app=>version.
-    result-platform = COND #( WHEN check_cloud( ) = abap_true
-                              THEN `ABAP Cloud`
-                              ELSE `Standard ABAP` ).
+
+    IF check_cloud( ) = abap_true.
+      temp11 = `ABAP Cloud`.
+    ELSE.
+      temp11 = `Standard ABAP`.
+    ENDIF.
+    result-platform = temp11.
     result-user_exit = get_user_exit_class( ).
     IF result-user_exit IS INITIAL.
       result-user_exit = `(none - framework defaults)`.
@@ -229,15 +237,18 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     result-draft_expiry = |{ get_config_post( )-draft_exp_time_in_hours } hours|.
 
     TRY.
-        DATA(ls_get) = get_config_get( ).
+
+        ls_get = get_config_get( ).
         result-check_config = abap_true.
         result-ui5_src   = ls_get-src.
         result-ui5_theme = ls_get-theme.
         result-csp       = ls_get-content_security_policy.
-        LOOP AT ls_get-t_security_header INTO DATA(ls_header).
+
+        LOOP AT ls_get-t_security_header INTO ls_header.
           result-headers = |{ result-headers }{ ls_header-n }: { ls_header-v }{ cl_abap_char_utilities=>newline }|.
         ENDLOOP.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-config_error = lx->get_text( ).
     ENDTRY.
 
@@ -246,11 +257,15 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   METHOD get_checks.
 
     DATA ls_get TYPE z2ui5_if_ui5_exit=>ty_s_http_config.
+        DATA lx TYPE REF TO cx_root.
+    DATA lt_agent TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    FIELD-SYMBOLS <check> LIKE LINE OF result.
     TRY.
         ls_get = get_config_get( ).
         result = evaluate_config( is_get  = ls_get
                                   is_post = get_config_post( ) ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         add_check( EXPORTING id     = `CONFIG`
                              status = cs_status-error
                              title  = `Framework configuration readable`
@@ -261,10 +276,12 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                    CHANGING  checks = result ).
     ENDTRY.
     checks_cockpit( CHANGING checks = result ).
-    DATA(lt_agent) = evaluate_agent( z2ui5_cl_cockpit_agent=>get_setup( ) ).
+
+    lt_agent = evaluate_agent( z2ui5_cl_cockpit_agent=>get_setup( ) ).
     APPEND LINES OF lt_agent TO result.
 
-    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
+
+    LOOP AT result ASSIGNING <check>.
       <check>-icon = check_icon( <check>-status ).
     ENDLOOP.
 
@@ -272,15 +289,23 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD check_icon.
 
-    result = SWITCH #( status
-                       WHEN cs_status-ok    THEN `sap-icon://status-positive`
-                       WHEN cs_status-warn  THEN `sap-icon://status-critical`
-                       WHEN cs_status-error THEN `sap-icon://status-negative`
-                       ELSE `sap-icon://hint` ).
+    DATA temp12 TYPE string.
+    CASE status.
+      WHEN cs_status-ok.
+        temp12 = `sap-icon://status-positive`.
+      WHEN cs_status-warn.
+        temp12 = `sap-icon://status-critical`.
+      WHEN cs_status-error.
+        temp12 = `sap-icon://status-negative`.
+      WHEN OTHERS.
+        temp12 = `sap-icon://hint`.
+    ENDCASE.
+    result = temp12.
 
   ENDMETHOD.
 
   METHOD evaluate_agent.
+    FIELD-SYMBOLS <check> LIKE LINE OF result.
 
     IF is_agent-installed = abap_false.
       RETURN.
@@ -341,7 +366,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                  CHANGING  checks = result ).
     ENDIF.
 
-    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
+
+    LOOP AT result ASSIGNING <check>.
       <check>-icon = check_icon( <check>-status ).
     ENDLOOP.
 
@@ -350,44 +376,116 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   METHOD evaluate_config.
 
     DATA lv_missing TYPE string.
-    DATA(ls_get) = is_get.
-    DATA(ls_post) = is_post.
+    DATA ls_get LIKE is_get.
+    DATA ls_post LIKE is_post.
+    DATA temp13 TYPE string.
+    DATA temp1 TYPE string.
+    DATA temp14 TYPE string.
+    DATA temp2 TYPE string.
+    DATA temp15 TYPE string.
+    DATA temp3 TYPE string.
+    DATA lv_csp LIKE ls_get-content_security_policy.
+    DATA lv_csp_header TYPE string.
+      DATA lv_all TYPE string.
+      DATA lv_script TYPE string.
+      DATA temp16 TYPE string.
+      DATA temp4 TYPE string.
+      DATA temp17 TYPE string.
+      DATA temp5 TYPE string.
+      DATA lv_wild TYPE abap_bool.
+      DATA temp11 TYPE xsdboolean.
+      DATA temp18 TYPE string.
+      DATA temp6 TYPE string.
+    DATA temp19 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_expected LIKE temp19.
+    DATA lv_expected LIKE LINE OF lt_expected.
+    DATA temp21 TYPE string.
+    DATA temp7 TYPE string.
+    DATA lv_hsts TYPE string.
+    DATA temp22 TYPE string.
+    DATA temp8 TYPE string.
+    DATA lv_src TYPE string.
+    DATA lv_cdn TYPE abap_bool.
+    DATA temp12 TYPE xsdboolean.
+    DATA temp23 TYPE string.
+    DATA temp9 TYPE string.
+    DATA temp10 TYPE string.
+    DATA temp24 TYPE string.
+    FIELD-SYMBOLS <check> LIKE LINE OF result.
+    ls_get = is_get.
 
+    ls_post = is_post.
+
+
+    IF ls_post-check_csrf_active = abap_true.
+      temp13 = cs_status-ok.
+    ELSE.
+      temp13 = cs_status-error.
+    ENDIF.
+
+    IF ls_post-check_csrf_active = abap_true.
+      temp1 = `on`.
+    ELSE.
+      temp1 = `off`.
+    ENDIF.
     add_check( EXPORTING id     = `CSRF`
-                         status = COND #( WHEN ls_post-check_csrf_active = abap_true
-                                          THEN cs_status-ok ELSE cs_status-error )
+                         status = temp13
                          title  = `CSRF origin check`
-                         value  = COND #( WHEN ls_post-check_csrf_active = abap_true THEN `on` ELSE `off` )
+                         value  = temp1
                          text   = `A state-changing POST whose Origin/Referer names another site is rejected ` &&
                                   `with 403. On by default; an exit can switch it off for cross-origin callers.`
                          fix    = `Remove cs_config-check_csrf_active = abap_false from set_config_http_post ` &&
                                   `of your user exit, unless a cross-origin caller really needs it.`
                CHANGING  checks = result ).
 
+
+    IF ls_post-check_trust_forwarded_host = abap_true.
+      temp14 = cs_status-info.
+    ELSE.
+      temp14 = cs_status-ok.
+    ENDIF.
+
+    IF ls_post-check_trust_forwarded_host = abap_true.
+      temp2 = `yes`.
+    ELSE.
+      temp2 = `no`.
+    ENDIF.
     add_check( EXPORTING id     = `FORWARDED_HOST`
-                         status = COND #( WHEN ls_post-check_trust_forwarded_host = abap_true
-                                          THEN cs_status-info ELSE cs_status-ok )
+                         status = temp14
                          title  = `X-Forwarded-Host trusted by the CSRF check`
-                         value  = COND #( WHEN ls_post-check_trust_forwarded_host = abap_true THEN `yes` ELSE `no` )
+                         value  = temp2
                          text   = `Right behind a web dispatcher or reverse proxy that sets the header. ` &&
                                   `Without such a proxy the header is client-suppliable.`
                          fix    = `Not behind a proxy: set cs_config-check_trust_forwarded_host = abap_false ` &&
                                   `in set_config_http_post of your user exit.`
                CHANGING  checks = result ).
 
+
+    IF ls_post-check_hide_error_details = abap_true.
+      temp15 = cs_status-ok.
+    ELSE.
+      temp15 = cs_status-warn.
+    ENDIF.
+
+    IF ls_post-check_hide_error_details = abap_true.
+      temp3 = `hidden`.
+    ELSE.
+      temp3 = `shown`.
+    ENDIF.
     add_check( EXPORTING id     = `ERROR_DETAILS`
-                         status = COND #( WHEN ls_post-check_hide_error_details = abap_true
-                                          THEN cs_status-ok ELSE cs_status-warn )
+                         status = temp15
                          title  = `Error details hidden from the browser`
-                         value  = COND #( WHEN ls_post-check_hide_error_details = abap_true THEN `hidden` ELSE `shown` )
+                         value  = temp3
                          text   = `Without it, framework errors answer with the raw exception chain - ` &&
                                   `class names, texts and positions reach the browser.`
                          fix    = `Production: set cs_config-check_hide_error_details = abap_true ` &&
                                   `in set_config_http_post of your user exit.`
                CHANGING  checks = result ).
 
-    DATA(lv_csp) = ls_get-content_security_policy.
-    DATA(lv_csp_header) = header_value( headers = ls_get-t_security_header
+
+    lv_csp = ls_get-content_security_policy.
+
+    lv_csp_header = header_value( headers = ls_get-t_security_header
                                         name    = `content-security-policy` ).
     IF lv_csp IS INITIAL AND lv_csp_header IS INITIAL.
       add_check( EXPORTING id     = `CSP`
@@ -399,95 +497,187 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                     `extend the default instead.`
                  CHANGING  checks = result ).
     ELSE.
-      DATA(lv_all) = to_lower( |{ lv_csp } { lv_csp_header }| ).
-      DATA(lv_script) = csp_directive( csp       = lv_all
+
+      lv_all = to_lower( |{ lv_csp } { lv_csp_header }| ).
+
+      lv_script = csp_directive( csp       = lv_all
                                        directive = `script-src` ).
       IF lv_script IS INITIAL.
         lv_script = csp_directive( csp       = lv_all
                                    directive = `default-src` ).
       ENDIF.
 
+
+      IF lv_script CS `'unsafe-eval'`.
+        temp16 = cs_status-warn.
+      ELSE.
+        temp16 = cs_status-ok.
+      ENDIF.
+
+      IF lv_script CS `'unsafe-eval'`.
+        temp4 = `contains 'unsafe-eval'`.
+      ELSE.
+        temp4 = `ok`.
+      ENDIF.
       add_check( EXPORTING id     = `CSP_EVAL`
-                           status = COND #( WHEN lv_script CS `'unsafe-eval'` THEN cs_status-warn ELSE cs_status-ok )
+                           status = temp16
                            title  = `CSP without 'unsafe-eval'`
-                           value  = COND #( WHEN lv_script CS `'unsafe-eval'` THEN `contains 'unsafe-eval'` ELSE `ok` )
+                           value  = temp4
                            text   = `'unsafe-eval' lets strings become code. Only UI5 1.71-1.82 popups with ` &&
                                     `unloaded binding types need it ('wasm-unsafe-eval' is fine).`
                            fix    = `Remove 'unsafe-eval' from script-src in set_config_http_get of your user exit, ` &&
                                     `or upgrade UI5 to 1.84+.`
                  CHANGING  checks = result ).
 
+
+      IF lv_script CS `'unsafe-inline'`.
+        temp17 = cs_status-error.
+      ELSE.
+        temp17 = cs_status-ok.
+      ENDIF.
+
+      IF lv_script CS `'unsafe-inline'`.
+        temp5 = `contains 'unsafe-inline'`.
+      ELSE.
+        temp5 = `ok`.
+      ENDIF.
       add_check( EXPORTING id     = `CSP_INLINE`
-                           status = COND #( WHEN lv_script CS `'unsafe-inline'` THEN cs_status-error ELSE cs_status-ok )
+                           status = temp17
                            title  = `CSP without 'unsafe-inline' for scripts`
-                           value  = COND #( WHEN lv_script CS `'unsafe-inline'` THEN `contains 'unsafe-inline'` ELSE `ok` )
+                           value  = temp5
                            text   = `With 'unsafe-inline' in script-src every injected inline script runs; ` &&
                                     `the framework then also stops adding the hash of its own inline script.`
                            fix    = `Remove 'unsafe-inline' from script-src in your user exit ` &&
                                     `(style-src may keep it - UI5 needs it there).`
                  CHANGING  checks = result ).
 
-      DATA(lv_wild) = xsdbool( lv_script CS ` * ` OR lv_script CS ` https: ` OR lv_script CS ` http: `
-                               OR lv_script CS `cdn.jsdelivr.net` OR lv_script CS `cdnjs.cloudflare.com` ).
+
+
+      temp11 = boolc( lv_script CS ` * ` OR lv_script CS ` https: ` OR lv_script CS ` http: ` OR lv_script CS `cdn.jsdelivr.net` OR lv_script CS `cdnjs.cloudflare.com` ).
+      lv_wild = temp11.
+
+      IF lv_wild = abap_true.
+        temp18 = cs_status-warn.
+      ELSE.
+        temp18 = cs_status-ok.
+      ENDIF.
+
+      IF lv_wild = abap_true.
+        temp6 = `wildcard or general-purpose CDN`.
+      ELSE.
+        temp6 = `ok`.
+      ENDIF.
       add_check( EXPORTING id     = `CSP_HOSTS`
-                           status = COND #( WHEN lv_wild = abap_true THEN cs_status-warn ELSE cs_status-ok )
+                           status = temp18
                            title  = `Script hosts limited`
-                           value  = COND #( WHEN lv_wild = abap_true THEN `wildcard or general-purpose CDN` ELSE `ok` )
+                           value  = temp6
                            text   = `Every allowed script host is a host whose compromise is script execution ` &&
                                     `in an authenticated SAP session.`
                            fix    = `Allow only the UI5 hosts (or your own) in script-src.`
                  CHANGING  checks = result ).
     ENDIF.
 
-    DATA(lt_expected) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `x-content-type-options` )
-                                                                  ( `x-frame-options` )
-                                                                  ( `referrer-policy` )
-                                                                  ( `permissions-policy` ) ).
-    LOOP AT lt_expected INTO DATA(lv_expected).
+
+    CLEAR temp19.
+    INSERT `x-content-type-options` INTO TABLE temp19.
+    INSERT `x-frame-options` INTO TABLE temp19.
+    INSERT `referrer-policy` INTO TABLE temp19.
+    INSERT `permissions-policy` INTO TABLE temp19.
+
+    lt_expected = temp19.
+
+    LOOP AT lt_expected INTO lv_expected.
       IF header_value( headers = ls_get-t_security_header
                        name    = lv_expected ) IS INITIAL.
         lv_missing = |{ lv_missing } { lv_expected }|.
       ENDIF.
     ENDLOOP.
+
+    IF lv_missing IS INITIAL.
+      temp21 = cs_status-ok.
+    ELSE.
+      temp21 = cs_status-warn.
+    ENDIF.
+
+    IF lv_missing IS INITIAL.
+      temp7 = `set`.
+    ELSE.
+      temp7 = |missing:{ lv_missing }|.
+    ENDIF.
     add_check( EXPORTING id     = `HEADERS`
-                         status = COND #( WHEN lv_missing IS INITIAL THEN cs_status-ok ELSE cs_status-warn )
+                         status = temp21
                          title  = `Security headers`
-                         value  = COND #( WHEN lv_missing IS INITIAL THEN `set` ELSE |missing:{ lv_missing }| )
+                         value  = temp7
                          text   = `nosniff, frame protection, referrer and permissions policy are set by the ` &&
                                   `framework's defaults; an exit that replaces t_security_header can lose them.`
                          fix    = `APPEND to cs_config-t_security_header in your user exit instead of replacing it.`
                CHANGING  checks = result ).
 
-    DATA(lv_hsts) = header_value( headers = ls_get-t_security_header
+
+    lv_hsts = header_value( headers = ls_get-t_security_header
                                   name    = `strict-transport-security` ).
+
+    IF lv_hsts IS INITIAL.
+      temp22 = cs_status-info.
+    ELSE.
+      temp22 = cs_status-ok.
+    ENDIF.
+
+    IF lv_hsts IS INITIAL.
+      temp8 = `not set`.
+    ELSE.
+      temp8 = lv_hsts.
+    ENDIF.
     add_check( EXPORTING id     = `HSTS`
-                         status = COND #( WHEN lv_hsts IS INITIAL THEN cs_status-info ELSE cs_status-ok )
+                         status = temp22
                          title  = `Strict-Transport-Security`
-                         value  = COND #( WHEN lv_hsts IS INITIAL THEN `not set` ELSE lv_hsts )
+                         value  = temp8
                          text   = `Not set by default on purpose: many on-premise systems serve plain HTTP. ` &&
                                   `Served over HTTPS, it belongs to the TLS terminator or the exit.`
                          fix    = `HTTPS only: APPEND VALUE #( n = 'Strict-Transport-Security' v = 'max-age=31536000' ) ` &&
                                   `TO cs_config-t_security_header.`
                CHANGING  checks = result ).
 
-    DATA(lv_src) = to_lower( ls_get-src ).
-    DATA(lv_cdn) = xsdbool( lv_src CS `openui5.org` OR lv_src CS `ui5.sap.com` OR lv_src CS `hana.ondemand.com` ).
+
+    lv_src = to_lower( ls_get-src ).
+
+
+    temp12 = boolc( lv_src CS `openui5.org` OR lv_src CS `ui5.sap.com` OR lv_src CS `hana.ondemand.com` ).
+    lv_cdn = temp12.
+
+    IF lv_cdn = abap_true.
+      temp23 = cs_status-info.
+    ELSE.
+      temp23 = cs_status-ok.
+    ENDIF.
+
+    IF lv_cdn = abap_true.
+      temp9 = `UI5 loads from a public CDN: every browser needs internet access ` && `and the page trusts that host.`.
+    ELSE.
+      temp9 = `UI5 loads from a host of your own.`.
+    ENDIF.
+
+    IF lv_cdn = abap_true.
+      temp10 = `Optional: serve UI5 from your system (/sap/public/bc/ui5_ui5/) and set ` && `cs_config-src in set_config_http_get.`.
+    ELSE.
+      CLEAR temp10.
+    ENDIF.
     add_check( EXPORTING id     = `BOOTSTRAP`
-                         status = COND #( WHEN lv_cdn = abap_true THEN cs_status-info ELSE cs_status-ok )
+                         status = temp23
                          title  = `UI5 bootstrap`
                          value  = ls_get-src
-                         text   = COND #( WHEN lv_cdn = abap_true
-                                          THEN `UI5 loads from a public CDN: every browser needs internet access ` &&
-                                               `and the page trusts that host.`
-                                          ELSE `UI5 loads from a host of your own.` )
-                         fix    = COND #( WHEN lv_cdn = abap_true
-                                          THEN `Optional: serve UI5 from your system (/sap/public/bc/ui5_ui5/) and set ` &&
-                                               `cs_config-src in set_config_http_get.` )
+                         text   = temp9
+                         fix    = temp10
                CHANGING  checks = result ).
 
+
+    IF ls_post-draft_exp_time_in_hours > 24.
+      temp24 = cs_status-warn.
+    ELSE.
+      temp24 = cs_status-ok.
+    ENDIF.
     add_check( EXPORTING id     = `EXPIRY`
-                         status = COND #( WHEN ls_post-draft_exp_time_in_hours > 24
-                                          THEN cs_status-warn ELSE cs_status-ok )
+                         status = temp24
                          title  = `Draft expiry`
                          value  = |{ ls_post-draft_exp_time_in_hours } hours|
                          text   = `Drafts hold the serialized app state of every user. A long expiry keeps ` &&
@@ -495,7 +685,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          fix    = `Set cs_config-draft_exp_time_in_hours in set_config_http_post (default 4).`
                CHANGING  checks = result ).
 
-    LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
+
+    LOOP AT result ASSIGNING <check>.
       <check>-icon = check_icon( <check>-status ).
     ENDLOOP.
 
@@ -504,23 +695,61 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   METHOD checks_cockpit.
 
     DATA lv_dev TYPE string.
-    LOOP AT get_addons( ) INTO DATA(ls_addon) WHERE installed = abap_true AND kind = `developer tool`. "#EC CI_SORTSEQ
-      lv_dev = |{ lv_dev }{ COND #( WHEN lv_dev IS NOT INITIAL THEN `, ` ) }{ ls_addon-name }|.
+    DATA temp25 TYPE z2ui5_cl_cockpit_inst=>ty_t_addon.
+    DATA ls_addon LIKE LINE OF temp25.
+      DATA temp26 TYPE string.
+    DATA temp27 TYPE string.
+    DATA temp10 TYPE string.
+    DATA lv_auth_mode TYPE string.
+    DATA temp28 TYPE string.
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA temp29 TYPE string.
+    DATA lv_recorded TYPE i.
+    DATA temp30 TYPE string.
+    DATA temp11 TYPE string.
+    temp25 = get_addons( ).
+
+    LOOP AT temp25 INTO ls_addon WHERE installed = abap_true AND kind = `developer tool`. "#EC CI_SORTSEQ
+
+      IF lv_dev IS NOT INITIAL.
+        temp26 = `, `.
+      ELSE.
+        CLEAR temp26.
+      ENDIF.
+      lv_dev = |{ lv_dev }{ temp26 }{ ls_addon-name }|.
     ENDLOOP.
+
+    IF lv_dev IS INITIAL.
+      temp27 = cs_status-ok.
+    ELSE.
+      temp27 = cs_status-error.
+    ENDIF.
+
+    IF lv_dev IS INITIAL.
+      temp10 = `none installed`.
+    ELSE.
+      temp10 = lv_dev.
+    ENDIF.
     add_check( EXPORTING id     = `DEV_ADDONS`
-                         status = COND #( WHEN lv_dev IS INITIAL THEN cs_status-ok ELSE cs_status-error )
+                         status = temp27
                          title  = `Developer addons reachable`
-                         value  = COND #( WHEN lv_dev IS INITIAL THEN `none installed` ELSE lv_dev )
+                         value  = temp10
                          text   = `Any user who can reach the abap2UI5 ICF node can start any installed app class. ` &&
                                   `SQL consoles, table browsers and SE80-like tools read and change data.`
                          fix    = `Do not install them in production, or restrict them: an authorization check ` &&
                                   `in your user exit / ICF node (allowed apps per role).`
                CHANGING  checks = checks ).
 
-    DATA(lv_auth_mode) = z2ui5_cl_cockpit_auth=>get_mode( ).
+
+    lv_auth_mode = z2ui5_cl_cockpit_auth=>get_mode( ).
+
+    IF lv_auth_mode = z2ui5_cl_cockpit_auth=>cs_mode-claim.
+      temp28 = cs_status-error.
+    ELSE.
+      temp28 = cs_status-ok.
+    ENDIF.
     add_check( EXPORTING id     = `COCKPIT_AUTH`
-                         status = COND #( WHEN lv_auth_mode = z2ui5_cl_cockpit_auth=>cs_mode-claim
-                                          THEN cs_status-error ELSE cs_status-ok )
+                         status = temp28
                          title  = `Admin cockpit restricted`
                          value  = z2ui5_cl_cockpit_auth=>get_mode_text( )
                          text   = `The cockpit shows usage and configuration of the whole system. Without an ` &&
@@ -529,10 +758,16 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                   `administrators on the Settings tab, or implement z2ui5_if_cockpit_auth.`
                CHANGING  checks = checks ).
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
+
+    IF ls_set-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-name.
+      temp29 = cs_status-warn.
+    ELSE.
+      temp29 = cs_status-ok.
+    ENDIF.
     add_check( EXPORTING id     = `PRIVACY`
-                         status = COND #( WHEN ls_set-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-name
-                                          THEN cs_status-warn ELSE cs_status-ok )
+                         status = temp29
                          title  = `Monitor privacy mode`
                          value  = ls_set-user_tracking
                          text   = `HASH counts users under a pseudonym that changes every day, NONE does not ` &&
@@ -542,15 +777,28 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                CHANGING  checks = checks ).
 
     " the recorder keeps whole requests and responses - what users typed and saw
-    DATA(lv_recorded) = z2ui5_cl_cockpit_wire=>count_records( ).
+
+    lv_recorded = z2ui5_cl_cockpit_wire=>count_records( ).
+
+    IF ls_set-wire_days > 7.
+      temp30 = cs_status-warn.
+    ELSEIF ls_set-wire_days > 0 AND lv_recorded = 0.
+      temp30 = cs_status-info.
+    ELSE.
+      temp30 = cs_status-ok.
+    ENDIF.
+
+    IF ls_set-wire_days <= 0.
+      temp11 = `off`.
+    ELSEIF lv_recorded = 0.
+      temp11 = |no recording today, kept { ls_set-wire_days } days|.
+    ELSE.
+      temp11 = |{ lv_recorded } today, kept { ls_set-wire_days } days|.
+    ENDIF.
     add_check( EXPORTING id     = `RECORDER`
-                         status = COND #( WHEN ls_set-wire_days > 7 THEN cs_status-warn
-                                          WHEN ls_set-wire_days > 0 AND lv_recorded = 0 THEN cs_status-info
-                                          ELSE cs_status-ok )
+                         status = temp30
                          title  = `Recorder of requests and responses`
-                         value  = COND #( WHEN ls_set-wire_days <= 0 THEN `off`
-                                          WHEN lv_recorded = 0 THEN |no recording today, kept { ls_set-wire_days } days|
-                                          ELSE |{ lv_recorded } today, kept { ls_set-wire_days } days| )
+                         value  = temp11
                          text   = `Stores the complete request and response of each roundtrip - the values users ` &&
                                   `typed, the messages and screens they saw - for the screen playback, the process ` &&
                                   `variants and the messages users saw; the same line feeds the usage, error and ` &&
@@ -571,31 +819,117 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
     DATA lv_error TYPE string.
 
-    result = VALUE #(
-      " the markers without the prefix - obj_name( ) puts it in front below
-      ( name = `popups`                   marker = `CL_POPUP_CONTEXT`         kind = `library` )
-      ( name = `layout-management`        marker = `CL_LAYO_MANAGER`          kind = `library` )
-      ( name = `range-filter`             marker = `CL_SEL_MULTISEL`          kind = `library` )
-      ( name = `abap-cloud-gui`           marker = `CL_CGUI_CONTEXT`          kind = `library` )
-      ( name = `custom-controls`          marker = `CL_CCI`                   kind = `library` )
-      ( name = `custom-controls-customer` marker = `CL_CCC`                   kind = `library` )
-      ( name = `lock-manager`             marker = `CL_LOCK_MANAGER`          kind = `library` )
-      ( name = `config-management`        marker = `CL_CONFIG_SERVICE`        kind = `library` )
-      ( name = `rap-ext`                  marker = `CL_RAP_UTIL`              kind = `library` )
-      ( name = `open-source-libs`         marker = `CL_OSL_VALIDATOR`         kind = `library` )
-      ( name = `launchpad-kpi`            marker = `CL_LP_KPI_HELLO_WORLD`    kind = `library` )
-      ( name = `headless-frontend`        marker = `CL_FRONTEND_SIM`          kind = `test tool` )
-      ( name = `abap-agent-runtime`       marker = `CL_AGENT_SETTINGS`        kind = `agent endpoint` )
-      ( name = `http-connector`           marker = `CL_HTTP_CON_HANDLER`      kind = `connector` )
-      ( name = `rfc-connector`            marker = `CL_RFC_CONNECTOR_HANDLER` kind = `connector` )
-      ( name = `sql-console`              marker = `CL_SQL_APP_01`            kind = `developer tool`
-        marker_old = `SQL_CL_APP_01` )
-      ( name = `se16n`                    marker = `CL_SE16_CONTEXT`          kind = `developer tool` )
-      ( name = `table-maintenance`        marker = `CL_TM_001`                kind = `developer tool` )
-      ( name = `table-content-loader`     marker = `CL_TCL_CONTEXT`           kind = `developer tool` )
-      ( name = `sapgui (SE80, SE38, SE16N, ...)` marker = `ZCL_SAPGUI_A2UI5`        kind = `developer tool` ) ).
+    DATA temp31 TYPE z2ui5_cl_cockpit_inst=>ty_t_addon.
+    DATA temp32 LIKE LINE OF temp31.
+    FIELD-SYMBOLS <addon> LIKE LINE OF result.
+        DATA temp33 TYPE z2ui5_cl_cockpit_inst=>ty_s_addon-state.
+    CLEAR temp31.
 
-    LOOP AT result ASSIGNING FIELD-SYMBOL(<addon>).
+    CLEAR temp32.
+    temp32-name = `popups`.
+    temp32-marker = `CL_POPUP_CONTEXT`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `layout-management`.
+    temp32-marker = `CL_LAYO_MANAGER`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `range-filter`.
+    temp32-marker = `CL_SEL_MULTISEL`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `abap-cloud-gui`.
+    temp32-marker = `CL_CGUI_CONTEXT`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `custom-controls`.
+    temp32-marker = `CL_CCI`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `custom-controls-customer`.
+    temp32-marker = `CL_CCC`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `lock-manager`.
+    temp32-marker = `CL_LOCK_MANAGER`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `config-management`.
+    temp32-marker = `CL_CONFIG_SERVICE`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `rap-ext`.
+    temp32-marker = `CL_RAP_UTIL`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `open-source-libs`.
+    temp32-marker = `CL_OSL_VALIDATOR`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `launchpad-kpi`.
+    temp32-marker = `CL_LP_KPI_HELLO_WORLD`.
+    temp32-kind = `library`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `headless-frontend`.
+    temp32-marker = `CL_FRONTEND_SIM`.
+    temp32-kind = `test tool`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `abap-agent-runtime`.
+    temp32-marker = `CL_AGENT_SETTINGS`.
+    temp32-kind = `agent endpoint`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `http-connector`.
+    temp32-marker = `CL_HTTP_CON_HANDLER`.
+    temp32-kind = `connector`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `rfc-connector`.
+    temp32-marker = `CL_RFC_CONNECTOR_HANDLER`.
+    temp32-kind = `connector`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `sql-console`.
+    temp32-marker = `CL_SQL_APP_01`.
+    temp32-kind = `developer tool`.
+    temp32-marker_old = `SQL_CL_APP_01`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `se16n`.
+    temp32-marker = `CL_SE16_CONTEXT`.
+    temp32-kind = `developer tool`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `table-maintenance`.
+    temp32-marker = `CL_TM_001`.
+    temp32-kind = `developer tool`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `table-content-loader`.
+    temp32-marker = `CL_TCL_CONTEXT`.
+    temp32-kind = `developer tool`.
+    INSERT temp32 INTO TABLE temp31.
+    CLEAR temp32.
+    temp32-name = `sapgui (SE80, SE38, SE16N, ...)`.
+    temp32-marker = `ZCL_SAPGUI_A2UI5`.
+    temp32-kind = `developer tool`.
+    INSERT temp32 INTO TABLE temp31.
+    result = temp31.
+
+
+    LOOP AT result ASSIGNING <addon>.
       IF <addon>-marker CP `CL_*`.
         <addon>-marker = obj_name( <addon>-marker ).
       ENDIF.
@@ -615,8 +949,13 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       ENDIF.
       IF <addon>-installed = abap_true.
         <addon>-status = `installed`.
-        <addon>-state = COND #( WHEN <addon>-kind = `developer tool`
-                                THEN cs_status-error ELSE cs_status-ok ).
+
+        IF <addon>-kind = `developer tool`.
+          temp33 = cs_status-error.
+        ELSE.
+          temp33 = cs_status-ok.
+        ENDIF.
+        <addon>-state = temp33.
         CASE <addon>-kind.
           WHEN `developer tool`.
             <addon>-note = `Reachable for every user of the ICF node unless restricted.`.
@@ -641,7 +980,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
     " exactly what the framework does per request: one instance per roll
     " area, holding the defaults and the user exit it found
-    DATA(lv_class) = obj_name( `CL_UI5_USER_EXIT` ).
+    DATA lv_class TYPE string.
+    lv_class = obj_name( `CL_UI5_USER_EXIT` ).
     CALL METHOD (lv_class)=>(`GET_INSTANCE`)
       RECEIVING
         result = result.
@@ -653,14 +993,19 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_config_get.
 
-    get_exit( )->set_config_http_get( CHANGING cs_config = result ).
+    DATA temp1 TYPE REF TO z2ui5_if_ui5_exit.
+    temp1 = get_exit( ).
+    temp1->set_config_http_get( CHANGING cs_config = result ).
 
   ENDMETHOD.
 
   METHOD get_config_post.
+        DATA temp1 TYPE REF TO z2ui5_if_ui5_exit.
 
     TRY.
-        get_exit( )->set_config_http_post( CHANGING cs_config = result ).
+
+        temp1 = get_exit( ).
+        temp1->set_config_http_post( CHANGING cs_config = result ).
       CATCH cx_root.
         CLEAR result.
     ENDTRY.
@@ -669,7 +1014,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_user_exit_class.
 
-    DATA(lv_class) = obj_name( `CL_UI5_USER_EXIT` ).
+    DATA lv_class TYPE string.
+    lv_class = obj_name( `CL_UI5_USER_EXIT` ).
     TRY.
         CALL METHOD (lv_class)=>(`GET_USER_EXIT_CLASS`)
           RECEIVING
@@ -683,7 +1029,9 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   METHOD check_cloud.
 
     " T100 is not released for ABAP Cloud - the same probe the framework uses
-    result = xsdbool( check_type_exists( `T100` ) = abap_false ).
+    DATA temp13 TYPE xsdboolean.
+    temp13 = boolc( check_type_exists( `T100` ) = abap_false ).
+    result = temp13.
 
   ENDMETHOD.
 
@@ -695,6 +1043,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD describe.
+        DATA temp14 TYPE xsdboolean.
+        DATA lx TYPE REF TO cx_root.
 
     CLEAR: found,
            error.
@@ -702,8 +1052,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
         cl_abap_typedescr=>describe_by_name( EXPORTING  p_name         = name
                                              EXCEPTIONS type_not_found = 1
                                                         OTHERS         = 2 ).
-        found = xsdbool( sy-subrc = 0 ).
-      CATCH cx_root INTO DATA(lx).
+
+        temp14 = boolc( sy-subrc = 0 ).
+        found = temp14.
+
+      CATCH cx_root INTO lx.
         " the class exists but cannot be loaded, e.g. a syntax error in an
         " installed addon - it must not take the whole tab down
         error = lx->get_text( ).
@@ -731,9 +1084,12 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
         classname   TYPE string,
         description TYPE string,
       END OF ty_s_class.
-    DATA lt_classes TYPE STANDARD TABLE OF ty_s_class WITH EMPTY KEY.
+    TYPES temp1 TYPE STANDARD TABLE OF ty_s_class WITH DEFAULT KEY.
+DATA lt_classes TYPE temp1.
 
-    DATA(lv_class) = obj_name( `CL_UI5_UTIL_CONTEXT` ).
+    DATA lv_class TYPE string.
+    DATA ls_class LIKE LINE OF lt_classes.
+    lv_class = obj_name( `CL_UI5_UTIL_CONTEXT` ).
     TRY.
         CALL METHOD (lv_class)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
           EXPORTING
@@ -744,7 +1100,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
         RETURN.
     ENDTRY.
 
-    LOOP AT lt_classes INTO DATA(ls_class).
+
+    LOOP AT lt_classes INTO ls_class.
       APPEND to_upper( ls_class-classname ) TO result.
     ENDLOOP.
     SORT result BY table_line.
@@ -754,7 +1111,8 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD csp_directive.
 
-    DATA(lv_off) = find( val = csp
+    DATA lv_off TYPE i.
+    lv_off = find( val = csp
                          sub = directive ).
     IF lv_off < 0.
       RETURN.
@@ -775,18 +1133,22 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD add_check.
 
-    APPEND VALUE #( id     = id
-                    status = status
-                    title  = title
-                    value  = value
-                    text   = text
-                    fix    = fix ) TO checks.
+    DATA temp34 TYPE z2ui5_cl_cockpit_inst=>ty_s_check.
+    CLEAR temp34.
+    temp34-id = id.
+    temp34-status = status.
+    temp34-title = title.
+    temp34-value = value.
+    temp34-text = text.
+    temp34-fix = fix.
+    APPEND temp34 TO checks.
 
   ENDMETHOD.
 
   METHOD header_value.
 
-    LOOP AT headers INTO DATA(ls_header).
+    DATA ls_header LIKE LINE OF headers.
+    LOOP AT headers INTO ls_header.
       IF to_lower( ls_header-n ) = name.
         result = ls_header-v.
         RETURN.

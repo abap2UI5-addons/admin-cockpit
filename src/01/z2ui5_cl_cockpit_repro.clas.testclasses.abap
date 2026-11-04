@@ -73,29 +73,57 @@ CLASS ltcl_repro IMPLEMENTATION.
     DATA lx_outer TYPE REF TO cx_root.
     DATA lv_zero TYPE i.
     DATA lv_result TYPE i.
+        DATA lx_div TYPE REF TO cx_sy_zerodivide.
+        DATA lx_itab TYPE REF TO cx_sy_arithmetic_overflow.
+    DATA lv_text TYPE string.
+    DATA lt_line TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+    FIELD-SYMBOLS <temp1> LIKE LINE OF lt_line.
+    DATA temp2 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp3> LIKE LINE OF lt_line.
+    DATA temp4 LIKE sy-tabix.
 
     TRY.
         lv_result = 1 / lv_zero.
-      CATCH cx_sy_zerodivide INTO DATA(lx_div).
+
+      CATCH cx_sy_zerodivide INTO lx_div.
         lx_inner = lx_div.
     ENDTRY.
     TRY.
         RAISE EXCEPTION TYPE cx_sy_arithmetic_overflow
           EXPORTING
             previous = lx_inner.
-      CATCH cx_sy_arithmetic_overflow INTO DATA(lx_itab).
+
+      CATCH cx_sy_arithmetic_overflow INTO lx_itab.
         lx_outer = lx_itab.
     ENDTRY.
 
-    DATA(lv_text) = z2ui5_cl_cockpit_repro=>chain_text( lx_outer ).
-    SPLIT lv_text AT cl_abap_char_utilities=>newline INTO TABLE DATA(lt_line).
+
+    lv_text = z2ui5_cl_cockpit_repro=>chain_text( lx_outer ).
+
+    SPLIT lv_text AT cl_abap_char_utilities=>newline INTO TABLE lt_line.
 
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = lines( lt_line ) ).
+
+
+    temp2 = sy-tabix.
+    READ TABLE lt_line INDEX 1 ASSIGNING <temp1>.
+    sy-tabix = temp2.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_char_cp( exp = `CX_SY_ARITHMETIC_OVERFLOW:*`
-                                         act = lt_line[ 1 ] ).
+                                         act = <temp1> ).
+
+
+    temp4 = sy-tabix.
+    READ TABLE lt_line INDEX 2 ASSIGNING <temp3>.
+    sy-tabix = temp4.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_char_cp( exp = `CX_SY_ZERODIVIDE:*`
-                                         act = lt_line[ 2 ] ).
+                                         act = <temp3> ).
     cl_abap_unit_assert=>assert_equals( exp = 0
                                         act = lv_result ).
 

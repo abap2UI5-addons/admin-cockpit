@@ -49,7 +49,7 @@ CLASS z2ui5_cl_cockpit_auth DEFINITION PUBLIC FINAL CREATE PUBLIC.
         action TYPE string,
         text   TYPE string,
       END OF ty_s_log.
-    TYPES ty_t_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
+    TYPES ty_t_log TYPE STANDARD TABLE OF ty_s_log WITH DEFAULT KEY.
 
     "! abap_true when the current user may do the action.
     CLASS-METHODS check
@@ -138,7 +138,8 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
   METHOD check.
 
     DATA lo_auth TYPE REF TO z2ui5_if_cockpit_auth.
-    DATA(lv_class) = get_custom_class( ).
+    DATA lv_class TYPE string.
+    lv_class = get_custom_class( ).
     IF lv_class IS NOT INITIAL.
       TRY.
           CREATE OBJECT lo_auth TYPE (lv_class).
@@ -159,6 +160,8 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
   METHOD decide.
 
     DATA lv_uname TYPE string.
+    DATA temp13 LIKE sy-subrc.
+    DATA temp1 TYPE xsdboolean.
 
     IF action <> z2ui5_if_cockpit_auth=>cs_action-display AND action <> z2ui5_if_cockpit_auth=>cs_action-change.
       RETURN.
@@ -178,7 +181,12 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
     " no administrator: nobody gets in - the app offers the claim instead
     lv_uname = to_upper( uname ).
-    result = xsdbool( lv_uname IS NOT INITIAL AND line_exists( admins[ table_line = lv_uname ] ) ). "#EC CI_SORTSEQ
+
+    READ TABLE admins WITH KEY table_line = lv_uname TRANSPORTING NO FIELDS.
+    temp13 = sy-subrc.
+
+    temp1 = boolc( lv_uname IS NOT INITIAL AND temp13 = 0 ).
+    result = temp1. "#EC CI_SORTSEQ
 
   ENDMETHOD.
 
@@ -216,16 +224,29 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_custom_class.
+    DATA lt_classes TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lv_default TYPE string.
+    DATA temp14 TYPE string.
+    DATA temp15 TYPE string.
 
     IF gv_custom_known = abap_true.
       result = gv_custom_class.
       RETURN.
     ENDIF.
 
-    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( `IF_COCKPIT_AUTH` ) ).
-    DATA(lv_default) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_AUTH` ).
+
+    lt_classes = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( `IF_COCKPIT_AUTH` ) ).
+
+    lv_default = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_AUTH` ).
     DELETE lt_classes WHERE table_line = lv_default.
-    gv_custom_class = VALUE #( lt_classes[ 1 ] OPTIONAL ).
+
+    CLEAR temp14.
+
+    READ TABLE lt_classes INTO temp15 INDEX 1.
+    IF sy-subrc = 0.
+      temp14 = temp15.
+    ENDIF.
+    gv_custom_class = temp14.
     gv_custom_known = abap_true.
     result = gv_custom_class.
 
@@ -235,6 +256,8 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
     DATA ls_row TYPE z2ui5_t_26.
     DATA lv_value TYPE z2ui5_t_26-value.
+      DATA lv_claimed LIKE abap_false.
+        DATA temp2 TYPE xsdboolean.
 
     IF get_mode( ) <> cs_mode-claim.
       RETURN.
@@ -242,18 +265,21 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
     ls_row-name  = c_claim_row.
     ls_row-value = sy-uname.
-    INSERT z2ui5_t_26 FROM @ls_row.
+    INSERT z2ui5_t_26 FROM ls_row.
     IF sy-subrc <> 0.
       " a claim row without an administrator is stale (the list was
       " emptied in the database) - drop it and claim once more
-      DATA(lv_claimed) = abap_false.
-      SELECT SINGLE value FROM z2ui5_t_26
-        WHERE name = @c_claim_row
-        INTO @lv_value.
+
+      lv_claimed = abap_false.
+      SELECT SINGLE value FROM z2ui5_t_26 INTO lv_value
+        WHERE name = c_claim_row
+        .
       IF sy-subrc = 0 AND z2ui5_cl_cockpit_setup=>get_admins( ) IS INITIAL.
-        DELETE FROM z2ui5_t_26 WHERE name = @c_claim_row AND value = @lv_value.
-        INSERT z2ui5_t_26 FROM @ls_row.
-        lv_claimed = xsdbool( sy-subrc = 0 ).
+        DELETE FROM z2ui5_t_26 WHERE name = c_claim_row AND value = lv_value.
+        INSERT z2ui5_t_26 FROM ls_row.
+
+        temp2 = boolc( sy-subrc = 0 ).
+        lv_claimed = temp2.
       ENDIF.
       " decided by the INSERT alone: the SELECT's return code let the
       " loser of a race (claim row and administrator already there) through
@@ -274,24 +300,41 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
   METHOD reset_admins.
 
-    DATA(lt_admins) = z2ui5_cl_cockpit_setup=>get_admins( ).
-    LOOP AT lt_admins INTO DATA(lv_admin).
+    DATA lt_admins TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lv_admin LIKE LINE OF lt_admins.
+    DATA lv_new TYPE string.
+      DATA temp16 TYPE z2ui5_t_26.
+      DATA ls_row LIKE temp16.
+    DATA temp17 TYPE string.
+    lt_admins = z2ui5_cl_cockpit_setup=>get_admins( ).
+
+    LOOP AT lt_admins INTO lv_admin.
       z2ui5_cl_cockpit_setup=>remove_admin( lv_admin ).
     ENDLOOP.
-    DELETE FROM z2ui5_t_26 WHERE name = @c_claim_row.
+    DELETE FROM z2ui5_t_26 WHERE name = c_claim_row.
 
-    DATA(lv_new) = to_upper( condense( uname ) ).
+
+    lv_new = to_upper( condense( uname ) ).
     IF lv_new IS NOT INITIAL.
       z2ui5_cl_cockpit_setup=>add_admin( lv_new ).
-      DATA(ls_row) = VALUE z2ui5_t_26( name  = c_claim_row
-                                           value = lv_new ).
-      INSERT z2ui5_t_26 FROM @ls_row.
+
+      CLEAR temp16.
+      temp16-name = c_claim_row.
+      temp16-value = lv_new.
+
+      ls_row = temp16.
+      INSERT z2ui5_t_26 FROM ls_row.
     ENDIF.
 
+
+    IF lv_new IS NOT INITIAL.
+      temp17 = |, { lv_new } is the administrator now|.
+    ELSE.
+      temp17 = `, open for a new claim`.
+    ENDIF.
     log( action = cs_log-reset
          text   = |administrators reset by { sy-uname } ({ lines( lt_admins ) } removed)| &&
-                  |{ COND #( WHEN lv_new IS NOT INITIAL THEN |, { lv_new } is the administrator now|
-                             ELSE `, open for a new claim` ) }| ).
+                  |{ temp17 }| ).
     COMMIT WORK.
 
   ENDMETHOD.
@@ -305,7 +348,7 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
         ls_row-uname      = sy-uname.
         ls_row-action     = action.
         ls_row-text       = text.
-        INSERT z2ui5_t_24 FROM @ls_row.
+        INSERT z2ui5_t_24 FROM ls_row.
       CATCH cx_root ##NO_HANDLER.
         " the change log must never block the change it records
     ENDTRY.
@@ -314,20 +357,27 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
   METHOD get_log.
 
-    DATA lt_rows TYPE STANDARD TABLE OF z2ui5_t_24 WITH EMPTY KEY.
+    TYPES temp1 TYPE STANDARD TABLE OF z2ui5_t_24 WITH DEFAULT KEY.
+DATA lt_rows TYPE temp1.
+    DATA ls_row LIKE LINE OF lt_rows.
+      DATA temp18 TYPE z2ui5_cl_cockpit_auth=>ty_s_log.
     TRY.
-        SELECT timestampl, uname, action, text FROM z2ui5_t_24
+        SELECT timestampl uname action text FROM z2ui5_t_24
           ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @max_rows ROWS.                         "#EC CI_NOWHERE
+          INTO CORRESPONDING FIELDS OF TABLE lt_rows
+          UP TO max_rows ROWS.                         "#EC CI_NOWHERE
       CATCH cx_root ##NO_HANDLER.
     ENDTRY.
 
-    LOOP AT lt_rows INTO DATA(ls_row).
-      APPEND VALUE #( time   = z2ui5_cl_cockpit_setup=>ts_text( ls_row-timestampl )
-                      user   = ls_row-uname
-                      action = ls_row-action
-                      text   = ls_row-text ) TO result.
+
+    LOOP AT lt_rows INTO ls_row.
+
+      CLEAR temp18.
+      temp18-time = z2ui5_cl_cockpit_setup=>ts_text( ls_row-timestampl ).
+      temp18-user = ls_row-uname.
+      temp18-action = ls_row-action.
+      temp18-text = ls_row-text.
+      APPEND temp18 TO result.
     ENDLOOP.
 
   ENDMETHOD.

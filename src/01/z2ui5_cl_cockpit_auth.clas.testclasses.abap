@@ -13,7 +13,9 @@ CLASS ltd_auth IMPLEMENTATION.
 
   METHOD z2ui5_if_cockpit_auth~check.
 
-    result = xsdbool( action = allowed ).
+    DATA temp1 TYPE xsdboolean.
+    temp1 = boolc( action = allowed ).
+    result = temp1.
 
   ENDMETHOD.
 
@@ -64,7 +66,13 @@ CLASS ltcl_access IMPLEMENTATION.
 
   METHOD admin_may_all.
 
-    DATA(lt_admins) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `ALICE` ) ( `BOB` ) ).
+    DATA temp1 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_admins LIKE temp1.
+    CLEAR temp1.
+    INSERT `ALICE` INTO TABLE temp1.
+    INSERT `BOB` INTO TABLE temp1.
+
+    lt_admins = temp1.
     cl_abap_unit_assert=>assert_true( allowed( action = z2ui5_if_cockpit_auth=>cs_action-display
                                                admins = lt_admins ) ).
     cl_abap_unit_assert=>assert_true( allowed( action = z2ui5_if_cockpit_auth=>cs_action-change
@@ -74,7 +82,12 @@ CLASS ltcl_access IMPLEMENTATION.
 
   METHOD admin_case_insensitive.
 
-    DATA(lt_admins) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `ALICE` ) ).
+    DATA temp3 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_admins LIKE temp3.
+    CLEAR temp3.
+    INSERT `ALICE` INTO TABLE temp3.
+
+    lt_admins = temp3.
     cl_abap_unit_assert=>assert_true( allowed( action = z2ui5_if_cockpit_auth=>cs_action-display
                                                admins = lt_admins
                                                uname  = `alice` ) ).
@@ -83,7 +96,12 @@ CLASS ltcl_access IMPLEMENTATION.
 
   METHOD non_admin_denied.
 
-    DATA(lt_admins) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `BOB` ) ).
+    DATA temp5 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_admins LIKE temp5.
+    CLEAR temp5.
+    INSERT `BOB` INTO TABLE temp5.
+
+    lt_admins = temp5.
     cl_abap_unit_assert=>assert_false( allowed( action = z2ui5_if_cockpit_auth=>cs_action-display
                                                 admins = lt_admins ) ).
     cl_abap_unit_assert=>assert_false( allowed( action = z2ui5_if_cockpit_auth=>cs_action-change
@@ -97,9 +115,16 @@ CLASS ltcl_access IMPLEMENTATION.
   METHOD custom_class_decides.
 
     " the customer class decides alone - the administrator list is ignored
-    DATA(lo_auth) = NEW ltd_auth( ).
+    DATA lo_auth TYPE REF TO ltd_auth.
+    DATA temp7 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_admins LIKE temp7.
+    CREATE OBJECT lo_auth TYPE ltd_auth.
     lo_auth->allowed = z2ui5_if_cockpit_auth=>cs_action-display.
-    DATA(lt_admins) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `ALICE` ) ).
+
+    CLEAR temp7.
+    INSERT `ALICE` INTO TABLE temp7.
+
+    lt_admins = temp7.
 
     cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_auth=>decide( action       = z2ui5_if_cockpit_auth=>cs_action-display
                                                                      custom_class = `ZCL_MY_COCKPIT_AUTH`
@@ -117,7 +142,12 @@ CLASS ltcl_access IMPLEMENTATION.
   METHOD custom_class_not_created.
 
     " a class that is configured but cannot be created denies - fail closed
-    DATA(lt_admins) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `ALICE` ) ).
+    DATA temp9 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_admins LIKE temp9.
+    CLEAR temp9.
+    INSERT `ALICE` INTO TABLE temp9.
+
+    lt_admins = temp9.
     cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_auth=>decide( action       = z2ui5_if_cockpit_auth=>cs_action-display
                                                                       custom_class = `ZCL_MY_COCKPIT_AUTH`
                                                                       admins       = lt_admins
@@ -127,7 +157,12 @@ CLASS ltcl_access IMPLEMENTATION.
 
   METHOD unknown_action_denied.
 
-    DATA(lt_admins) = VALUE z2ui5_cl_cockpit_setup=>ty_t_names( ( `ALICE` ) ).
+    DATA temp11 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA lt_admins LIKE temp11.
+    CLEAR temp11.
+    INSERT `ALICE` INTO TABLE temp11.
+
+    lt_admins = temp11.
     cl_abap_unit_assert=>assert_false( allowed( action = `DELETE_EVERYTHING`
                                                 admins = lt_admins ) ).
 

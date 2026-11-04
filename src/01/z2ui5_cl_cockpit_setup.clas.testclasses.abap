@@ -44,7 +44,8 @@ CLASS ltcl_privacy IMPLEMENTATION.
 
   METHOD use.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    ls_set = z2ui5_cl_cockpit_setup=>get_default( ).
     ls_set-user_tracking = tracking.
     z2ui5_cl_cockpit_setup=>set_buffer( ls_set ).
 
@@ -70,13 +71,15 @@ CLASS ltcl_privacy IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD hash_mode_known_vector.
+    DATA lv_key TYPE string.
 
     " SHA-256 of salt and upper-cased name: AB + C = ABC
     use( z2ui5_cl_cockpit_setup=>cs_users-hash ).
     z2ui5_cl_cockpit_setup=>gv_salt_day = `20990101`.
     z2ui5_cl_cockpit_setup=>gv_salt     = `AB`.
 
-    DATA(lv_key) = z2ui5_cl_cockpit_setup=>user_key( uname = `c`
+
+    lv_key = z2ui5_cl_cockpit_setup=>user_key( uname = `c`
                                                      day   = `20990101` ).
 
     cl_abap_unit_assert=>assert_equals( exp = `B5D4045C3F466FA91FE2CC6ABE79232A1A57CDF104F7A26E716E0A1E2789DF78`
@@ -86,18 +89,24 @@ CLASS ltcl_privacy IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD hash_mode_differs_per_day.
+    DATA lv_day1 TYPE string.
+    DATA lv_day1_again TYPE string.
+    DATA lv_day2 TYPE string.
 
     use( z2ui5_cl_cockpit_setup=>cs_users-hash ).
     z2ui5_cl_cockpit_setup=>gv_salt_day = `20990101`.
     z2ui5_cl_cockpit_setup=>gv_salt     = `SALT-OF-DAY-ONE`.
-    DATA(lv_day1) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+
+    lv_day1 = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
                                                       day   = `20990101` ).
-    DATA(lv_day1_again) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+
+    lv_day1_again = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
                                                             day   = `20990101` ).
 
     z2ui5_cl_cockpit_setup=>gv_salt_day = `20990102`.
     z2ui5_cl_cockpit_setup=>gv_salt     = `SALT-OF-DAY-TWO`.
-    DATA(lv_day2) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+
+    lv_day2 = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
                                                       day   = `20990102` ).
 
     cl_abap_unit_assert=>assert_equals( exp = lv_day1
@@ -108,17 +117,22 @@ CLASS ltcl_privacy IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD hash_mode_without_name.
+    DATA lv_key TYPE string.
+    DATA temp1 TYPE xsdboolean.
 
     use( z2ui5_cl_cockpit_setup=>cs_users-hash ).
     z2ui5_cl_cockpit_setup=>gv_salt_day = `20990101`.
     z2ui5_cl_cockpit_setup=>gv_salt     = `SALT`.
 
-    DATA(lv_key) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+
+    lv_key = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
                                                      day   = `20990101` ).
 
     cl_abap_unit_assert=>assert_equals( exp = 64
                                         act = strlen( lv_key ) ).
-    cl_abap_unit_assert=>assert_false( xsdbool( to_upper( lv_key ) CS `ALICE` ) ).
+
+    temp1 = boolc( to_upper( lv_key ) CS `ALICE` ).
+    cl_abap_unit_assert=>assert_false( temp1 ).
 
   ENDMETHOD.
 
@@ -157,7 +171,9 @@ CLASS ltcl_privacy IMPLEMENTATION.
   METHOD alert_settings.
 
     " 0 keeps a threshold switched off through a save; out of range falls back
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA ls_def TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    ls_set = z2ui5_cl_cockpit_setup=>get_default( ).
     ls_set-alert_err_pct = 0.
     ls_set-alert_p95_ms  = -1.
     ls_set-alert_min_cnt = 0.
@@ -165,7 +181,8 @@ CLASS ltcl_privacy IMPLEMENTATION.
 
     z2ui5_cl_cockpit_setup=>check_alerts( CHANGING cs_set = ls_set ).
 
-    DATA(ls_def) = z2ui5_cl_cockpit_setup=>get_default( ).
+
+    ls_def = z2ui5_cl_cockpit_setup=>get_default( ).
     cl_abap_unit_assert=>assert_equals( exp = 0
                                         act = ls_set-alert_err_pct ).
     cl_abap_unit_assert=>assert_equals( exp = ls_def-alert_p95_ms
@@ -245,7 +262,7 @@ CLASS ltcl_salt IMPLEMENTATION.
 
     DATA lv_pattern TYPE z2ui5_t_26-name.
     lv_pattern = `SALT_2099%`.
-    DELETE FROM z2ui5_t_26 WHERE name LIKE @lv_pattern.
+    DELETE FROM z2ui5_t_26 WHERE name LIKE lv_pattern.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
     CLEAR z2ui5_cl_cockpit_setup=>gv_salt_day.
@@ -255,7 +272,9 @@ CLASS ltcl_salt IMPLEMENTATION.
 
   METHOD salt_rotates_daily.
 
-    DATA(lv_day1) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+    DATA lv_day1 TYPE string.
+    DATA lv_day2 TYPE string.
+    lv_day1 = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
                                                       day   = `20990101` ).
     cl_abap_unit_assert=>assert_equals( exp = 64
                                         act = strlen( lv_day1 ) ).
@@ -269,7 +288,8 @@ CLASS ltcl_salt IMPLEMENTATION.
                                                                                 day   = `20990101` ) ).
 
     " the next day: a new salt, a new pseudonym, and the old salt is gone
-    DATA(lv_day2) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+
+    lv_day2 = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
                                                       day   = `20990102` ).
     cl_abap_unit_assert=>assert_differs( exp = lv_day1
                                          act = lv_day2 ).
@@ -281,11 +301,18 @@ CLASS ltcl_salt IMPLEMENTATION.
   METHOD salt_exists.
 
     DATA lv_value TYPE z2ui5_t_26-value.
-    DATA(lv_name) = CONV z2ui5_t_26-name( |SALT_{ day }| ).
-    SELECT SINGLE value FROM z2ui5_t_26
-      WHERE name = @lv_name
-      INTO @lv_value.
-    result = xsdbool( sy-subrc = 0 ).
+    DATA temp1 TYPE z2ui5_t_26-name.
+    DATA lv_name LIKE temp1.
+    DATA temp2 TYPE xsdboolean.
+    temp1 = |SALT_{ day }|.
+
+    lv_name = temp1.
+    SELECT SINGLE value FROM z2ui5_t_26 INTO lv_value
+      WHERE name = lv_name
+      .
+
+    temp2 = boolc( sy-subrc = 0 ).
+    result = temp2.
 
   ENDMETHOD.
 

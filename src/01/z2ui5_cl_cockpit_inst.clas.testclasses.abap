@@ -39,16 +39,32 @@ ENDCLASS.
 CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD setup.
+    DATA temp1 TYPE z2ui5_if_client=>ty_t_name_value.
+    DATA temp2 LIKE LINE OF temp1.
 
     " what the framework's defaults amount to, served from the own host
     ms_get-src = `/sap/public/bc/ui5_ui5/resources/sap-ui-core.js`.
     ms_get-content_security_policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; ` &&
                                      `script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'">`.
-    ms_get-t_security_header = VALUE #( ( n = `X-Content-Type-Options`    v = `nosniff` )
-                                        ( n = `X-Frame-Options`           v = `SAMEORIGIN` )
-                                        ( n = `Referrer-Policy`           v = `strict-origin-when-cross-origin` )
-                                        ( n = `Permissions-Policy`        v = `camera=()` )
-                                        ( n = `Strict-Transport-Security` v = `max-age=31536000` ) ).
+
+    CLEAR temp1.
+
+    temp2-n = `X-Content-Type-Options`.
+    temp2-v = `nosniff`.
+    INSERT temp2 INTO TABLE temp1.
+    temp2-n = `X-Frame-Options`.
+    temp2-v = `SAMEORIGIN`.
+    INSERT temp2 INTO TABLE temp1.
+    temp2-n = `Referrer-Policy`.
+    temp2-v = `strict-origin-when-cross-origin`.
+    INSERT temp2 INTO TABLE temp1.
+    temp2-n = `Permissions-Policy`.
+    temp2-v = `camera=()`.
+    INSERT temp2 INTO TABLE temp1.
+    temp2-n = `Strict-Transport-Security`.
+    temp2-v = `max-age=31536000`.
+    INSERT temp2 INTO TABLE temp1.
+    ms_get-t_security_header = temp1.
     ms_post-check_csrf_active          = abap_true.
     ms_post-check_hide_error_details   = abap_true.
     ms_post-check_trust_forwarded_host = abap_false.
@@ -58,20 +74,33 @@ CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD check.
 
-    DATA(lt_check) = it_check.
+    DATA lt_check LIKE it_check.
+    DATA temp3 TYPE z2ui5_cl_cockpit_inst=>ty_s_check.
+    DATA temp4 TYPE z2ui5_cl_cockpit_inst=>ty_s_check.
+    lt_check = it_check.
     IF lt_check IS INITIAL.
       lt_check = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
                                                          is_post = ms_post ).
     ENDIF.
-    result = VALUE #( lt_check[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
+
+    CLEAR temp3.
+
+    READ TABLE lt_check INTO temp4 WITH KEY id = id.
+    IF sy-subrc = 0.
+      temp3 = temp4.
+    ENDIF.
+    result = temp3. "#EC CI_SORTSEQ
 
   ENDMETHOD.
 
   METHOD secure_config_is_green.
 
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    DATA ls_check LIKE LINE OF lt_check.
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
                                                              is_post = ms_post ).
-    LOOP AT lt_check INTO DATA(ls_check).
+
+    LOOP AT lt_check INTO ls_check.
       cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-ok
                                           act = ls_check-status
                                           msg = |{ ls_check-id }: { ls_check-value }| ).
@@ -84,9 +113,11 @@ CLASS ltcl_checks IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD csrf_off.
+    DATA ls_check TYPE z2ui5_cl_cockpit_inst=>ty_s_check.
 
     ms_post-check_csrf_active = abap_false.
-    DATA(ls_check) = check( `CSRF` ).
+
+    ls_check = check( `CSRF` ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-error
                                         act = ls_check-status ).
     cl_abap_unit_assert=>assert_equals( exp = `off`
@@ -124,9 +155,11 @@ CLASS ltcl_checks IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD csp_missing.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
 
     CLEAR ms_get-content_security_policy.
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
                                                              is_post = ms_post ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-error
                                         act = check( id       = `CSP`
@@ -137,11 +170,17 @@ CLASS ltcl_checks IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD csp_in_header_counts.
+    DATA temp5 TYPE z2ui5_if_client=>ty_s_name_value.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
 
     CLEAR ms_get-content_security_policy.
-    APPEND VALUE #( n = `Content-Security-Policy`
-                    v = `default-src 'self'; script-src 'self' 'unsafe-eval'` ) TO ms_get-t_security_header.
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
+
+    CLEAR temp5.
+    temp5-n = `Content-Security-Policy`.
+    temp5-v = `default-src 'self'; script-src 'self' 'unsafe-eval'`.
+    APPEND temp5 TO ms_get-t_security_header.
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_config( is_get  = ms_get
                                                              is_post = ms_post ).
     cl_abap_unit_assert=>assert_initial( check( id       = `CSP`
                                                 it_check = lt_check ) ).
@@ -160,9 +199,11 @@ CLASS ltcl_checks IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD headers_missing.
+    DATA ls_check TYPE z2ui5_cl_cockpit_inst=>ty_s_check.
 
     DELETE ms_get-t_security_header WHERE n = `X-Frame-Options`.
-    DATA(ls_check) = check( `HEADERS` ).
+
+    ls_check = check( `HEADERS` ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-warn
                                         act = ls_check-status ).
     cl_abap_unit_assert=>assert_equals( exp = `missing: x-frame-options`
@@ -187,9 +228,16 @@ CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD agent_disabled.
 
-    DATA(ls_agent) = VALUE z2ui5_cl_cockpit_agent=>ty_s_setup( installed = abap_true
-                                                               readable  = abap_true ).
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
+    DATA temp6 TYPE z2ui5_cl_cockpit_agent=>ty_s_setup.
+    DATA ls_agent LIKE temp6.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    CLEAR temp6.
+    temp6-installed = abap_true.
+    temp6-readable = abap_true.
+
+    ls_agent = temp6.
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-ok
                                         act = check( id       = `AGENT`
                                                      it_check = lt_check )-status ).
@@ -198,11 +246,18 @@ CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD agent_without_admin.
 
-    DATA(ls_agent) = VALUE z2ui5_cl_cockpit_agent=>ty_s_setup( installed = abap_true
-                                                               readable  = abap_true
-                                                               enabled   = abap_true
-                                                               opted_in  = 3 ).
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
+    DATA temp7 TYPE z2ui5_cl_cockpit_agent=>ty_s_setup.
+    DATA ls_agent LIKE temp7.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    CLEAR temp7.
+    temp7-installed = abap_true.
+    temp7-readable = abap_true.
+    temp7-enabled = abap_true.
+    temp7-opted_in = 3.
+
+    ls_agent = temp7.
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-error
                                         act = check( id       = `AGENT`
                                                      it_check = lt_check )-status ).
@@ -211,13 +266,20 @@ CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD agent_allows_all.
 
-    DATA(ls_agent) = VALUE z2ui5_cl_cockpit_agent=>ty_s_setup( installed = abap_true
-                                                               readable  = abap_true
-                                                               enabled   = abap_true
-                                                               admins    = 1
-                                                               app_rules = 1
-                                                               allow_all = abap_true ).
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
+    DATA temp8 TYPE z2ui5_cl_cockpit_agent=>ty_s_setup.
+    DATA ls_agent LIKE temp8.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    CLEAR temp8.
+    temp8-installed = abap_true.
+    temp8-readable = abap_true.
+    temp8-enabled = abap_true.
+    temp8-admins = 1.
+    temp8-app_rules = 1.
+    temp8-allow_all = abap_true.
+
+    ls_agent = temp8.
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-warn
                                         act = check( id       = `AGENT`
                                                      it_check = lt_check )-status ).
@@ -226,12 +288,21 @@ CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD agent_without_apps.
 
-    DATA(ls_agent) = VALUE z2ui5_cl_cockpit_agent=>ty_s_setup( installed = abap_true
-                                                               readable  = abap_true
-                                                               enabled   = abap_true
-                                                               admins    = 1 ).
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
-    DATA(ls_check) = check( id       = `AGENT`
+    DATA temp9 TYPE z2ui5_cl_cockpit_agent=>ty_s_setup.
+    DATA ls_agent LIKE temp9.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    DATA ls_check TYPE z2ui5_cl_cockpit_inst=>ty_s_check.
+    CLEAR temp9.
+    temp9-installed = abap_true.
+    temp9-readable = abap_true.
+    temp9-enabled = abap_true.
+    temp9-admins = 1.
+
+    ls_agent = temp9.
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
+
+    ls_check = check( id       = `AGENT`
                             it_check = lt_check ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-warn
                                         act = ls_check-status ).
@@ -242,12 +313,19 @@ CLASS ltcl_checks IMPLEMENTATION.
 
   METHOD agent_set_up.
 
-    DATA(ls_agent) = VALUE z2ui5_cl_cockpit_agent=>ty_s_setup( installed = abap_true
-                                                               readable  = abap_true
-                                                               enabled   = abap_true
-                                                               admins    = 2
-                                                               opted_in  = 1 ).
-    DATA(lt_check) = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
+    DATA temp10 TYPE z2ui5_cl_cockpit_agent=>ty_s_setup.
+    DATA ls_agent LIKE temp10.
+    DATA lt_check TYPE z2ui5_cl_cockpit_inst=>ty_t_check.
+    CLEAR temp10.
+    temp10-installed = abap_true.
+    temp10-readable = abap_true.
+    temp10-enabled = abap_true.
+    temp10-admins = 2.
+    temp10-opted_in = 1.
+
+    ls_agent = temp10.
+
+    lt_check = z2ui5_cl_cockpit_inst=>evaluate_agent( ls_agent ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-info
                                         act = check( id       = `AGENT`
                                                      it_check = lt_check )-status ).
