@@ -678,7 +678,7 @@ dynamic SQL inside `TRY`, so there is no dependency either way:
   `z2ui5_if_agent_app`), the APP rules and the agent administrators;
 - calls per day, per app and per MCP client (name and version from
   `initialize`), each split into refused by **policy** (endpoint disabled, app
-  not enabled for agents, event forbidden or reserved for a human) and refused
+  not enabled or denied for agents, event forbidden or reserved for a human) and refused
   or failed otherwise (**validation** - wrong field or value, unknown or
   expired session, the app raised);
 - the last calls with operation, event, outcome and text; the user only with

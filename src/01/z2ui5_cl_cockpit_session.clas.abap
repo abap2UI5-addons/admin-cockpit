@@ -3183,9 +3183,11 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD check_framework.
 
-    result = xsdbool( label CP `Z2UI5_CL_UI5_*`
-                      OR label CP `Z2UI5_CL_SRT_*`
-                      OR label CP `Z2UI5_CL_AJSON*` ).
+    " behind the installation's prefix - a rename rewrites references,
+    " never a literal
+    result = xsdbool( label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` )
+                      OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` )
+                      OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ) ).
 
   ENDMETHOD.
 

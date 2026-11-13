@@ -26,7 +26,7 @@ CLASS z2ui5_cl_cockpit_agent DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS:
       BEGIN OF cs_kind,
         ok         TYPE string VALUE `ok`,
-        " refused by the rules: endpoint off, app not enabled, event
+        " refused by the rules: endpoint off, app not enabled or denied, event
         " forbidden or reserved for a human
         policy     TYPE string VALUE `policy`,
         " refused or failed for the request itself: wrong field, value,
@@ -273,7 +273,8 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
         OR lv_text CS `needs a human`
         OR lv_text CS `not enabled for agents`
         OR lv_text CS `endpoint is disabled`
-        OR lv_text CS `never operable by an agent`.
+        OR lv_text CS `never operable by an agent`
+        OR lv_text CS `denied for agents`.
       result = cs_kind-policy.
     ELSE.
       result = cs_kind-validation.

@@ -297,10 +297,12 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
       REPLACE ALL OCCURRENCES OF `_-` IN lv_tag WITH `/`.
       lv_tag = to_upper( lv_tag ).
 
+      " the framework's classes behind the installation's prefix - a rename
+      " rewrites references, never a literal
       IF lv_tag IS INITIAL
-          OR lv_tag CP `Z2UI5_CL_UI5_*`
-          OR lv_tag CP `Z2UI5_CL_SRT_*`
-          OR lv_tag CP `Z2UI5_CL_AJSON*`.
+          OR lv_tag CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` )
+          OR lv_tag CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` )
+          OR lv_tag CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ).
         CONTINUE.
       ENDIF.
       result = lv_tag.
