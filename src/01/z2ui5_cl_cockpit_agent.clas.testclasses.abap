@@ -106,6 +106,10 @@ CLASS ltcl_agent IMPLEMENTATION.
         act = z2ui5_cl_cockpit_agent=>classify( outcome = `error`
                                                 text    = `the abap2UI5 agent endpoint is disabled on this system` ) ).
     cl_abap_unit_assert=>assert_equals(
+        exp = z2ui5_cl_cockpit_agent=>cs_kind-policy
+        act = z2ui5_cl_cockpit_agent=>classify( outcome = `error`
+                                                text    = `ZCL_X is denied for agents by the setting APP ZCL_*` ) ).
+    cl_abap_unit_assert=>assert_equals(
         exp = z2ui5_cl_cockpit_agent=>cs_kind-validation
         act = z2ui5_cl_cockpit_agent=>classify( outcome = `error`
                                                 text    = `QTY holds a number - "ten" is none` ) ).
