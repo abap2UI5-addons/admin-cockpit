@@ -65,7 +65,7 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
         last_purge         TYPE string,
       END OF ty_s_settings.
 
-    TYPES ty_t_names TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    TYPES ty_t_names TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
     "! The effective settings - stored values over the defaults.
     CLASS-METHODS get
@@ -197,7 +197,7 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
         name  TYPE c LENGTH 30,
         value TYPE c LENGTH 255,
       END OF ty_s_row.
-    TYPES ty_t_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES ty_t_rows TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
 
     CLASS-DATA gs_settings TYPE ty_s_settings.
     CLASS-DATA gv_loaded   TYPE abap_bool.
@@ -237,6 +237,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
   METHOD get.
 
     DATA lt_rows TYPE ty_t_rows.
+    DATA ls_row LIKE LINE OF lt_rows.
     IF gv_loaded = abap_true.
       result = gs_settings.
       RETURN.
@@ -245,13 +246,14 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     result = get_default( ).
 
     TRY.
-        SELECT name, value FROM z2ui5_t_26
-          INTO TABLE @lt_rows.                          "#EC CI_NOWHERE
+        SELECT name value FROM z2ui5_t_26
+          INTO TABLE lt_rows.                          "#EC CI_NOWHERE
       CATCH cx_root ##NO_HANDLER.
         " a table that is not there yet (half-imported addon) means defaults
     ENDTRY.
 
-    LOOP AT lt_rows INTO DATA(ls_row).
+
+    LOOP AT lt_rows INTO ls_row.
       CASE ls_row-name.
         WHEN `MODE`.
           IF ls_row-value = cs_mode-all OR ls_row-value = cs_mode-errors
@@ -319,27 +321,31 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD get_default.
 
-    result = VALUE #( mode               = cs_mode-all
-                      sample_pct         = 10
-                      slow_ms            = 2000
-                      retention_days     = 30
-                      agg_retention_days = 400
-                      user_tracking      = cs_users-hash
-                      unused_days        = 90
-                      response_warn_kb   = 500
-                      model_warn_kb      = 1024
-                      alert_err_pct      = 5
-                      alert_p95_ms       = 2000
-                      alert_min_cnt      = 20
-                      alert_hours        = 1
-                      wire_days          = 2 ).
+    CLEAR result.
+    result-mode = cs_mode-all.
+    result-sample_pct = 10.
+    result-slow_ms = 2000.
+    result-retention_days = 30.
+    result-agg_retention_days = 400.
+    result-user_tracking = cs_users-hash.
+    result-unused_days = 90.
+    result-response_warn_kb = 500.
+    result-model_warn_kb = 1024.
+    result-alert_err_pct = 5.
+    result-alert_p95_ms = 2000.
+    result-alert_min_cnt = 20.
+    result-alert_hours = 1.
+    result-wire_days = 2.
 
   ENDMETHOD.
 
   METHOD save.
 
-    DATA(ls_set) = settings.
-    DATA(ls_def) = get_default( ).
+    DATA ls_set LIKE settings.
+    DATA ls_def TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    ls_set = settings.
+
+    ls_def = get_default( ).
 
     IF ls_set-mode <> cs_mode-all AND ls_set-mode <> cs_mode-errors
         AND ls_set-mode <> cs_mode-sample AND ls_set-mode <> cs_mode-off.
@@ -418,24 +424,35 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD row_save.
 
-    DATA(ls_row) = VALUE z2ui5_t_26( name  = name
-                                         value = value ).
-    MODIFY z2ui5_t_26 FROM @ls_row.
+    DATA temp2 TYPE z2ui5_t_26.
+    DATA ls_row LIKE temp2.
+    CLEAR temp2.
+    temp2-name = name.
+    temp2-value = value.
+
+    ls_row = temp2.
+    MODIFY z2ui5_t_26 FROM ls_row.
 
   ENDMETHOD.
 
   METHOD get_admins.
 
-    DATA lt_names TYPE STANDARD TABLE OF z2ui5_t_21-uname WITH EMPTY KEY.
+    TYPES temp1 TYPE STANDARD TABLE OF z2ui5_t_21-uname WITH DEFAULT KEY.
+DATA lt_names TYPE temp1.
+    DATA lv_name LIKE LINE OF lt_names.
+      DATA temp3 LIKE LINE OF result.
     TRY.
         SELECT uname FROM z2ui5_t_21
           ORDER BY uname
-          INTO TABLE @lt_names.
+          INTO TABLE lt_names.
       CATCH cx_root ##NO_HANDLER.
     ENDTRY.
 
-    LOOP AT lt_names INTO DATA(lv_name).
-      APPEND CONV string( lv_name ) TO result.
+
+    LOOP AT lt_names INTO lv_name.
+
+      temp3 = lv_name.
+      APPEND temp3 TO result.
     ENDLOOP.
 
   ENDMETHOD.
@@ -443,7 +460,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
   METHOD add_admin.
 
     DATA ls_row TYPE z2ui5_t_21.
-    DATA(lv_name) = to_upper( condense( uname ) ).
+    DATA lv_name TYPE string.
+    lv_name = to_upper( condense( uname ) ).
     IF lv_name IS INITIAL.
       RETURN.
     ENDIF.
@@ -451,20 +469,23 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     ls_row-uname      = lv_name.
     ls_row-created_by = sy-uname.
     ls_row-created_at = now( ).
-    MODIFY z2ui5_t_21 FROM @ls_row.
+    MODIFY z2ui5_t_21 FROM ls_row.
 
   ENDMETHOD.
 
   METHOD remove_admin.
 
-    DATA(lv_name) = to_upper( condense( uname ) ).
-    DELETE FROM z2ui5_t_21 WHERE uname = @lv_name.
+    DATA lv_name TYPE string.
+    lv_name = to_upper( condense( uname ) ).
+    DELETE FROM z2ui5_t_21 WHERE uname = lv_name.
 
   ENDMETHOD.
 
   METHOD user_key.
 
-    DATA(ls_set) = get( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+        DATA lv_salt TYPE string.
+    ls_set = get( ).
 
     CASE ls_set-user_tracking.
       WHEN cs_users-name.
@@ -472,7 +493,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
       WHEN cs_users-none.
         CLEAR result.
       WHEN OTHERS.
-        DATA(lv_salt) = salt_of_day( day ).
+
+        lv_salt = salt_of_day( day ).
         IF lv_salt IS INITIAL.
           RETURN.
         ENDIF.
@@ -494,6 +516,10 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
   METHOD salt_of_day.
 
     DATA lv_value TYPE ty_s_row-value.
+    DATA temp4 TYPE ty_s_row-name.
+    DATA lv_name LIKE temp4.
+      DATA temp5 TYPE z2ui5_t_26.
+      DATA ls_row LIKE temp5.
     " One random salt per UTC day, stored as SALT_<day>. The salt of every
     " earlier day is deleted when a new one is created: from that moment the
     " pseudonyms of the earlier day can no longer be recomputed from a name,
@@ -503,29 +529,36 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lv_name) = CONV ty_s_row-name( |SALT_{ day }| ).
 
-    SELECT SINGLE value FROM z2ui5_t_26
-      WHERE name = @lv_name
-      INTO @lv_value.
+    temp4 = |SALT_{ day }|.
+
+    lv_name = temp4.
+
+    SELECT SINGLE value FROM z2ui5_t_26 INTO lv_value
+      WHERE name = lv_name
+      .
     IF sy-subrc <> 0.
       TRY.
           lv_value = cl_system_uuid=>create_uuid_c32_static( ).
         CATCH cx_uuid_error.
           RETURN.
       ENDTRY.
-      DATA(ls_row) = VALUE z2ui5_t_26( name  = lv_name
-                                           value = lv_value ).
-      INSERT z2ui5_t_26 FROM @ls_row.
+
+      CLEAR temp5.
+      temp5-name = lv_name.
+      temp5-value = lv_value.
+
+      ls_row = temp5.
+      INSERT z2ui5_t_26 FROM ls_row.
       IF sy-subrc <> 0.
         " another work process created it a moment ago - use that one
-        SELECT SINGLE value FROM z2ui5_t_26
-          WHERE name = @lv_name
-          INTO @lv_value.
+        SELECT SINGLE value FROM z2ui5_t_26 INTO lv_value
+          WHERE name = lv_name
+          .
       ELSE.
         DELETE FROM z2ui5_t_26
           WHERE name LIKE 'SALT_%'
-            AND name <> @lv_name.
+            AND name <> lv_name.
       ENDIF.
     ENDIF.
 
@@ -537,7 +570,9 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD check_privacy.
 
-    result = xsdbool( get( )-user_tracking <> cs_users-name ).
+    DATA temp1 TYPE xsdboolean.
+    temp1 = boolc( get( )-user_tracking <> cs_users-name ).
+    result = temp1.
 
   ENDMETHOD.
 
@@ -557,7 +592,8 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   METHOD check_alerts.
 
-    DATA(ls_def) = get_default( ).
+    DATA ls_def TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    ls_def = get_default( ).
     IF cs_set-alert_err_pct < 0 OR cs_set-alert_err_pct > 100.
       cs_set-alert_err_pct = ls_def-alert_err_pct.
     ENDIF.
@@ -574,9 +610,11 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD to_int.
+    DATA lv_val TYPE string.
 
     result = fallback.
-    DATA(lv_val) = condense( val ).
+
+    lv_val = condense( val ).
     IF lv_val IS INITIAL.
       RETURN.
     ENDIF.

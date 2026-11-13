@@ -17,7 +17,7 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PUBLIC SECTION.
 
     TYPES ty_s_alert TYPE z2ui5_if_cockpit_notify=>ty_s_alert.
-    TYPES ty_t_alert TYPE STANDARD TABLE OF ty_s_alert WITH EMPTY KEY.
+    TYPES ty_t_alert TYPE STANDARD TABLE OF ty_s_alert WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_history,
@@ -36,7 +36,7 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
         text       TYPE string,
         note       TYPE string,
       END OF ty_s_history.
-    TYPES ty_t_history TYPE STANDARD TABLE OF ty_s_history WITH EMPTY KEY.
+    TYPES ty_t_history TYPE STANDARD TABLE OF ty_s_history WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_status,
@@ -109,7 +109,7 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
         cnt       TYPE i,
         note      TYPE c LENGTH 255,
       END OF ty_s_open.
-    TYPES ty_t_open TYPE STANDARD TABLE OF ty_s_open WITH EMPTY KEY.
+    TYPES ty_t_open TYPE STANDARD TABLE OF ty_s_open WITH DEFAULT KEY.
 
     CLASS-DATA gv_notifier       TYPE string.
     CLASS-DATA gv_notifier_known TYPE abap_bool.
@@ -161,7 +161,8 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   METHOD check.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
     IF ls_set-alert_err_pct = 0 AND ls_set-alert_p95_ms = 0.
       RETURN.
     ENDIF.
@@ -178,9 +179,15 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
   METHOD evaluate.
 
     DATA lv_rate TYPE p LENGTH 8 DECIMALS 1.
-    DATA lt_app_rules TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES temp1 TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_app_rules TYPE temp1.
 
-    LOOP AT it_window INTO DATA(ls_win).
+    DATA ls_win LIKE LINE OF it_window.
+          DATA temp35 TYPE z2ui5_if_cockpit_notify=>ty_s_alert.
+        DATA temp36 TYPE z2ui5_if_cockpit_notify=>ty_s_alert.
+    DATA ls_alert LIKE LINE OF result.
+    DATA lv_rule LIKE LINE OF lt_app_rules.
+    LOOP AT it_window INTO ls_win.
       IF ls_win-roundtrips <= 0 OR ls_win-roundtrips < is_set-alert_min_cnt.
         CONTINUE.
       ENDIF.
@@ -188,57 +195,89 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       IF is_set-alert_err_pct > 0.
         lv_rate = ls_win-errors * 100 / ls_win-roundtrips.
         IF lv_rate >= is_set-alert_err_pct.
-          APPEND VALUE #( rule       = z2ui5_if_cockpit_notify=>cs_rule-error_rate
-                          app        = ls_win-app
-                          value      = |{ lv_rate } %|
-                          limit      = |{ is_set-alert_err_pct } %|
-                          roundtrips = ls_win-roundtrips
-                          text       = |Error rate { lv_rate } % { app_text( ls_win-app ) } - { ls_win-errors } of | &&
-                                       |{ ls_win-roundtrips } roundtrips failed, threshold { is_set-alert_err_pct } %| )
+
+          CLEAR temp35.
+          temp35-rule = z2ui5_if_cockpit_notify=>cs_rule-error_rate.
+          temp35-app = ls_win-app.
+          temp35-value = |{ lv_rate } %|.
+          temp35-limit = |{ is_set-alert_err_pct } %|.
+          temp35-roundtrips = ls_win-roundtrips.
+          temp35-text = |Error rate { lv_rate } % { app_text( ls_win-app ) } - { ls_win-errors } of | && |{ ls_win-roundtrips } roundtrips failed, threshold { is_set-alert_err_pct } %|.
+          APPEND temp35
                  TO result.
         ENDIF.
       ENDIF.
 
       IF is_set-alert_p95_ms > 0 AND ls_win-p95_ms >= is_set-alert_p95_ms.
-        APPEND VALUE #( rule       = z2ui5_if_cockpit_notify=>cs_rule-p95
-                        app        = ls_win-app
-                        value      = |{ ls_win-p95_ms } ms|
-                        limit      = |{ is_set-alert_p95_ms } ms|
-                        roundtrips = ls_win-roundtrips
-                        text       = |p95 response time { ls_win-p95_ms } ms { app_text( ls_win-app ) } - | &&
-                                     |{ ls_win-roundtrips } roundtrips, threshold { is_set-alert_p95_ms } ms| )
+
+        CLEAR temp36.
+        temp36-rule = z2ui5_if_cockpit_notify=>cs_rule-p95.
+        temp36-app = ls_win-app.
+        temp36-value = |{ ls_win-p95_ms } ms|.
+        temp36-limit = |{ is_set-alert_p95_ms } ms|.
+        temp36-roundtrips = ls_win-roundtrips.
+        temp36-text = |p95 response time { ls_win-p95_ms } ms { app_text( ls_win-app ) } - | && |{ ls_win-roundtrips } roundtrips, threshold { is_set-alert_p95_ms } ms|.
+        APPEND temp36
                TO result.
       ENDIF.
     ENDLOOP.
 
     " the line over all apps is for the many small apps that stay below the
     " minimum one by one - when an app raises the rule itself, it says more
-    LOOP AT result INTO DATA(ls_alert) WHERE app IS NOT INITIAL. "#EC CI_SORTSEQ
+
+    LOOP AT result INTO ls_alert WHERE app IS NOT INITIAL. "#EC CI_SORTSEQ
       INSERT ls_alert-rule INTO TABLE lt_app_rules.
     ENDLOOP.
-    LOOP AT lt_app_rules INTO DATA(lv_rule).
+
+    LOOP AT lt_app_rules INTO lv_rule.
       DELETE result WHERE app IS INITIAL AND rule = lv_rule.
     ENDLOOP.
 
   ENDMETHOD.
 
   METHOD diff.
+    DATA ls_now LIKE LINE OF it_now.
+      DATA temp37 TYPE ty_s_open-app.
+      DATA lv_app LIKE temp37.
+      DATA temp38 TYPE ty_s_open-rule_id.
+      DATA lv_rule LIKE temp38.
+      DATA temp39 LIKE sy-subrc.
+    DATA ls_open LIKE LINE OF it_open.
+      DATA lv_found LIKE abap_false.
+        DATA temp40 TYPE ty_s_open-rule_id.
+        DATA temp12 TYPE ty_s_open-app.
 
     CLEAR et_raised.
     CLEAR et_cleared.
 
-    LOOP AT it_now INTO DATA(ls_now).
-      DATA(lv_app) = CONV ty_s_open-app( ls_now-app ).
-      DATA(lv_rule) = CONV ty_s_open-rule_id( ls_now-rule ).
-      IF NOT line_exists( it_open[ rule_id = lv_rule app = lv_app ] ). "#EC CI_SORTSEQ
+
+    LOOP AT it_now INTO ls_now.
+
+      temp37 = ls_now-app.
+
+      lv_app = temp37.
+
+      temp38 = ls_now-rule.
+
+      lv_rule = temp38.
+
+      READ TABLE it_open WITH KEY rule_id = lv_rule app = lv_app TRANSPORTING NO FIELDS.
+      temp39 = sy-subrc.
+      IF NOT temp39 = 0. "#EC CI_SORTSEQ
         APPEND ls_now TO et_raised.
       ENDIF.
     ENDLOOP.
 
-    LOOP AT it_open INTO DATA(ls_open).
-      DATA(lv_found) = abap_false.
+
+    LOOP AT it_open INTO ls_open.
+
+      lv_found = abap_false.
       LOOP AT it_now INTO ls_now.
-        IF CONV ty_s_open-rule_id( ls_now-rule ) = ls_open-rule_id AND CONV ty_s_open-app( ls_now-app ) = ls_open-app.
+
+        temp40 = ls_now-rule.
+
+        temp12 = ls_now-app.
+        IF temp40 = ls_open-rule_id AND temp12 = ls_open-app.
           lv_found = abap_true.
           EXIT.
         ENDIF.
@@ -258,21 +297,33 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
     DATA ls_row TYPE z2ui5_t_23.
     DATA lv_zero TYPE timestampl.
 
-    DATA(lt_now) = check( ).
+    DATA lt_now TYPE z2ui5_cl_cockpit_alert=>ty_t_alert.
+    DATA lv_now TYPE timestampl.
+    DATA lv_system TYPE string.
+    DATA ls_alert LIKE LINE OF lt_raised.
+    DATA ls_open LIKE LINE OF lt_cleared.
+      DATA temp41 TYPE ty_s_alert.
+      DATA ls_clear LIKE temp41.
+      DATA temp42 TYPE ty_s_open-note.
+      DATA lv_note LIKE temp42.
+    lt_now = check( ).
 
-    SELECT id, rule_id, app, raised, measured, threshold, cnt, note FROM z2ui5_t_23
-      WHERE cleared = @lv_zero
-      INTO CORRESPONDING FIELDS OF TABLE @lt_open.
+    SELECT id rule_id app raised measured threshold cnt note FROM z2ui5_t_23 INTO CORRESPONDING FIELDS OF TABLE lt_open
+      WHERE cleared = lv_zero
+      .
 
     diff( EXPORTING it_open    = lt_open
                     it_now     = lt_now
           IMPORTING et_raised  = lt_raised
                     et_cleared = lt_cleared ).
 
-    DATA(lv_now) = z2ui5_cl_cockpit_setup=>now( ).
-    DATA(lv_system) = |{ sy-sysid }/{ sy-mandt }|.
 
-    LOOP AT lt_raised INTO DATA(ls_alert).
+    lv_now = z2ui5_cl_cockpit_setup=>now( ).
+
+    lv_system = |{ sy-sysid }/{ sy-mandt }|.
+
+
+    LOOP AT lt_raised INTO ls_alert.
       ls_alert-event  = z2ui5_if_cockpit_notify=>cs_event-raised.
       ls_alert-raised = z2ui5_cl_cockpit_setup=>ts_text( lv_now ).
       ls_alert-system = lv_system.
@@ -290,26 +341,34 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       ls_row-cnt       = ls_alert-roundtrips.
       ls_row-text      = ls_alert-text.
       ls_row-note      = notify( ls_alert ).
-      INSERT z2ui5_t_23 FROM @ls_row.
+      INSERT z2ui5_t_23 FROM ls_row.
       result-raised = result-raised + 1.
     ENDLOOP.
 
-    LOOP AT lt_cleared INTO DATA(ls_open).
-      DATA(ls_clear) = VALUE ty_s_alert( event      = z2ui5_if_cockpit_notify=>cs_event-cleared
-                                         rule       = ls_open-rule_id
-                                         app        = ls_open-app
-                                         value      = ls_open-measured
-                                         limit      = ls_open-threshold
-                                         roundtrips = ls_open-cnt
-                                         raised     = z2ui5_cl_cockpit_setup=>ts_text( ls_open-raised )
-                                         system     = lv_system ).
+
+    LOOP AT lt_cleared INTO ls_open.
+
+      CLEAR temp41.
+      temp41-event = z2ui5_if_cockpit_notify=>cs_event-cleared.
+      temp41-rule = ls_open-rule_id.
+      temp41-app = ls_open-app.
+      temp41-value = ls_open-measured.
+      temp41-limit = ls_open-threshold.
+      temp41-roundtrips = ls_open-cnt.
+      temp41-raised = z2ui5_cl_cockpit_setup=>ts_text( ls_open-raised ).
+      temp41-system = lv_system.
+
+      ls_clear = temp41.
       ls_clear-text = |{ rule_text( ls_open-rule_id ) } { app_text( ls_open-app ) } is below | &&
                       |{ ls_open-threshold } again (raised { ls_clear-raised } UTC at { ls_open-measured })|.
-      DATA(lv_note) = CONV ty_s_open-note( |{ ls_open-note }; cleared: { notify( ls_clear ) }| ).
+
+      temp42 = |{ ls_open-note }; cleared: { notify( ls_clear ) }|.
+
+      lv_note = temp42.
       UPDATE z2ui5_t_23
-        SET cleared = @lv_now,
-            note    = @lv_note
-        WHERE id = @ls_open-id.
+        SET cleared = lv_now,
+            note    = lv_note
+        WHERE id = ls_open-id.
       result-cleared = result-cleared + 1.
     ENDLOOP.
 
@@ -321,7 +380,9 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
   METHOD notify.
 
     DATA lo_notify TYPE REF TO z2ui5_if_cockpit_notify.
-    DATA(lv_class) = get_notifier_class( ).
+    DATA lv_class TYPE string.
+        DATA lx TYPE REF TO cx_root.
+    lv_class = get_notifier_class( ).
     IF lv_class IS INITIAL.
       result = `not sent - no class implements z2ui5_if_cockpit_notify`.
       RETURN.
@@ -331,7 +392,8 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
         CREATE OBJECT lo_notify TYPE (lv_class).
         lo_notify->notify( is_alert ).
         result = |sent by { lv_class }|.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result = |{ lv_class } failed: { lx->get_text( ) }|.
     ENDTRY.
 
@@ -339,29 +401,62 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   METHOD get_history.
 
-    DATA lt_rows TYPE STANDARD TABLE OF z2ui5_t_23 WITH EMPTY KEY.
+    TYPES temp2 TYPE STANDARD TABLE OF z2ui5_t_23 WITH DEFAULT KEY.
+DATA lt_rows TYPE temp2.
+    DATA ls_row LIKE LINE OF lt_rows.
+      DATA lv_open TYPE abap_bool.
+      DATA temp1 TYPE xsdboolean.
+      DATA temp43 TYPE z2ui5_cl_cockpit_alert=>ty_s_history.
+      DATA temp13 TYPE z2ui5_cl_cockpit_alert=>ty_s_history-status.
+      DATA temp14 TYPE z2ui5_cl_cockpit_alert=>ty_s_history-state.
+      DATA temp15 TYPE z2ui5_cl_cockpit_alert=>ty_s_history-app.
     TRY.
         SELECT * FROM z2ui5_t_23
           ORDER BY raised DESCENDING
-          INTO TABLE @lt_rows
-          UP TO @max_rows ROWS.                         "#EC CI_NOWHERE
+          INTO TABLE lt_rows
+          UP TO max_rows ROWS.                         "#EC CI_NOWHERE
       CATCH cx_root ##NO_HANDLER.
     ENDTRY.
 
-    LOOP AT lt_rows INTO DATA(ls_row).
-      DATA(lv_open) = xsdbool( ls_row-cleared IS INITIAL ).
-      APPEND VALUE #( id         = ls_row-id
-                      status     = COND #( WHEN lv_open = abap_true THEN `open` ELSE `cleared` )
-                      state      = COND #( WHEN lv_open = abap_true THEN `Error` ELSE `Success` )
-                      rule       = rule_text( ls_row-rule_id )
-                      app        = COND #( WHEN ls_row-app IS INITIAL THEN `(all apps)` ELSE ls_row-app )
-                      raised     = z2ui5_cl_cockpit_setup=>ts_text( ls_row-raised )
-                      cleared    = z2ui5_cl_cockpit_setup=>ts_text( ls_row-cleared )
-                      value      = ls_row-measured
-                      limit      = ls_row-threshold
-                      roundtrips = ls_row-cnt
-                      text       = ls_row-text
-                      note       = ls_row-note ) TO result.
+
+    LOOP AT lt_rows INTO ls_row.
+
+
+      temp1 = boolc( ls_row-cleared IS INITIAL ).
+      lv_open = temp1.
+
+      CLEAR temp43.
+      temp43-id = ls_row-id.
+
+      IF lv_open = abap_true.
+        temp13 = `open`.
+      ELSE.
+        temp13 = `cleared`.
+      ENDIF.
+      temp43-status = temp13.
+
+      IF lv_open = abap_true.
+        temp14 = `Error`.
+      ELSE.
+        temp14 = `Success`.
+      ENDIF.
+      temp43-state = temp14.
+      temp43-rule = rule_text( ls_row-rule_id ).
+
+      IF ls_row-app IS INITIAL.
+        temp15 = `(all apps)`.
+      ELSE.
+        temp15 = ls_row-app.
+      ENDIF.
+      temp43-app = temp15.
+      temp43-raised = z2ui5_cl_cockpit_setup=>ts_text( ls_row-raised ).
+      temp43-cleared = z2ui5_cl_cockpit_setup=>ts_text( ls_row-cleared ).
+      temp43-value = ls_row-measured.
+      temp43-limit = ls_row-threshold.
+      temp43-roundtrips = ls_row-cnt.
+      temp43-text = ls_row-text.
+      temp43-note = ls_row-note.
+      APPEND temp43 TO result.
     ENDLOOP.
 
     " open ones first, each group newest first
@@ -371,9 +466,16 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   METHOD get_status.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA temp2 TYPE xsdboolean.
+    DATA temp44 TYPE string.
+    DATA lv_window LIKE temp44.
+    DATA temp45 TYPE string.
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
     result-notifier  = get_notifier_class( ).
-    result-check_now = xsdbool( it_now IS NOT INITIAL ).
+
+    temp2 = boolc( it_now IS NOT INITIAL ).
+    result-check_now = temp2.
 
     IF ls_set-alert_err_pct = 0 AND ls_set-alert_p95_ms = 0.
       result-strip_type = `Information`.
@@ -381,8 +483,14 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lv_window) = COND string( WHEN ls_set-alert_hours = 0 THEN `the UTC hour running now`
-                                   ELSE |the UTC hour running now and the { ls_set-alert_hours } before| ).
+
+    IF ls_set-alert_hours = 0.
+      temp44 = `the UTC hour running now`.
+    ELSE.
+      temp44 = |the UTC hour running now and the { ls_set-alert_hours } before|.
+    ENDIF.
+
+    lv_window = temp44.
     IF it_now IS INITIAL.
       result-strip_type = `Success`.
       result-text       = |No alert threshold exceeded in { lv_window }.|.
@@ -391,22 +499,37 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       result-text       = |{ lines( it_now ) } alert threshold(s) exceeded in { lv_window }.|.
     ENDIF.
 
+
+    IF result-notifier IS INITIAL.
+      temp45 = ` - nobody is told: no class implements z2ui5_if_cockpit_notify.`.
+    ELSE.
+      temp45 = | - notification: { result-notifier }.|.
+    ENDIF.
     result-text = result-text && | Alerts are kept and sent by the housekeeping job z2ui5_cl_cockpit_job=>run( )| &&
-                  COND string( WHEN result-notifier IS INITIAL
-                               THEN ` - nobody is told: no class implements z2ui5_if_cockpit_notify.`
-                               ELSE | - notification: { result-notifier }.| ).
+                  temp45.
 
   ENDMETHOD.
 
   METHOD get_notifier_class.
+    DATA lt_classes TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+    DATA temp46 TYPE string.
+    DATA temp47 TYPE string.
 
     IF gv_notifier_known = abap_true.
       result = gv_notifier.
       RETURN.
     ENDIF.
 
-    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( c_notify_intf ) ).
-    gv_notifier = VALUE #( lt_classes[ 1 ] OPTIONAL ).
+
+    lt_classes = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( c_notify_intf ) ).
+
+    CLEAR temp46.
+
+    READ TABLE lt_classes INTO temp47 INDEX 1.
+    IF sy-subrc = 0.
+      temp46 = temp47.
+    ENDIF.
+    gv_notifier = temp46.
     gv_notifier_known = abap_true.
     result = gv_notifier.
 
@@ -414,13 +537,20 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   METHOD send_test.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
-    DATA(ls_alert) = VALUE ty_s_alert( event  = z2ui5_if_cockpit_notify=>cs_event-test
-                                       rule   = z2ui5_if_cockpit_notify=>cs_rule-error_rate
-                                       value  = `0 %`
-                                       limit  = |{ ls_set-alert_err_pct } %|
-                                       raised = z2ui5_cl_cockpit_setup=>ts_text( z2ui5_cl_cockpit_setup=>now( ) )
-                                       system = |{ sy-sysid }/{ sy-mandt }| ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA temp48 TYPE ty_s_alert.
+    DATA ls_alert LIKE temp48.
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
+
+    CLEAR temp48.
+    temp48-event = z2ui5_if_cockpit_notify=>cs_event-test.
+    temp48-rule = z2ui5_if_cockpit_notify=>cs_rule-error_rate.
+    temp48-value = `0 %`.
+    temp48-limit = |{ ls_set-alert_err_pct } %|.
+    temp48-raised = z2ui5_cl_cockpit_setup=>ts_text( z2ui5_cl_cockpit_setup=>now( ) ).
+    temp48-system = |{ sy-sysid }/{ sy-mandt }|.
+
+    ls_alert = temp48.
     ls_alert-text = |Test notification of the abap2UI5 admin cockpit on { ls_alert-system }, sent by { sy-uname } - | &&
                     `nothing is exceeded.`.
     result = notify( ls_alert ).
@@ -442,7 +572,13 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   METHOD app_text.
 
-    result = COND #( WHEN app IS INITIAL THEN `over all apps` ELSE |in { app }| ).
+    DATA temp49 TYPE string.
+    IF app IS INITIAL.
+      temp49 = `over all apps`.
+    ELSE.
+      temp49 = |in { app }|.
+    ENDIF.
+    result = temp49.
 
   ENDMETHOD.
 

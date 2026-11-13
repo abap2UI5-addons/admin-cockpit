@@ -60,7 +60,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         uname      TYPE c LENGTH 32,
         timestampl TYPE timestampl,
       END OF ty_s_node.
-    TYPES ty_t_node TYPE STANDARD TABLE OF ty_s_node WITH EMPTY KEY.
+    TYPES ty_t_node TYPE STANDARD TABLE OF ty_s_node WITH DEFAULT KEY.
 
     TYPES:
       "! The session a draft belongs to: the first draft of its chain.
@@ -89,7 +89,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         signals      TYPE string,
         signal_state TYPE string,
       END OF ty_s_session.
-    TYPES ty_t_session TYPE STANDARD TABLE OF ty_s_session WITH EMPTY KEY.
+    TYPES ty_t_session TYPE STANDARD TABLE OF ty_s_session WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_list,
@@ -145,7 +145,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the highlight of the row: Information for the step shown
         state   TYPE string,
       END OF ty_s_step.
-    TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH EMPTY KEY.
+    TYPES ty_t_step TYPE STANDARD TABLE OF ty_s_step WITH DEFAULT KEY.
 
     TYPES:
       "! One click of a session as signals_of reads it.
@@ -158,7 +158,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the error box it answered with
         error_text  TYPE string,
       END OF ty_s_signal.
-    TYPES ty_t_signal TYPE STANDARD TABLE OF ty_s_signal WITH EMPTY KEY.
+    TYPES ty_t_signal TYPE STANDARD TABLE OF ty_s_signal WITH DEFAULT KEY.
 
     TYPES:
       "! Signs that a user struggled - a score, the reasons, a ValueState.
@@ -177,7 +177,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the step it first appears in
         step   TYPE i,
       END OF ty_s_business.
-    TYPES ty_t_business TYPE STANDARD TABLE OF ty_s_business WITH EMPTY KEY.
+    TYPES ty_t_business TYPE STANDARD TABLE OF ty_s_business WITH DEFAULT KEY.
 
     TYPES:
       "! A message the app holds in its state.
@@ -186,9 +186,9 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         text TYPE string,
         path TYPE string,
       END OF ty_s_message.
-    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
+    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH DEFAULT KEY.
 
-    TYPES ty_t_id TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    TYPES ty_t_id TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
     TYPES:
       "! A field of one sample - a draft - for common_of.
@@ -197,7 +197,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         path   TYPE string,
         value  TYPE string,
       END OF ty_s_sample.
-    TYPES ty_t_sample TYPE STANDARD TABLE OF ty_s_sample WITH EMPTY KEY.
+    TYPES ty_t_sample TYPE STANDARD TABLE OF ty_s_sample WITH DEFAULT KEY.
 
     TYPES:
       "! A value most failing cases share and the other states rarely have.
@@ -209,7 +209,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         others_pct TYPE i,
         text       TYPE string,
       END OF ty_s_common.
-    TYPES ty_t_common TYPE STANDARD TABLE OF ty_s_common WITH EMPTY KEY.
+    TYPES ty_t_common TYPE STANDARD TABLE OF ty_s_common WITH DEFAULT KEY.
 
     TYPES:
       "! A business object value and in how many drafts it occurs.
@@ -219,7 +219,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         drafts TYPE i,
         field  TYPE string,
       END OF ty_s_object_count.
-    TYPES ty_t_object_count TYPE STANDARD TABLE OF ty_s_object_count WITH EMPTY KEY.
+    TYPES ty_t_object_count TYPE STANDARD TABLE OF ty_s_object_count WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_failures,
@@ -246,7 +246,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         outcome TYPE string,
         state   TYPE string,
       END OF ty_s_outcome.
-    TYPES ty_t_outcome TYPE STANDARD TABLE OF ty_s_outcome WITH EMPTY KEY.
+    TYPES ty_t_outcome TYPE STANDARD TABLE OF ty_s_outcome WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_steps,
@@ -263,7 +263,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         path  TYPE string,
         value TYPE string,
       END OF ty_s_value.
-    TYPES ty_t_value TYPE STANDARD TABLE OF ty_s_value WITH EMPTY KEY.
+    TYPES ty_t_value TYPE STANDARD TABLE OF ty_s_value WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_field,
@@ -275,7 +275,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " removed, None unchanged
         state  TYPE string,
       END OF ty_s_field.
-    TYPES ty_t_field TYPE STANDARD TABLE OF ty_s_field WITH EMPTY KEY.
+    TYPES ty_t_field TYPE STANDARD TABLE OF ty_s_field WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_view,
@@ -297,7 +297,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         change TYPE string,
         state  TYPE string,
       END OF ty_s_history.
-    TYPES ty_t_history TYPE STANDARD TABLE OF ty_s_history WITH EMPTY KEY.
+    TYPES ty_t_history TYPE STANDARD TABLE OF ty_s_history WITH DEFAULT KEY.
 
     TYPES:
       "! A field of a draft that contains a searched value.
@@ -311,7 +311,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         path    TYPE string,
         value   TYPE string,
       END OF ty_s_hit.
-    TYPES ty_t_hit TYPE STANDARD TABLE OF ty_s_hit WITH EMPTY KEY.
+    TYPES ty_t_hit TYPE STANDARD TABLE OF ty_s_hit WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_find,
@@ -329,7 +329,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         target TYPE string,
         count  TYPE i,
       END OF ty_s_flow.
-    TYPES ty_t_flow TYPE STANDARD TABLE OF ty_s_flow WITH EMPTY KEY.
+    TYPES ty_t_flow TYPE STANDARD TABLE OF ty_s_flow WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_flows,
@@ -345,7 +345,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         rows_before TYPE i,
         rows_after  TYPE i,
       END OF ty_s_growth.
-    TYPES ty_t_growth TYPE STANDARD TABLE OF ty_s_growth WITH EMPTY KEY.
+    TYPES ty_t_growth TYPE STANDARD TABLE OF ty_s_growth WITH DEFAULT KEY.
 
     TYPES:
       "! A draft, its predecessor and its app - the input of flows_of.
@@ -355,7 +355,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         app        TYPE string,
         timestampl TYPE timestampl,
       END OF ty_s_link.
-    TYPES ty_t_link TYPE STANDARD TABLE OF ty_s_link WITH EMPTY KEY.
+    TYPES ty_t_link TYPE STANDARD TABLE OF ty_s_link WITH DEFAULT KEY.
 
     "! The sessions in the draft table, newest activity first. Never
     "! raises - check_readable / error say whether the table could be read.
@@ -684,7 +684,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         root  TYPE string,
         href  TYPE string,
       END OF ty_s_leaf.
-    TYPES ty_t_leaf TYPE STANDARD TABLE OF ty_s_leaf WITH EMPTY KEY.
+    TYPES ty_t_leaf TYPE STANDARD TABLE OF ty_s_leaf WITH DEFAULT KEY.
 
     CLASS-METHODS read_nodes
       RETURNING
@@ -833,36 +833,71 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         event       TYPE string,
         http_status TYPE i,
       END OF ty_s_wire.
-    DATA lt_agg TYPE HASHED TABLE OF ty_s_agg WITH UNIQUE KEY root.
-    DATA lt_sorted TYPE STANDARD TABLE OF ty_s_agg WITH EMPTY KEY.
+    TYPES temp1 TYPE HASHED TABLE OF ty_s_agg WITH UNIQUE KEY root.
+DATA lt_agg TYPE temp1.
+    TYPES temp2 TYPE STANDARD TABLE OF ty_s_agg WITH DEFAULT KEY.
+DATA lt_sorted TYPE temp2.
     DATA lt_node TYPE ty_t_node.
-    DATA lt_failed TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
+    TYPES temp3 TYPE STANDARD TABLE OF ty_id WITH DEFAULT KEY.
+DATA lt_failed TYPE temp3.
     DATA lv_oldest TYPE timestampl.
-    DATA lt_wire_row TYPE STANDARD TABLE OF ty_s_wire_row WITH EMPTY KEY.
-    DATA lt_wire TYPE SORTED TABLE OF ty_s_wire WITH NON-UNIQUE KEY root timestampl.
+    TYPES temp4 TYPE STANDARD TABLE OF ty_s_wire_row WITH DEFAULT KEY.
+DATA lt_wire_row TYPE temp4.
+    TYPES temp5 TYPE SORTED TABLE OF ty_s_wire WITH NON-UNIQUE KEY root timestampl.
+DATA lt_wire TYPE temp5.
     DATA lt_signal TYPE ty_t_signal.
     DATA lv_key TYPE c LENGTH 32.
+        DATA lx TYPE REF TO cx_root.
+    DATA temp6 TYPE xsdboolean.
+    DATA lt_root TYPE z2ui5_cl_cockpit_session=>ty_t_root.
+    DATA ls_node LIKE LINE OF lt_node.
+      DATA ls_root TYPE z2ui5_cl_cockpit_session=>ty_s_root.
+      FIELD-SYMBOLS <agg> TYPE ty_s_agg.
+        DATA temp127 TYPE ty_s_agg.
+    DATA lv_failed LIKE LINE OF lt_failed.
+    DATA ls_wire_row LIKE LINE OF lt_wire_row.
+      DATA temp128 LIKE lv_key.
+        DATA temp129 TYPE ty_s_wire.
+      DATA lv_since TYPE timestampl.
+    DATA lv_reads TYPE i.
+    DATA ls_agg LIKE LINE OF lt_sorted.
+      DATA temp130 TYPE ty_s_session.
+      DATA temp17 TYPE z2ui5_cl_cockpit_session=>ty_s_session-state.
+      DATA ls_session LIKE temp130.
+      DATA ls_wire LIKE LINE OF lt_wire.
+        DATA temp131 TYPE z2ui5_cl_cockpit_session=>ty_s_signal.
+      DATA ls_signals TYPE z2ui5_cl_cockpit_session=>ty_s_signals.
 
     TRY.
         lt_node = read_nodes( ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
     result-check_readable = abap_true.
-    result-check_capped = xsdbool( lines( lt_node ) >= c_max_nodes ).
 
-    DATA(lt_root) = roots_of( lt_node ).
-    LOOP AT lt_node INTO DATA(ls_node).
-      READ TABLE lt_root INTO DATA(ls_root) WITH TABLE KEY id = ls_node-id.
+    temp6 = boolc( lines( lt_node ) >= c_max_nodes ).
+    result-check_capped = temp6.
+
+
+    lt_root = roots_of( lt_node ).
+
+    LOOP AT lt_node INTO ls_node.
+
+      READ TABLE lt_root INTO ls_root WITH TABLE KEY id = ls_node-id.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_agg ASSIGNING FIELD-SYMBOL(<agg>) WITH TABLE KEY root = ls_root-root.
+
+      READ TABLE lt_agg ASSIGNING <agg> WITH TABLE KEY root = ls_root-root.
       IF sy-subrc <> 0.
-        INSERT VALUE #( root  = ls_root-root
-                        first = ls_node-timestampl
-                        last  = ls_node-timestampl ) INTO TABLE lt_agg ASSIGNING <agg>.
+
+        CLEAR temp127.
+        temp127-root = ls_root-root.
+        temp127-first = ls_node-timestampl.
+        temp127-last = ls_node-timestampl.
+        INSERT temp127 INTO TABLE lt_agg ASSIGNING <agg>.
       ENDIF.
       <agg>-steps = <agg>-steps + 1.
       IF ls_node-id = ls_root-root.
@@ -884,14 +919,15 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the failed roundtrips the monitor logged since the oldest draft, each
     " counted for the session of the draft it started from
     TRY.
-        SELECT draft_id_prev FROM z2ui5_t_25
-          WHERE check_error = @abap_true
-            AND timestampl >= @lv_oldest
-          INTO TABLE @lt_failed.
+        SELECT draft_id_prev FROM z2ui5_t_25 INTO TABLE lt_failed
+          WHERE check_error = abap_true
+            AND timestampl >= lv_oldest
+          .
       CATCH cx_root ##NO_HANDLER.
         " no monitor log - no error counts
     ENDTRY.
-    LOOP AT lt_failed INTO DATA(lv_failed).
+
+    LOOP AT lt_failed INTO lv_failed.
       READ TABLE lt_root INTO ls_root WITH TABLE KEY id = lv_failed.
       IF sy-subrc <> 0.
         CONTINUE.
@@ -907,29 +943,39 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     TRY.
         " ORDER BY as in z2ui5_cl_cockpit_wire=>get_variants - without it the
         " 7.02 downport leaves this SELECT half converted
-        SELECT draft_id, draft_id_prev, event, http_status, timestampl FROM z2ui5_t_28
-          WHERE timestampl >= @lv_oldest
+        SELECT draft_id draft_id_prev event http_status timestampl FROM z2ui5_t_28 INTO CORRESPONDING FIELDS OF TABLE lt_wire_row
+          WHERE timestampl >= lv_oldest
           ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_wire_row
+
           UP TO 20000 ROWS.
       CATCH cx_root ##NO_HANDLER.
         " no recorder - no signals
     ENDTRY.
-    LOOP AT lt_wire_row INTO DATA(ls_wire_row).
-      lv_key = COND #( WHEN ls_wire_row-draft_id_prev IS NOT INITIAL THEN ls_wire_row-draft_id_prev
-                       ELSE ls_wire_row-draft_id ).
+
+    LOOP AT lt_wire_row INTO ls_wire_row.
+
+      IF ls_wire_row-draft_id_prev IS NOT INITIAL.
+        temp128 = ls_wire_row-draft_id_prev.
+      ELSE.
+        temp128 = ls_wire_row-draft_id.
+      ENDIF.
+      lv_key = temp128.
       READ TABLE lt_root INTO ls_root WITH TABLE KEY id = lv_key.
       IF sy-subrc = 0.
-        INSERT VALUE #( root        = ls_root-root
-                        timestampl  = ls_wire_row-timestampl
-                        event       = ls_wire_row-event
-                        http_status = ls_wire_row-http_status ) INTO TABLE lt_wire.
+
+        CLEAR temp129.
+        temp129-root = ls_root-root.
+        temp129-timestampl = ls_wire_row-timestampl.
+        temp129-event = ls_wire_row-event.
+        temp129-http_status = ls_wire_row-http_status.
+        INSERT temp129 INTO TABLE lt_wire.
       ENDIF.
     ENDLOOP.
 
     lt_sorted = lt_agg.
     IF active_minutes > 0.
-      DATA(lv_since) = z2ui5_cl_cockpit_setup=>now_minus_seconds( active_minutes * 60 ).
+
+      lv_since = z2ui5_cl_cockpit_setup=>now_minus_seconds( active_minutes * 60 ).
       DELETE lt_sorted WHERE last < lv_since.
     ENDIF.
     IF check_errors = abap_true.
@@ -940,23 +986,34 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     " the app of a session is in its newest draft - read for as many
     " sessions as are listed, and a few more when a filter skips some
-    DATA(lv_reads) = 0.
-    LOOP AT lt_sorted INTO DATA(ls_agg).
+
+    lv_reads = 0.
+
+    LOOP AT lt_sorted INTO ls_agg.
       IF lines( result-t_session ) >= max_sessions OR lv_reads >= max_sessions * 3.
         EXIT.
       ENDIF.
       lv_reads = lv_reads + 1.
 
-      DATA(ls_session) = VALUE ty_s_session( id       = ls_agg-root
-                                             user     = user_text( ls_agg-uname )
-                                             steps    = ls_agg-steps
-                                             errors   = ls_agg-errors
-                                             state    = COND #( WHEN ls_agg-errors > 0 THEN `Error` ELSE `None` )
-                                             signal_state = `None`
-                                             first    = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-first )
-                                             last     = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-last )
-                                             duration = duration_text( seconds_between( ts_from = ls_agg-first
-                                                                                        ts_to   = ls_agg-last ) ) ).
+
+      CLEAR temp130.
+      temp130-id = ls_agg-root.
+      temp130-user = user_text( ls_agg-uname ).
+      temp130-steps = ls_agg-steps.
+      temp130-errors = ls_agg-errors.
+
+      IF ls_agg-errors > 0.
+        temp17 = `Error`.
+      ELSE.
+        temp17 = `None`.
+      ENDIF.
+      temp130-state = temp17.
+      temp130-signal_state = `None`.
+      temp130-first = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-first ).
+      temp130-last = z2ui5_cl_cockpit_setup=>ts_text( ls_agg-last ).
+      temp130-duration = duration_text( seconds_between( ts_from = ls_agg-first ts_to = ls_agg-last ) ).
+
+      ls_session = temp130.
       TRY.
           ls_session-app = app_of( read_data( ls_agg-last_id ) ).
         CATCH cx_root ##NO_HANDLER.
@@ -969,12 +1026,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ls_session-note = `earlier steps expired`.
       ENDIF.
       CLEAR lt_signal.
-      LOOP AT lt_wire INTO DATA(ls_wire) WHERE root = ls_agg-root.
-        APPEND VALUE #( timestampl  = ls_wire-timestampl
-                        event       = ls_wire-event
-                        http_status = ls_wire-http_status ) TO lt_signal.
+
+      LOOP AT lt_wire INTO ls_wire WHERE root = ls_agg-root.
+
+        CLEAR temp131.
+        temp131-timestampl = ls_wire-timestampl.
+        temp131-event = ls_wire-event.
+        temp131-http_status = ls_wire-http_status.
+        APPEND temp131 TO lt_signal.
       ENDLOOP.
-      DATA(ls_signals) = signals_of( lt_signal ).
+
+      ls_signals = signals_of( lt_signal ).
       ls_session-signals      = ls_signals-text.
       ls_session-signal_state = ls_signals-state.
 
@@ -990,19 +1052,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD get_steps.
 
     DATA lt_node TYPE ty_t_node.
+        DATA lv_over TYPE i.
+        DATA lx TYPE REF TO cx_root.
 
     TRY.
         lt_node = read_nodes( ).
         result-t_step = steps_of( it_node = lt_node
                                   it_root = roots_of( lt_node )
                                   id      = id ).
-        DATA(lv_over) = lines( result-t_step ) - c_max_steps.
+
+        lv_over = lines( result-t_step ) - c_max_steps.
         IF lv_over > 0.
           result-check_capped = abap_true.
           DELETE result-t_step TO lv_over.
         ENDIF.
         fill_steps( CHANGING cs_steps = result ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -1022,15 +1088,24 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD get_session_of.
 
     DATA lt_node TYPE ty_t_node.
+    DATA lt_root TYPE z2ui5_cl_cockpit_session=>ty_t_root.
+    DATA temp132 TYPE ty_s_root-id.
+    DATA lv_id LIKE temp132.
+    DATA ls_root TYPE z2ui5_cl_cockpit_session=>ty_s_root.
 
     TRY.
         lt_node = read_nodes( ).
       CATCH cx_root.
         RETURN.
     ENDTRY.
-    DATA(lt_root) = roots_of( lt_node ).
-    DATA(lv_id) = CONV ty_s_root-id( draft_id ).
-    READ TABLE lt_root INTO DATA(ls_root) WITH TABLE KEY id = lv_id.
+
+    lt_root = roots_of( lt_node ).
+
+    temp132 = draft_id.
+
+    lv_id = temp132.
+
+    READ TABLE lt_root INTO ls_root WITH TABLE KEY id = lv_id.
     IF sy-subrc = 0.
       result = ls_root-root.
     ENDIF.
@@ -1042,13 +1117,19 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_new TYPE string.
     DATA lv_old TYPE string.
     DATA lt_old TYPE ty_t_value.
+        DATA lx TYPE REF TO cx_root.
+    DATA lt_new TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA lt_field TYPE z2ui5_cl_cockpit_session=>ty_t_field.
+    DATA temp7 TYPE xsdboolean.
+    DATA ls_field LIKE LINE OF lt_field.
 
     TRY.
         lv_new = read_data( id ).
         IF id_prev IS NOT INITIAL.
           lv_old = read_data( id_prev ).
         ENDIF.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -1058,18 +1139,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
 
     result-app = app_of( lv_new ).
-    DATA(lt_new) = flatten( xml       = lv_new
+
+    lt_new = flatten( xml       = lv_new
                             check_all = check_all ).
     IF id_prev IS NOT INITIAL.
       lt_old = flatten( xml       = lv_old
                         check_all = check_all ).
     ENDIF.
-    DATA(lt_field) = diff( it_new      = lt_new
+
+
+    temp7 = boolc( id_prev IS INITIAL ).
+    lt_field = diff( it_new      = lt_new
                            it_old      = lt_old
-                           check_first = xsdbool( id_prev IS INITIAL ) ).
+                           check_first = temp7 ).
 
     result-fields = lines( lt_field ).
-    LOOP AT lt_field INTO DATA(ls_field).
+
+    LOOP AT lt_field INTO ls_field.
       IF ls_field-change IS NOT INITIAL.
         result-changes = result-changes + 1.
       ELSEIF check_changes = abap_true.
@@ -1097,52 +1183,132 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lt_old TYPE ty_t_value.
     DATA lv_prev TYPE string.
 
-    DATA(ls_steps) = get_steps( id ).
-    DATA(lv_nl) = cl_abap_char_utilities=>newline.
-    APPEND |abap2UI5 session { id }| TO lt_lines.
-    APPEND |exported { z2ui5_cl_cockpit_setup=>ts_text( z2ui5_cl_cockpit_setup=>now( ) ) } UTC by { sy-uname }| TO lt_lines.
+    DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+    DATA lv_nl LIKE cl_abap_char_utilities=>newline.
+    DATA temp133 LIKE LINE OF lt_lines.
+    DATA temp134 LIKE LINE OF lt_lines.
+      DATA temp135 LIKE LINE OF lt_lines.
+      DATA temp136 LIKE LINE OF lt_lines.
+    DATA temp137 TYPE string.
+    DATA temp18 LIKE LINE OF lt_lines.
+    DATA ls_business LIKE LINE OF ls_steps-t_business.
+      DATA temp138 LIKE LINE OF lt_lines.
+    DATA ls_step LIKE LINE OF ls_steps-t_step.
+      DATA temp139 TYPE string.
+      DATA temp19 TYPE string.
+      DATA temp1 LIKE LINE OF lt_lines.
+        DATA temp140 LIKE LINE OF lt_lines.
+        DATA temp141 LIKE LINE OF lt_lines.
+        DATA temp142 LIKE LINE OF lt_lines.
+        FIELD-SYMBOLS <temp143> LIKE LINE OF ls_steps-t_step.
+        DATA temp144 LIKE sy-tabix.
+          DATA lv_xml TYPE string.
+          DATA lx TYPE REF TO cx_root.
+          DATA temp145 LIKE LINE OF lt_lines.
+      DATA lt_field TYPE z2ui5_cl_cockpit_session=>ty_t_field.
+      DATA temp8 TYPE xsdboolean.
+      DATA lv_changes TYPE i.
+      DATA ls_field LIKE LINE OF lt_field.
+            DATA temp146 LIKE LINE OF lt_lines.
+            DATA temp147 LIKE LINE OF lt_lines.
+            DATA temp148 LIKE LINE OF lt_lines.
+              DATA temp149 LIKE LINE OF lt_lines.
+    ls_steps = get_steps( id ).
+
+    lv_nl = cl_abap_char_utilities=>newline.
+
+    temp133 = |abap2UI5 session { id }|.
+    APPEND temp133 TO lt_lines.
+
+    temp134 = |exported { z2ui5_cl_cockpit_setup=>ts_text( z2ui5_cl_cockpit_setup=>now( ) ) } UTC by { sy-uname }|.
+    APPEND temp134 TO lt_lines.
     IF user IS NOT INITIAL.
-      APPEND |user: { user }| TO lt_lines.
+
+      temp135 = |user: { user }|.
+      APPEND temp135 TO lt_lines.
     ENDIF.
     IF ls_steps-error IS NOT INITIAL.
-      APPEND |The session could not be read: { ls_steps-error }| TO lt_lines.
+
+      temp136 = |The session could not be read: { ls_steps-error }|.
+      APPEND temp136 TO lt_lines.
     ENDIF.
-    APPEND |{ lines( ls_steps-t_step ) } steps{ COND #( WHEN ls_steps-check_capped = abap_true
-                                                         THEN | (the newest { c_max_steps })| ) }| TO lt_lines.
-    LOOP AT ls_steps-t_business INTO DATA(ls_business).
+
+    IF ls_steps-check_capped = abap_true.
+      temp137 = | (the newest { c_max_steps })|.
+    ELSE.
+      CLEAR temp137.
+    ENDIF.
+
+    temp18 = |{ lines( ls_steps-t_step ) } steps{ temp137 }|.
+    APPEND temp18 TO lt_lines.
+
+    LOOP AT ls_steps-t_business INTO ls_business.
       IF sy-tabix = 1.
         APPEND `business objects:` TO lt_lines.
       ENDIF.
-      APPEND |   { ls_business-object } { ls_business-value } (step { ls_business-step }, { ls_business-field })| TO lt_lines.
+
+      temp138 = |   { ls_business-object } { ls_business-value } (step { ls_business-step }, { ls_business-field })|.
+      APPEND temp138 TO lt_lines.
     ENDLOOP.
 
-    LOOP AT ls_steps-t_step INTO DATA(ls_step).
+
+    LOOP AT ls_steps-t_step INTO ls_step.
       APPEND `` TO lt_lines.
-      APPEND |== Step { ls_step-step } - { ls_step-time } UTC{ COND #( WHEN ls_step-delta IS NOT INITIAL
-                                                                      THEN | ({ ls_step-delta })| ) }| &&
-             | - { ls_step-app }{ COND #( WHEN ls_step-event IS NOT INITIAL THEN | - event { ls_step-event }| ) }| TO lt_lines.
+
+      IF ls_step-delta IS NOT INITIAL.
+        temp139 = | ({ ls_step-delta })|.
+      ELSE.
+        CLEAR temp139.
+      ENDIF.
+
+      IF ls_step-event IS NOT INITIAL.
+        temp19 = | - event { ls_step-event }|.
+      ELSE.
+        CLEAR temp19.
+      ENDIF.
+
+      temp1 = |== Step { ls_step-step } - { ls_step-time } UTC{ temp139 }| && | - { ls_step-app }{ temp19 }|.
+      APPEND temp1 TO lt_lines.
       IF ls_step-note IS NOT INITIAL.
-        APPEND |   { ls_step-note }| TO lt_lines.
+
+        temp140 = |   { ls_step-note }|.
+        APPEND temp140 TO lt_lines.
       ENDIF.
       IF ls_step-monitor IS NOT INITIAL.
-        APPEND |   monitor: { ls_step-monitor }| TO lt_lines.
+
+        temp141 = |   monitor: { ls_step-monitor }|.
+        APPEND temp141 TO lt_lines.
       ENDIF.
       IF ls_step-messages IS NOT INITIAL.
-        APPEND |   messages in the app: { ls_step-messages }| TO lt_lines.
+
+        temp142 = |   messages in the app: { ls_step-messages }|.
+        APPEND temp142 TO lt_lines.
       ENDIF.
 
       CLEAR lt_old.
       CLEAR lv_prev.
       IF ls_step-follows > 0.
-        lv_prev = ls_steps-t_step[ ls_step-follows ]-id.
+
+
+        temp144 = sy-tabix.
+        READ TABLE ls_steps-t_step INDEX ls_step-follows ASSIGNING <temp143>.
+        sy-tabix = temp144.
+        IF sy-subrc <> 0.
+          ASSERT 1 = 0.
+        ENDIF.
+        lv_prev = <temp143>-id.
       ENDIF.
       TRY.
-          DATA(lv_xml) = read_data( ls_step-id ).
+
+          lv_xml = read_data( ls_step-id ).
           IF lv_prev IS NOT INITIAL.
             lt_old = flatten( read_data( lv_prev ) ).
           ENDIF.
-        CATCH cx_root INTO DATA(lx).
-          APPEND |   not readable: { lx->get_text( ) }| TO lt_lines.
+
+        CATCH cx_root INTO lx.
+
+          temp145 = |   not readable: { lx->get_text( ) }|.
+          APPEND temp145 TO lt_lines.
           CONTINUE.
       ENDTRY.
       IF lv_xml IS INITIAL.
@@ -1150,21 +1316,34 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lt_field) = diff( it_new      = flatten( lv_xml )
+
+
+      temp8 = boolc( lv_prev IS INITIAL ).
+      lt_field = diff( it_new      = flatten( lv_xml )
                              it_old      = lt_old
-                             check_first = xsdbool( lv_prev IS INITIAL ) ).
-      DATA(lv_changes) = 0.
-      LOOP AT lt_field INTO DATA(ls_field).
+                             check_first = temp8 ).
+
+      lv_changes = 0.
+
+      LOOP AT lt_field INTO ls_field.
         CASE ls_field-change.
           WHEN cs_change-changed.
-            APPEND |   changed  { ls_field-path } = { cut( ls_field-value ) }   (before: { cut( ls_field-prev ) })| TO lt_lines.
+
+            temp146 = |   changed  { ls_field-path } = { cut( ls_field-value ) }   (before: { cut( ls_field-prev ) })|.
+            APPEND temp146 TO lt_lines.
           WHEN cs_change-new.
-            APPEND |   new      { ls_field-path } = { cut( ls_field-value ) }| TO lt_lines.
+
+            temp147 = |   new      { ls_field-path } = { cut( ls_field-value ) }|.
+            APPEND temp147 TO lt_lines.
           WHEN cs_change-removed.
-            APPEND |   removed  { ls_field-path }   (was: { cut( ls_field-prev ) })| TO lt_lines.
+
+            temp148 = |   removed  { ls_field-path }   (was: { cut( ls_field-prev ) })|.
+            APPEND temp148 TO lt_lines.
           WHEN OTHERS.
             IF lv_prev IS INITIAL.
-              APPEND |   { ls_field-path } = { cut( ls_field-value ) }| TO lt_lines.
+
+              temp149 = |   { ls_field-path } = { cut( ls_field-value ) }|.
+              APPEND temp149 TO lt_lines.
             ENDIF.
             CONTINUE.
         ENDCASE.
@@ -1184,9 +1363,16 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lv_last TYPE string.
 
-    LOOP AT it_step INTO DATA(ls_step).
+    DATA ls_step LIKE LINE OF it_step.
+          DATA lv_xml TYPE string.
+      DATA temp150 TYPE ty_s_history.
+      DATA ls_history LIKE temp150.
+      DATA temp151 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+      DATA ls_value LIKE LINE OF temp151.
+    LOOP AT it_step INTO ls_step.
       TRY.
-          DATA(lv_xml) = read_data( ls_step-id ).
+
+          lv_xml = read_data( ls_step-id ).
         CATCH cx_root.
           CONTINUE.
       ENDTRY.
@@ -1194,12 +1380,18 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(ls_history) = VALUE ty_s_history( step  = ls_step-step
-                                             time  = ls_step-time
-                                             value = `(not there)`
-                                             state = `None` ).
-      LOOP AT flatten( xml       = lv_xml
-                       check_all = check_all ) INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
+
+      CLEAR temp150.
+      temp150-step = ls_step-step.
+      temp150-time = ls_step-time.
+      temp150-value = `(not there)`.
+      temp150-state = `None`.
+
+      ls_history = temp150.
+
+      temp151 = flatten( xml = lv_xml check_all = check_all ).
+
+      LOOP AT temp151 INTO ls_value WHERE path = path. "#EC CI_SORTSEQ
         ls_history-value = ls_value-value.
         EXIT.
       ENDLOOP.
@@ -1227,12 +1419,28 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         uname      TYPE c LENGTH 32,
         timestampl TYPE timestampl,
       END OF ty_s_meta.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
+    TYPES temp6 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp6.
+    TYPES temp7 TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
+DATA lt_meta TYPE temp7.
     DATA lt_node TYPE ty_t_node.
     DATA lv_last TYPE c LENGTH 32.
     DATA lv_tab TYPE string.
     DATA lv_search TYPE string.
+        DATA lx TYPE REF TO cx_root.
+    DATA lt_root TYPE z2ui5_cl_cockpit_session=>ty_t_root.
+    DATA ls_node LIKE LINE OF lt_node.
+      DATA temp152 TYPE ty_s_meta.
+    DATA lv_prefilter TYPE abap_bool.
+    DATA temp9 TYPE xsdboolean.
+      DATA ls_row LIKE LINE OF lt_rows.
+        DATA lv_matched LIKE abap_false.
+        DATA temp153 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+        DATA ls_value LIKE LINE OF temp153.
+          DATA ls_meta TYPE ty_s_meta.
+          DATA ls_root TYPE z2ui5_cl_cockpit_session=>ty_s_root.
+          DATA temp154 TYPE z2ui5_cl_cockpit_session=>ty_s_hit.
+          DATA temp20 TYPE z2ui5_cl_cockpit_session=>ty_s_hit-session.
 
     lv_search = condense( search ).
     IF strlen( lv_search ) < c_min_search.
@@ -1242,28 +1450,37 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     TRY.
         lt_node = read_nodes( ).
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
-    DATA(lt_root) = roots_of( lt_node ).
-    LOOP AT lt_node INTO DATA(ls_node).
-      INSERT VALUE #( id         = ls_node-id
-                      uname      = ls_node-uname
-                      timestampl = ls_node-timestampl ) INTO TABLE lt_meta.
+
+    lt_root = roots_of( lt_node ).
+
+    LOOP AT lt_node INTO ls_node.
+
+      CLEAR temp152.
+      temp152-id = ls_node-id.
+      temp152-uname = ls_node-uname.
+      temp152-timestampl = ls_node-timestampl.
+      INSERT temp152 INTO TABLE lt_meta.
     ENDLOOP.
 
     " the serialized text escapes <, > and &, so a term with one of them
     " is only found in the decoded fields - every draft is taken apart then
-    DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
+
+
+    temp9 = boolc( lv_search NA `<>&"'` ).
+    lv_prefilter = temp9.
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
       CLEAR lt_rows.
       TRY.
-          SELECT id, data FROM (lv_tab)
-            WHERE id > @lv_last
+          SELECT id data FROM (lv_tab) INTO CORRESPONDING FIELDS OF TABLE lt_rows
+            WHERE id > lv_last
             ORDER BY id
-            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+
             UP TO 200 ROWS.
         CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
@@ -1273,14 +1490,19 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         EXIT.
       ENDIF.
 
-      LOOP AT lt_rows INTO DATA(ls_row).
+
+      LOOP AT lt_rows INTO ls_row.
         lv_last = ls_row-id.
         result-drafts = result-drafts + 1.
         IF lv_prefilter = abap_true AND ls_row-data NS lv_search.
           CONTINUE.
         ENDIF.
-        DATA(lv_matched) = abap_false.
-        LOOP AT flatten( ls_row-data ) INTO DATA(ls_value).
+
+        lv_matched = abap_false.
+
+        temp153 = flatten( ls_row-data ).
+
+        LOOP AT temp153 INTO ls_value.
           IF ls_value-value NS lv_search.
             CONTINUE.
           ENDIF.
@@ -1289,16 +1511,27 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
             result-check_capped = abap_true.
             EXIT.
           ENDIF.
-          READ TABLE lt_meta INTO DATA(ls_meta) WITH TABLE KEY id = ls_row-id.
-          READ TABLE lt_root INTO DATA(ls_root) WITH TABLE KEY id = ls_row-id.
-          APPEND VALUE #( nr      = lines( result-t_hit ) + 1
-                          session = COND #( WHEN ls_root-root IS NOT INITIAL THEN ls_root-root ELSE ls_row-id )
-                          id      = ls_row-id
-                          time    = z2ui5_cl_cockpit_setup=>ts_text( ls_meta-timestampl )
-                          user    = user_text( ls_meta-uname )
-                          app     = app_of( ls_row-data )
-                          path    = ls_value-path
-                          value   = cut( ls_value-value ) ) TO result-t_hit.
+
+          READ TABLE lt_meta INTO ls_meta WITH TABLE KEY id = ls_row-id.
+
+          READ TABLE lt_root INTO ls_root WITH TABLE KEY id = ls_row-id.
+
+          CLEAR temp154.
+          temp154-nr = lines( result-t_hit ) + 1.
+
+          IF ls_root-root IS NOT INITIAL.
+            temp20 = ls_root-root.
+          ELSE.
+            temp20 = ls_row-id.
+          ENDIF.
+          temp154-session = temp20.
+          temp154-id = ls_row-id.
+          temp154-time = z2ui5_cl_cockpit_setup=>ts_text( ls_meta-timestampl ).
+          temp154-user = user_text( ls_meta-uname ).
+          temp154-app = app_of( ls_row-data ).
+          temp154-path = ls_value-path.
+          temp154-value = cut( ls_value-value ).
+          APPEND temp154 TO result-t_hit.
           CLEAR ls_meta.
           CLEAR ls_root.
         ENDLOOP.
@@ -1325,36 +1558,48 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         data       TYPE string,
       END OF ty_s_row.
     TYPES ty_id TYPE c LENGTH 32.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES temp8 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp8.
     DATA lt_link TYPE ty_t_link.
-    DATA lt_ids TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
+    TYPES temp9 TYPE STANDARD TABLE OF ty_id WITH DEFAULT KEY.
+DATA lt_ids TYPE temp9.
     DATA lt_failed TYPE ty_t_id.
     DATA lv_oldest TYPE timestampl.
     DATA lv_last TYPE c LENGTH 32.
     DATA lv_tab TYPE string.
+          DATA lx TYPE REF TO cx_root.
+      DATA ls_row LIKE LINE OF lt_rows.
+        DATA temp155 TYPE z2ui5_cl_cockpit_session=>ty_s_link.
+    DATA lv_id LIKE LINE OF lt_ids.
+      DATA temp156 LIKE LINE OF lt_failed.
 
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
       CLEAR lt_rows.
       TRY.
-          SELECT id, id_prev, timestampl, data FROM (lv_tab)
-            WHERE id > @lv_last
+          SELECT id id_prev timestampl data FROM (lv_tab) INTO CORRESPONDING FIELDS OF TABLE lt_rows
+            WHERE id > lv_last
             ORDER BY id
-            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+
             UP TO 200 ROWS.
-        CATCH cx_root INTO DATA(lx).
+
+        CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
       ENDTRY.
       IF lt_rows IS INITIAL.
         EXIT.
       ENDIF.
-      LOOP AT lt_rows INTO DATA(ls_row).
+
+      LOOP AT lt_rows INTO ls_row.
         lv_last = ls_row-id.
-        APPEND VALUE #( id         = ls_row-id
-                        id_prev    = ls_row-id_prev
-                        timestampl = ls_row-timestampl
-                        app        = app_of( ls_row-data ) ) TO lt_link.
+
+        CLEAR temp155.
+        temp155-id = ls_row-id.
+        temp155-id_prev = ls_row-id_prev.
+        temp155-timestampl = ls_row-timestampl.
+        temp155-app = app_of( ls_row-data ).
+        APPEND temp155 TO lt_link.
         IF lv_oldest IS INITIAL OR ls_row-timestampl < lv_oldest.
           lv_oldest = ls_row-timestampl.
         ENDIF.
@@ -1367,15 +1612,18 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the drafts a failed roundtrip started from - a session ending there
     " ended in an error
     TRY.
-        SELECT draft_id_prev FROM z2ui5_t_25
-          WHERE check_error = @abap_true
-            AND timestampl >= @lv_oldest
-          INTO TABLE @lt_ids.
+        SELECT draft_id_prev FROM z2ui5_t_25 INTO TABLE lt_ids
+          WHERE check_error = abap_true
+            AND timestampl >= lv_oldest
+          .
       CATCH cx_root ##NO_HANDLER.
         " no monitor log - every end is a plain end
     ENDTRY.
-    LOOP AT lt_ids INTO DATA(lv_id).
-      APPEND CONV string( lv_id ) TO lt_failed.
+
+    LOOP AT lt_ids INTO lv_id.
+
+      temp156 = lv_id.
+      APPEND temp156 TO lt_failed.
     ENDLOOP.
 
     result-drafts = lines( lt_link ).
@@ -1399,47 +1647,121 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         target TYPE string,
         count  TYPE i,
       END OF ty_s_count.
-    DATA lt_app TYPE HASHED TABLE OF ty_s_app WITH UNIQUE KEY id.
-    DATA lt_count TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY source target.
-    DATA lt_prev TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lt_failed TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES temp10 TYPE HASHED TABLE OF ty_s_app WITH UNIQUE KEY id.
+DATA lt_app TYPE temp10.
+    TYPES temp11 TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY source target.
+DATA lt_count TYPE temp11.
+    TYPES temp12 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_prev TYPE temp12.
+    TYPES temp13 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_failed TYPE temp13.
     DATA lv_source TYPE string.
     DATA lv_target TYPE string.
 
-    LOOP AT it_link INTO DATA(ls_link).
-      INSERT VALUE #( id  = ls_link-id
-                      app = COND #( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ) )
+    DATA ls_link LIKE LINE OF it_link.
+      DATA temp157 TYPE ty_s_app.
+      DATA temp21 TYPE ty_s_app-app.
+        DATA temp158 LIKE LINE OF lt_prev.
+    DATA lv_failed LIKE LINE OF it_failed.
+      DATA temp159 TYPE string.
+      DATA lv_link_id LIKE temp159.
+      DATA temp160 LIKE sy-subrc.
+      DATA temp161 LIKE sy-subrc.
+        DATA temp162 TYPE string.
+        DATA temp163 TYPE string.
+        DATA temp22 LIKE sy-subrc.
+        DATA temp23 LIKE sy-subrc.
+        FIELD-SYMBOLS <end> TYPE ty_s_count.
+          DATA temp164 TYPE ty_s_count.
+      DATA temp165 TYPE string.
+        DATA ls_prev TYPE ty_s_app.
+      FIELD-SYMBOLS <count> TYPE ty_s_count.
+        DATA temp166 TYPE ty_s_count.
+    DATA ls_count LIKE LINE OF lt_count.
+      DATA temp167 TYPE z2ui5_cl_cockpit_session=>ty_s_flow.
+    LOOP AT it_link INTO ls_link.
+
+      CLEAR temp157.
+      temp157-id = ls_link-id.
+
+      IF ls_link-app IS NOT INITIAL.
+        temp21 = ls_link-app.
+      ELSE.
+        temp21 = `(unknown)`.
+      ENDIF.
+      temp157-app = temp21.
+      INSERT temp157
              INTO TABLE lt_app.
       IF ls_link-id_prev IS NOT INITIAL.
-        INSERT CONV string( ls_link-id_prev ) INTO TABLE lt_prev.
+
+        temp158 = ls_link-id_prev.
+        INSERT temp158 INTO TABLE lt_prev.
       ENDIF.
     ENDLOOP.
-    LOOP AT it_failed INTO DATA(lv_failed).
+
+    LOOP AT it_failed INTO lv_failed.
       INSERT lv_failed INTO TABLE lt_failed.
     ENDLOOP.
 
     LOOP AT it_link INTO ls_link.
-      DATA(lv_link_id) = CONV string( ls_link-id ).
+
+      temp159 = ls_link-id.
+
+      lv_link_id = temp159.
       " the last step of a session that is over: where the user left
+
+
+      temp161 = sy-subrc.
+      READ TABLE lt_prev WITH KEY table_line = lv_link_id TRANSPORTING NO FIELDS.
+      temp160 = sy-subrc.
+      sy-subrc = temp161.
       IF ended_before IS NOT INITIAL
           AND ls_link-timestampl < ended_before
-          AND NOT line_exists( lt_prev[ table_line = lv_link_id ] ).
-        lv_source = COND #( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ).
-        lv_target = COND #( WHEN line_exists( lt_failed[ table_line = lv_link_id ] )
-                            THEN `(end after an error)` ELSE `(end)` ).
-        READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<end>) WITH TABLE KEY source = lv_source target = lv_target.
+          AND NOT temp160 = 0.
+
+        IF ls_link-app IS NOT INITIAL.
+          temp162 = ls_link-app.
+        ELSE.
+          temp162 = `(unknown)`.
+        ENDIF.
+        lv_source = temp162.
+
+
+
+        temp23 = sy-subrc.
+        READ TABLE lt_failed WITH KEY table_line = lv_link_id TRANSPORTING NO FIELDS.
+        temp22 = sy-subrc.
+        sy-subrc = temp23.
+        IF temp22 = 0.
+          temp163 = `(end after an error)`.
+        ELSE.
+          temp163 = `(end)`.
+        ENDIF.
+        lv_target = temp163.
+
+        READ TABLE lt_count ASSIGNING <end> WITH TABLE KEY source = lv_source target = lv_target.
         IF sy-subrc <> 0.
-          INSERT VALUE #( source = lv_source
-                          target = lv_target ) INTO TABLE lt_count ASSIGNING <end>.
+
+          CLEAR temp164.
+          temp164-source = lv_source.
+          temp164-target = lv_target.
+          INSERT temp164 INTO TABLE lt_count ASSIGNING <end>.
         ENDIF.
         <end>-count = <end>-count + 1.
       ENDIF.
 
-      lv_target = COND string( WHEN ls_link-app IS NOT INITIAL THEN ls_link-app ELSE `(unknown)` ).
+
+      IF ls_link-app IS NOT INITIAL.
+        temp165 = ls_link-app.
+      ELSE.
+        temp165 = `(unknown)`.
+      ENDIF.
+      lv_target = temp165.
       IF ls_link-id_prev IS INITIAL.
         lv_source = `(start)`.
       ELSE.
-        READ TABLE lt_app INTO DATA(ls_prev) WITH TABLE KEY id = ls_link-id_prev.
+
+        READ TABLE lt_app INTO ls_prev WITH TABLE KEY id = ls_link-id_prev.
         IF sy-subrc <> 0.
           " the predecessor expired - neither a start nor a known navigation
           CONTINUE.
@@ -1449,28 +1771,40 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ENDIF.
         lv_source = ls_prev-app.
       ENDIF.
-      READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY source = lv_source target = lv_target.
+
+      READ TABLE lt_count ASSIGNING <count> WITH TABLE KEY source = lv_source target = lv_target.
       IF sy-subrc <> 0.
-        INSERT VALUE #( source = lv_source
-                        target = lv_target ) INTO TABLE lt_count ASSIGNING <count>.
+
+        CLEAR temp166.
+        temp166-source = lv_source.
+        temp166-target = lv_target.
+        INSERT temp166 INTO TABLE lt_count ASSIGNING <count>.
       ENDIF.
       <count>-count = <count>-count + 1.
     ENDLOOP.
 
-    LOOP AT lt_count INTO DATA(ls_count).
-      APPEND VALUE #( source = ls_count-source
-                      target = ls_count-target
-                      count  = ls_count-count ) TO result.
+
+    LOOP AT lt_count INTO ls_count.
+
+      CLEAR temp167.
+      temp167-source = ls_count-source.
+      temp167-target = ls_count-target.
+      temp167-count = ls_count-count.
+      APPEND temp167 TO result.
     ENDLOOP.
     SORT result BY count DESCENDING source ASCENDING target ASCENDING.
 
   ENDMETHOD.
 
   METHOD get_growth.
+        DATA lv_before TYPE string.
+        DATA lv_after TYPE string.
 
     TRY.
-        DATA(lv_before) = read_data( id_before ).
-        DATA(lv_after) = read_data( id_after ).
+
+        lv_before = read_data( id_before ).
+
+        lv_after = read_data( id_after ).
       CATCH cx_root.
         RETURN.
     ENDTRY.
@@ -1489,7 +1823,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         text  TYPE string,
         count TYPE i,
       END OF ty_s_count.
-    DATA lt_error TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY text.
+    TYPES temp14 TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY text.
+DATA lt_error TYPE temp14.
     DATA lv_run TYPE i.
     DATA lv_run_from TYPE timestampl.
     DATA lv_failed TYPE i.
@@ -1498,8 +1833,20 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA ls_prev TYPE ty_s_signal.
     DATA lt_reason TYPE string_table.
 
-    LOOP AT it_signal INTO DATA(ls_signal).
-      DATA(lv_index) = sy-tabix.
+    DATA ls_signal LIKE LINE OF it_signal.
+      DATA lv_index LIKE sy-tabix.
+        DATA temp168 TYPE ty_s_count.
+        FIELD-SYMBOLS <error> TYPE ty_s_count.
+    DATA ls_error LIKE LINE OF lt_error.
+      DATA temp169 LIKE LINE OF lt_reason.
+      DATA temp170 TYPE string.
+      DATA temp24 LIKE LINE OF lt_reason.
+    DATA lv_reason LIKE LINE OF lt_reason.
+      DATA temp171 TYPE string.
+    DATA temp172 TYPE z2ui5_cl_cockpit_session=>ty_s_signals-state.
+    LOOP AT it_signal INTO ls_signal.
+
+      lv_index = sy-tabix.
 
       " the same button again and again, each within 10 seconds
       IF lv_index > 1 AND ls_signal-event IS NOT INITIAL AND ls_signal-event = ls_prev-event
@@ -1527,8 +1874,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         lv_failed = lv_failed + 1.
       ENDIF.
       IF ls_signal-error_text IS NOT INITIAL.
-        INSERT VALUE #( text = ls_signal-error_text ) INTO TABLE lt_error.
-        READ TABLE lt_error ASSIGNING FIELD-SYMBOL(<error>) WITH TABLE KEY text = ls_signal-error_text.
+
+        CLEAR temp168.
+        temp168-text = ls_signal-error_text.
+        INSERT temp168 INTO TABLE lt_error.
+
+        READ TABLE lt_error ASSIGNING <error> WITH TABLE KEY text = ls_signal-error_text.
         <error>-count = <error>-count + 1.
       ENDIF.
       ls_prev = ls_signal.
@@ -1538,12 +1889,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       APPEND lv_rage TO lt_reason.
       result-score = result-score + 3.
     ENDIF.
-    LOOP AT lt_error INTO DATA(ls_error) WHERE count >= 2.
-      APPEND |error "{ ls_error-text }" { ls_error-count } times| TO lt_reason.
+
+    LOOP AT lt_error INTO ls_error WHERE count >= 2.
+
+      temp169 = |error "{ ls_error-text }" { ls_error-count } times|.
+      APPEND temp169 TO lt_reason.
       result-score = result-score + 2.
     ENDLOOP.
     IF lv_failed > 0.
-      APPEND |{ lv_failed } failed click{ COND #( WHEN lv_failed > 1 THEN `s` ) }| TO lt_reason.
+
+      IF lv_failed > 1.
+        temp170 = `s`.
+      ELSE.
+        CLEAR temp170.
+      ENDIF.
+
+      temp24 = |{ lv_failed } failed click{ temp170 }|.
+      APPEND temp24 TO lt_reason.
       result-score = result-score + 2 * lv_failed.
     ENDIF.
     IF lv_again IS NOT INITIAL.
@@ -1555,12 +1917,25 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       result-score = result-score + 3.
     ENDIF.
 
-    LOOP AT lt_reason INTO DATA(lv_reason).
-      result-text = |{ result-text }{ COND #( WHEN result-text IS NOT INITIAL THEN `; ` ) }{ lv_reason }|.
+
+    LOOP AT lt_reason INTO lv_reason.
+
+      IF result-text IS NOT INITIAL.
+        temp171 = `; `.
+      ELSE.
+        CLEAR temp171.
+      ENDIF.
+      result-text = |{ result-text }{ temp171 }{ lv_reason }|.
     ENDLOOP.
-    result-state = COND #( WHEN result-score >= 5 THEN `Error`
-                           WHEN result-score > 0 THEN `Warning`
-                           ELSE `None` ).
+
+    IF result-score >= 5.
+      temp172 = `Error`.
+    ELSEIF result-score > 0.
+      temp172 = `Warning`.
+    ELSE.
+      temp172 = `None`.
+    ENDIF.
+    result-state = temp172.
 
   ENDMETHOD.
 
@@ -1568,18 +1943,34 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lt_signal TYPE ty_t_signal.
 
-    LOOP AT it_step INTO DATA(ls_step).
+    DATA ls_step LIKE LINE OF it_step.
+        DATA temp173 TYPE z2ui5_cl_cockpit_session=>ty_s_signal.
+        DATA temp25 TYPE z2ui5_cl_cockpit_session=>ty_s_signal-error_text.
+        DATA temp174 TYPE z2ui5_cl_cockpit_session=>ty_s_signal.
+    LOOP AT it_step INTO ls_step.
       IF sy-tabix > 1 OR ls_step-wire_id IS NOT INITIAL.
-        APPEND VALUE #( timestampl = ls_step-timestampl
-                        event      = ls_step-event
-                        ms_browser = ls_step-ms_browser
-                        error_text = COND #( WHEN ls_step-shown_state = `Error` THEN ls_step-shown ) ) TO lt_signal.
+
+        CLEAR temp173.
+        temp173-timestampl = ls_step-timestampl.
+        temp173-event = ls_step-event.
+        temp173-ms_browser = ls_step-ms_browser.
+
+        IF ls_step-shown_state = `Error`.
+          temp25 = ls_step-shown.
+        ELSE.
+          CLEAR temp25.
+        ENDIF.
+        temp173-error_text = temp25.
+        APPEND temp173 TO lt_signal.
       ENDIF.
       " the click that failed after it wrote no step of its own
       IF ls_step-wire_fail_id IS NOT INITIAL.
-        APPEND VALUE #( timestampl  = ls_step-timestampl
-                        event       = ls_step-wire_fail_event
-                        http_status = 500 ) TO lt_signal.
+
+        CLEAR temp174.
+        temp174-timestampl = ls_step-timestampl.
+        temp174-event = ls_step-wire_fail_event.
+        temp174-http_status = 500.
+        APPEND temp174 TO lt_signal.
       ENDIF.
     ENDLOOP.
     result = signals_of( lt_signal ).
@@ -1589,25 +1980,42 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD story_of.
 
     DATA lv_app TYPE string.
-    DATA(lv_nl) = cl_abap_char_utilities=>newline.
+    DATA lv_nl LIKE cl_abap_char_utilities=>newline.
+    DATA ls_step LIKE LINE OF it_step.
+      DATA lv_index LIKE sy-tabix.
+      DATA lv_time LIKE ls_step-time.
+      DATA lv_line TYPE string.
+      DATA temp175 TYPE string.
+    lv_nl = cl_abap_char_utilities=>newline.
 
-    LOOP AT it_step INTO DATA(ls_step).
-      DATA(lv_index) = sy-tabix.
-      DATA(lv_time) = ls_step-time.
+
+    LOOP AT it_step INTO ls_step.
+
+      lv_index = sy-tabix.
+
+      lv_time = ls_step-time.
       IF strlen( lv_time ) >= 19.
         lv_time = substring( val = lv_time
                              off = 11
                              len = 8 ).
       ENDIF.
-      DATA(lv_line) = |{ lv_time }  |.
+
+      lv_line = |{ lv_time }  |.
       IF ls_step-app <> lv_app.
         lv_line = |{ lv_line }[{ ls_step-app }] |.
         lv_app = ls_step-app.
       ENDIF.
-      lv_line = lv_line && COND string( WHEN ls_step-did IS NOT INITIAL THEN ls_step-did
-                                        WHEN ls_step-event IS NOT INITIAL THEN |event { ls_step-event }|
-                                        WHEN lv_index = 1 THEN `started`
-                                        ELSE `(no event recorded)` ).
+
+      IF ls_step-did IS NOT INITIAL.
+        temp175 = ls_step-did.
+      ELSEIF ls_step-event IS NOT INITIAL.
+        temp175 = |event { ls_step-event }|.
+      ELSEIF lv_index = 1.
+        temp175 = `started`.
+      ELSE.
+        temp175 = `(no event recorded)`.
+      ENDIF.
+      lv_line = lv_line && temp175.
       IF ls_step-shown IS NOT INITIAL.
         lv_line = |{ lv_line } -> { ls_step-shown }|.
       ENDIF.
@@ -1635,44 +2043,76 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         before TYPE i,
         after  TYPE i,
       END OF ty_s_count.
-    DATA lt_row TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY tab row.
-    DATA lt_count TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY tab.
+    TYPES temp15 TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY tab row.
+DATA lt_row TYPE temp15.
+    TYPES temp16 TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY tab.
+DATA lt_count TYPE temp16.
     DATA lt_values TYPE ty_t_value.
     DATA lv_pos TYPE i.
+      DATA lv_pass LIKE sy-index.
+      DATA temp176 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+      DATA ls_value LIKE LINE OF lt_values.
+          DATA lv_close TYPE i.
+          DATA lv_prefix TYPE string.
+          DATA lv_open TYPE i.
+          DATA temp177 TYPE ty_s_row.
+      DATA ls_row LIKE LINE OF lt_row.
+        FIELD-SYMBOLS <count> TYPE ty_s_count.
+          DATA temp178 TYPE ty_s_count.
+    DATA ls_count LIKE LINE OF lt_count.
+      DATA temp179 TYPE z2ui5_cl_cockpit_session=>ty_s_growth.
 
     DO 2 TIMES.
-      DATA(lv_pass) = sy-index.
+
+      lv_pass = sy-index.
       CLEAR lt_row.
-      lt_values = COND #( WHEN lv_pass = 1 THEN it_before ELSE it_after ).
-      LOOP AT lt_values INTO DATA(ls_value).
+
+      IF lv_pass = 1.
+        temp176 = it_before.
+      ELSE.
+        temp176 = it_after.
+      ENDIF.
+      lt_values = temp176.
+
+      LOOP AT lt_values INTO ls_value.
         " every [n] of the path is a row of the table the path names up to it
         lv_pos = 0.
         DO.
-          DATA(lv_close) = find( val = ls_value-path
+
+          lv_close = find( val = ls_value-path
                                  sub = `]`
                                  off = lv_pos ).
           IF lv_close < 0.
             EXIT.
           ENDIF.
-          DATA(lv_prefix) = substring( val = ls_value-path
+
+          lv_prefix = substring( val = ls_value-path
                                        len = lv_close + 1 ).
-          DATA(lv_open) = find( val = lv_prefix
+
+          lv_open = find( val = lv_prefix
                                 sub = `[`
                                 occ = -1 ).
           lv_pos = lv_close + 1.
           IF lv_open <= 0.
             CONTINUE.
           ENDIF.
-          INSERT VALUE #( tab = substring( val = lv_prefix
-                                           len = lv_open )
-                          row = lv_prefix ) INTO TABLE lt_row.
+
+          CLEAR temp177.
+          temp177-tab = substring( val = lv_prefix len = lv_open ).
+          temp177-row = lv_prefix.
+          INSERT temp177 INTO TABLE lt_row.
         ENDDO.
       ENDLOOP.
 
-      LOOP AT lt_row INTO DATA(ls_row).
-        READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY tab = ls_row-tab.
+
+      LOOP AT lt_row INTO ls_row.
+
+        READ TABLE lt_count ASSIGNING <count> WITH TABLE KEY tab = ls_row-tab.
         IF sy-subrc <> 0.
-          INSERT VALUE #( tab = ls_row-tab ) INTO TABLE lt_count ASSIGNING <count>.
+
+          CLEAR temp178.
+          temp178-tab = ls_row-tab.
+          INSERT temp178 INTO TABLE lt_count ASSIGNING <count>.
         ENDIF.
         IF lv_pass = 1.
           <count>-before = <count>-before + 1.
@@ -1682,13 +2122,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDLOOP.
     ENDDO.
 
-    LOOP AT lt_count INTO DATA(ls_count).
+
+    LOOP AT lt_count INTO ls_count.
       IF ls_count-after <= ls_count-before.
         CONTINUE.
       ENDIF.
-      APPEND VALUE #( path        = ls_count-tab
-                      rows_before = ls_count-before
-                      rows_after  = ls_count-after ) TO result.
+
+      CLEAR temp179.
+      temp179-path = ls_count-tab.
+      temp179-rows_before = ls_count-before.
+      temp179-rows_after = ls_count-after.
+      APPEND temp179 TO result.
     ENDLOOP.
     SORT result BY rows_after DESCENDING path ASCENDING.
 
@@ -1717,29 +2161,59 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         timestampl TYPE timestampl,
       END OF ty_s_meta.
     TYPES ty_id TYPE c LENGTH 32.
-    DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
-    DATA lt_prev TYPE HASHED TABLE OF ty_id WITH UNIQUE KEY table_line.
+    TYPES temp17 TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
+DATA lt_meta TYPE temp17.
+    TYPES temp18 TYPE HASHED TABLE OF ty_id WITH UNIQUE KEY table_line.
+DATA lt_prev TYPE temp18.
     DATA lv_key TYPE ty_id.
 
-    LOOP AT it_node INTO DATA(ls_node).
-      INSERT VALUE #( id         = ls_node-id
-                      timestampl = ls_node-timestampl ) INTO TABLE lt_meta.
+    DATA ls_node LIKE LINE OF it_node.
+      DATA temp180 TYPE ty_s_meta.
+    DATA lv_id LIKE LINE OF it_id.
+      DATA temp181 TYPE ty_s_outcome.
+      DATA ls_outcome LIKE temp181.
+      DATA ls_meta TYPE ty_s_meta.
+      DATA lv_found TYPE abap_bool.
+      DATA temp10 TYPE xsdboolean.
+      DATA temp182 LIKE sy-subrc.
+      DATA temp183 LIKE sy-subrc.
+    LOOP AT it_node INTO ls_node.
+
+      CLEAR temp180.
+      temp180-id = ls_node-id.
+      temp180-timestampl = ls_node-timestampl.
+      INSERT temp180 INTO TABLE lt_meta.
       IF ls_node-id_prev IS NOT INITIAL.
         INSERT ls_node-id_prev INTO TABLE lt_prev.
       ENDIF.
     ENDLOOP.
 
-    LOOP AT it_id INTO DATA(lv_id).
+
+    LOOP AT it_id INTO lv_id.
       lv_key = lv_id.
-      DATA(ls_outcome) = VALUE ty_s_outcome( id = lv_id ).
-      READ TABLE lt_meta INTO DATA(ls_meta) WITH TABLE KEY id = lv_key.
+
+      CLEAR temp181.
+      temp181-id = lv_id.
+
+      ls_outcome = temp181.
+
+      READ TABLE lt_meta INTO ls_meta WITH TABLE KEY id = lv_key.
       " kept at once: the downport turns the line_exists( ) below into a READ
       " TABLE in front of this IF, which would overwrite sy-subrc
-      DATA(lv_found) = xsdbool( sy-subrc = 0 ).
+
+
+      temp10 = boolc( sy-subrc = 0 ).
+      lv_found = temp10.
+
+
+      temp183 = sy-subrc.
+      READ TABLE lt_prev WITH KEY table_line = lv_key TRANSPORTING NO FIELDS.
+      temp182 = sy-subrc.
+      sy-subrc = temp183.
       IF lv_key IS INITIAL OR lv_found = abap_false.
         ls_outcome-outcome = cs_outcome-unknown.
         ls_outcome-state   = `None`.
-      ELSEIF line_exists( lt_prev[ table_line = lv_key ] ).
+      ELSEIF temp182 = 0.
         ls_outcome-outcome = cs_outcome-continued.
         ls_outcome-state   = `Success`.
       ELSEIF ls_meta-timestampl >= ended_before.
@@ -1763,12 +2237,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       END OF ty_s_seen.
     DATA lt_failing TYPE ty_t_sample.
     DATA lt_others TYPE ty_t_sample.
-    DATA lt_done TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+    TYPES temp19 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_done TYPE temp19.
+    TYPES temp20 TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+DATA lt_seen TYPE temp20.
     DATA lv_xml TYPE string.
+        DATA lv_id LIKE LINE OF it_id.
+          DATA temp184 TYPE z2ui5_cl_cockpit_session=>ty_t_business.
+          DATA ls_business LIKE LINE OF temp184.
+            DATA temp185 TYPE ty_s_seen.
+            FIELD-SYMBOLS <object> TYPE z2ui5_cl_cockpit_session=>ty_s_object_count.
+              DATA temp186 TYPE z2ui5_cl_cockpit_session=>ty_s_object_count.
+        DATA lt_other_ids TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+        DATA lx TYPE REF TO cx_root.
 
     TRY.
-        LOOP AT it_id INTO DATA(lv_id).
+
+        LOOP AT it_id INTO lv_id.
           IF lv_id IS INITIAL.
             CONTINUE.
           ENDIF.
@@ -1788,18 +2273,28 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                       CHANGING  ct_sample = lt_failing ).
 
           CLEAR lt_seen.
-          LOOP AT business_of( flatten( lv_xml ) ) INTO DATA(ls_business).
-            INSERT VALUE #( object = ls_business-object
-                            value  = ls_business-value ) INTO TABLE lt_seen.
+
+          temp184 = business_of( flatten( lv_xml ) ).
+
+          LOOP AT temp184 INTO ls_business.
+
+            CLEAR temp185.
+            temp185-object = ls_business-object.
+            temp185-value = ls_business-value.
+            INSERT temp185 INTO TABLE lt_seen.
             IF sy-subrc <> 0.
               CONTINUE.
             ENDIF.
-            READ TABLE result-t_business ASSIGNING FIELD-SYMBOL(<object>)
+
+            READ TABLE result-t_business ASSIGNING <object>
                  WITH KEY object = ls_business-object value = ls_business-value. "#EC CI_SORTSEQ
             IF sy-subrc <> 0.
-              APPEND VALUE #( object = ls_business-object
-                              value  = ls_business-value
-                              field  = ls_business-field ) TO result-t_business ASSIGNING <object>.
+
+              CLEAR temp186.
+              temp186-object = ls_business-object.
+              temp186-value = ls_business-value.
+              temp186-field = ls_business-field.
+              APPEND temp186 TO result-t_business ASSIGNING <object>.
             ENDIF.
             <object>-drafts = <object>-drafts + 1.
           ENDLOOP.
@@ -1810,7 +2305,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           RETURN.
         ENDIF.
 
-        DATA(lt_other_ids) = scan_app( app      = app
+
+        lt_other_ids = scan_app( app      = app
                                        max_hits = 300
                                        it_skip  = it_id ).
         LOOP AT lt_other_ids INTO lv_id.
@@ -1823,7 +2319,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                 xml       = lv_xml
                       CHANGING  ct_sample = lt_others ).
         ENDLOOP.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -1852,28 +2349,49 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         common TYPE ty_s_common,
         f_pct  TYPE i,
       END OF ty_s_rank.
-    DATA lt_failing TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY path value.
-    DATA lt_others TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY path value.
-    DATA lt_once TYPE HASHED TABLE OF ty_s_key WITH UNIQUE KEY sample path value.
-    DATA lt_rank TYPE STANDARD TABLE OF ty_s_rank WITH EMPTY KEY.
+    TYPES temp21 TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY path value.
+DATA lt_failing TYPE temp21.
+    TYPES temp22 TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY path value.
+DATA lt_others TYPE temp22.
+    TYPES temp23 TYPE HASHED TABLE OF ty_s_key WITH UNIQUE KEY sample path value.
+DATA lt_once TYPE temp23.
+    TYPES temp24 TYPE STANDARD TABLE OF ty_s_rank WITH DEFAULT KEY.
+DATA lt_rank TYPE temp24.
     DATA lv_failing TYPE i.
     DATA lv_others TYPE i.
     DATA lv_pct TYPE i.
 
-    LOOP AT it_failing INTO DATA(ls_sample).
+    DATA ls_sample LIKE LINE OF it_failing.
+      DATA temp187 TYPE ty_s_key.
+      FIELD-SYMBOLS <count> TYPE ty_s_count.
+        DATA temp188 TYPE ty_s_count.
+      DATA temp189 TYPE ty_s_key.
+        DATA temp190 TYPE ty_s_count.
+    DATA ls_count LIKE LINE OF lt_failing.
+      DATA ls_other TYPE ty_s_count.
+      DATA temp191 TYPE ty_s_rank.
+    DATA ls_rank LIKE LINE OF lt_rank.
+    LOOP AT it_failing INTO ls_sample.
       IF ls_sample-sample > lv_failing.
         lv_failing = ls_sample-sample.
       ENDIF.
-      INSERT VALUE #( sample = ls_sample-sample
-                      path   = ls_sample-path
-                      value  = ls_sample-value ) INTO TABLE lt_once.
+
+      CLEAR temp187.
+      temp187-sample = ls_sample-sample.
+      temp187-path = ls_sample-path.
+      temp187-value = ls_sample-value.
+      INSERT temp187 INTO TABLE lt_once.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_failing ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY path = ls_sample-path value = ls_sample-value.
+
+      READ TABLE lt_failing ASSIGNING <count> WITH TABLE KEY path = ls_sample-path value = ls_sample-value.
       IF sy-subrc <> 0.
-        INSERT VALUE #( path  = ls_sample-path
-                        value = ls_sample-value ) INTO TABLE lt_failing ASSIGNING <count>.
+
+        CLEAR temp188.
+        temp188-path = ls_sample-path.
+        temp188-value = ls_sample-value.
+        INSERT temp188 INTO TABLE lt_failing ASSIGNING <count>.
       ENDIF.
       <count>-count = <count>-count + 1.
     ENDLOOP.
@@ -1883,16 +2401,22 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF ls_sample-sample > lv_others.
         lv_others = ls_sample-sample.
       ENDIF.
-      INSERT VALUE #( sample = ls_sample-sample
-                      path   = ls_sample-path
-                      value  = ls_sample-value ) INTO TABLE lt_once.
+
+      CLEAR temp189.
+      temp189-sample = ls_sample-sample.
+      temp189-path = ls_sample-path.
+      temp189-value = ls_sample-value.
+      INSERT temp189 INTO TABLE lt_once.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
       READ TABLE lt_others ASSIGNING <count> WITH TABLE KEY path = ls_sample-path value = ls_sample-value.
       IF sy-subrc <> 0.
-        INSERT VALUE #( path  = ls_sample-path
-                        value = ls_sample-value ) INTO TABLE lt_others ASSIGNING <count>.
+
+        CLEAR temp190.
+        temp190-path = ls_sample-path.
+        temp190-value = ls_sample-value.
+        INSERT temp190 INTO TABLE lt_others ASSIGNING <count>.
       ENDIF.
       <count>-count = <count>-count + 1.
     ENDLOOP.
@@ -1901,11 +2425,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    LOOP AT lt_failing INTO DATA(ls_count).
+
+    LOOP AT lt_failing INTO ls_count.
       IF ls_count-count * 100 < lv_failing * 80.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_others INTO DATA(ls_other) WITH TABLE KEY path = ls_count-path value = ls_count-value.
+
+      READ TABLE lt_others INTO ls_other WITH TABLE KEY path = ls_count-path value = ls_count-value.
       IF sy-subrc <> 0.
         CLEAR ls_other.
       ENDIF.
@@ -1913,19 +2439,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF lv_pct > 30.
         CONTINUE.
       ENDIF.
-      APPEND VALUE #( f_pct  = ls_count-count * 100 / lv_failing
-                      common = VALUE #( path       = ls_count-path
-                                        value      = ls_count-value
-                                        failing    = ls_count-count
-                                        of_failing = lv_failing
-                                        others_pct = lv_pct
-                                        text       = |in { ls_count-count } of { lv_failing } failing, | &&
-                                                     |in { lv_pct } % of { lv_others } other states| ) )
+
+      CLEAR temp191.
+      temp191-f_pct = ls_count-count * 100 / lv_failing.
+      CLEAR temp191-common.
+      temp191-common-path = ls_count-path.
+      temp191-common-value = ls_count-value.
+      temp191-common-failing = ls_count-count.
+      temp191-common-of_failing = lv_failing.
+      temp191-common-others_pct = lv_pct.
+      temp191-common-text = |in { ls_count-count } of { lv_failing } failing, | && |in { lv_pct } % of { lv_others } other states|.
+      APPEND temp191
              TO lt_rank.
     ENDLOOP.
 
     SORT lt_rank BY f_pct DESCENDING common-others_pct ASCENDING common-path ASCENDING.
-    LOOP AT lt_rank INTO DATA(ls_rank) TO 20.
+
+    LOOP AT lt_rank INTO ls_rank TO 20.
       APPEND ls_rank-common TO result.
     ENDLOOP.
 
@@ -1933,14 +2463,22 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD samples_of.
 
-    LOOP AT flatten( xml ) INTO DATA(ls_value).
+    DATA temp192 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA ls_value LIKE LINE OF temp192.
+      DATA temp193 TYPE z2ui5_cl_cockpit_session=>ty_s_sample.
+    temp192 = flatten( xml ).
+
+    LOOP AT temp192 INTO ls_value.
       " a reference or a long text tells nothing about a cause
       IF ls_value-value CP `->*` OR strlen( ls_value-value ) > 100.
         CONTINUE.
       ENDIF.
-      APPEND VALUE #( sample = sample
-                      path   = ls_value-path
-                      value  = ls_value-value ) TO ct_sample.
+
+      CLEAR temp193.
+      temp193-sample = sample.
+      temp193-path = ls_value-path.
+      temp193-value = ls_value-value.
+      APPEND temp193 TO ct_sample.
     ENDLOOP.
 
   ENDMETHOD.
@@ -1951,34 +2489,56 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       BEGIN OF ty_s_seen,
         object TYPE string,
       END OF ty_s_seen.
-    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object.
+    TYPES temp25 TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object.
+DATA lt_seen TYPE temp25.
     DATA lv_xml TYPE string.
+        DATA lt_ids TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+        DATA lv_id LIKE LINE OF lt_ids.
+          DATA temp194 TYPE z2ui5_cl_cockpit_session=>ty_t_business.
+          DATA ls_business LIKE LINE OF temp194.
+            DATA temp195 TYPE ty_s_seen.
+            FIELD-SYMBOLS <object> TYPE z2ui5_cl_cockpit_session=>ty_s_object_count.
+              DATA temp196 TYPE z2ui5_cl_cockpit_session=>ty_s_object_count.
+        DATA lx TYPE REF TO cx_root.
 
     TRY.
-        DATA(lt_ids) = scan_app( app      = app
+
+        lt_ids = scan_app( app      = app
                                  max_hits = 300 ).
-        LOOP AT lt_ids INTO DATA(lv_id).
+
+        LOOP AT lt_ids INTO lv_id.
           lv_xml = read_data( lv_id ).
           IF lv_xml IS INITIAL.
             CONTINUE.
           ENDIF.
           result-drafts = result-drafts + 1.
           CLEAR lt_seen.
-          LOOP AT business_of( flatten( lv_xml ) ) INTO DATA(ls_business).
-            INSERT VALUE #( object = ls_business-object ) INTO TABLE lt_seen.
+
+          temp194 = business_of( flatten( lv_xml ) ).
+
+          LOOP AT temp194 INTO ls_business.
+
+            CLEAR temp195.
+            temp195-object = ls_business-object.
+            INSERT temp195 INTO TABLE lt_seen.
             IF sy-subrc <> 0.
               CONTINUE.
             ENDIF.
-            READ TABLE result-t_object ASSIGNING FIELD-SYMBOL(<object>)
+
+            READ TABLE result-t_object ASSIGNING <object>
                  WITH KEY object = ls_business-object. "#EC CI_SORTSEQ
             IF sy-subrc <> 0.
-              APPEND VALUE #( object = ls_business-object
-                              field  = ls_business-field ) TO result-t_object ASSIGNING <object>.
+
+              CLEAR temp196.
+              temp196-object = ls_business-object.
+              temp196-field = ls_business-field.
+              APPEND temp196 TO result-t_object ASSIGNING <object>.
             ENDIF.
             <object>-drafts = <object>-drafts + 1.
           ENDLOOP.
         ENDLOOP.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -1993,32 +2553,48 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         id   TYPE c LENGTH 32,
         data TYPE string,
       END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_skip TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES temp26 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp26.
+    TYPES temp27 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_skip TYPE temp27.
     DATA lv_last TYPE c LENGTH 32.
     DATA lv_tab TYPE string.
     DATA lv_scanned TYPE i.
 
-    DATA(lv_app) = to_upper( condense( app ) ).
-    LOOP AT it_skip INTO DATA(lv_skip).
+    DATA lv_app TYPE string.
+    DATA lv_skip LIKE LINE OF it_skip.
+      DATA ls_row LIKE LINE OF lt_rows.
+        DATA temp197 TYPE string.
+        DATA lv_id LIKE temp197.
+        DATA temp198 LIKE sy-subrc.
+    lv_app = to_upper( condense( app ) ).
+
+    LOOP AT it_skip INTO lv_skip.
       INSERT lv_skip INTO TABLE lt_skip.
     ENDLOOP.
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
       CLEAR lt_rows.
-      SELECT id, data FROM (lv_tab)
-        WHERE id > @lv_last
+      SELECT id data FROM (lv_tab) INTO CORRESPONDING FIELDS OF TABLE lt_rows
+        WHERE id > lv_last
         ORDER BY id
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+
         UP TO 200 ROWS.
       IF lt_rows IS INITIAL.
         RETURN.
       ENDIF.
-      LOOP AT lt_rows INTO DATA(ls_row).
+
+      LOOP AT lt_rows INTO ls_row.
         lv_last = ls_row-id.
         lv_scanned = lv_scanned + 1.
-        DATA(lv_id) = CONV string( ls_row-id ).
-        IF line_exists( lt_skip[ table_line = lv_id ] ).
+
+        temp197 = ls_row-id.
+
+        lv_id = temp197.
+
+        READ TABLE lt_skip WITH KEY table_line = lv_id TRANSPORTING NO FIELDS.
+        temp198 = sy-subrc.
+        IF temp198 = 0.
           CONTINUE.
         ENDIF.
         IF app_of( ls_row-data ) <> lv_app.
@@ -2049,6 +2625,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_part TYPE string.
     DATA lo_conv TYPE REF TO object.
     DATA lv_class TYPE c LENGTH 30.
+    DATA lv_len TYPE i.
 
     " UTF-8 through whichever converter the release has - by name, as the
     " modern one is missing on 7.02 and the classic one is not released in
@@ -2081,7 +2658,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ENDTRY.
     ENDTRY.
 
-    DATA(lv_len) = xstrlen( lv_utf8 ).
+
+    lv_len = xstrlen( lv_utf8 ).
     WHILE lv_off < lv_len.
       lv_rest = lv_len - lv_off.
       lv_triple = 0.
@@ -2128,18 +2706,41 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         prev TYPE c LENGTH 32,
       END OF ty_s_link.
     TYPES ty_id TYPE c LENGTH 32.
-    DATA lt_link TYPE HASHED TABLE OF ty_s_link WITH UNIQUE KEY id.
-    DATA lt_path TYPE HASHED TABLE OF ty_id WITH UNIQUE KEY table_line.
+    TYPES temp28 TYPE HASHED TABLE OF ty_s_link WITH UNIQUE KEY id.
+DATA lt_link TYPE temp28.
+    TYPES temp29 TYPE HASHED TABLE OF ty_id WITH UNIQUE KEY table_line.
+DATA lt_path TYPE temp29.
     DATA lv_cur TYPE ty_id.
     DATA lv_root TYPE ty_id.
 
-    LOOP AT it_node INTO DATA(ls_node).
-      INSERT VALUE #( id   = ls_node-id
-                      prev = ls_node-id_prev ) INTO TABLE lt_link.
+    DATA ls_node LIKE LINE OF it_node.
+      DATA temp199 TYPE ty_s_link.
+      DATA temp200 LIKE sy-subrc.
+      DATA temp201 LIKE sy-subrc.
+        DATA ls_known TYPE z2ui5_cl_cockpit_session=>ty_s_root.
+        DATA ls_link TYPE ty_s_link.
+        DATA temp202 LIKE sy-subrc.
+        DATA temp203 LIKE sy-subrc.
+        DATA temp204 LIKE sy-subrc.
+        DATA temp205 LIKE sy-subrc.
+      DATA lv_id LIKE LINE OF lt_path.
+        DATA temp206 TYPE z2ui5_cl_cockpit_session=>ty_s_root.
+    LOOP AT it_node INTO ls_node.
+
+      CLEAR temp199.
+      temp199-id = ls_node-id.
+      temp199-prev = ls_node-id_prev.
+      INSERT temp199 INTO TABLE lt_link.
     ENDLOOP.
 
     LOOP AT it_node INTO ls_node.
-      IF line_exists( result[ id = ls_node-id ] ).
+
+
+      temp201 = sy-subrc.
+      READ TABLE result WITH KEY id = ls_node-id TRANSPORTING NO FIELDS.
+      temp200 = sy-subrc.
+      sy-subrc = temp201.
+      IF temp200 = 0.
         CONTINUE.
       ENDIF.
 
@@ -2147,23 +2748,37 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       CLEAR lv_root.
       lv_cur = ls_node-id.
       DO.
-        READ TABLE result INTO DATA(ls_known) WITH TABLE KEY id = lv_cur.
+
+        READ TABLE result INTO ls_known WITH TABLE KEY id = lv_cur.
         IF sy-subrc = 0.
           lv_root = ls_known-root.
           EXIT.
         ENDIF.
         INSERT lv_cur INTO TABLE lt_path.
-        READ TABLE lt_link INTO DATA(ls_link) WITH TABLE KEY id = lv_cur.
+
+        READ TABLE lt_link INTO ls_link WITH TABLE KEY id = lv_cur.
         IF sy-subrc <> 0 OR ls_link-prev IS INITIAL.
           lv_root = lv_cur.
           EXIT.
         ENDIF.
-        IF NOT line_exists( lt_link[ id = ls_link-prev ] ).
+
+
+        temp203 = sy-subrc.
+        READ TABLE lt_link WITH KEY id = ls_link-prev TRANSPORTING NO FIELDS.
+        temp202 = sy-subrc.
+        sy-subrc = temp203.
+        IF NOT temp202 = 0.
           " the predecessor expired - the session starts here now
           lv_root = lv_cur.
           EXIT.
         ENDIF.
-        IF line_exists( lt_path[ table_line = ls_link-prev ] ).
+
+
+        temp205 = sy-subrc.
+        READ TABLE lt_path WITH KEY table_line = ls_link-prev TRANSPORTING NO FIELDS.
+        temp204 = sy-subrc.
+        sy-subrc = temp205.
+        IF temp204 = 0.
           " a cycle no framework writes - end it where it closes
           lv_root = lv_cur.
           EXIT.
@@ -2171,9 +2786,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         lv_cur = ls_link-prev.
       ENDDO.
 
-      LOOP AT lt_path INTO DATA(lv_id).
-        INSERT VALUE #( id   = lv_id
-                        root = lv_root ) INTO TABLE result.
+
+      LOOP AT lt_path INTO lv_id.
+
+        CLEAR temp206.
+        temp206-id = lv_id.
+        temp206-root = lv_root.
+        INSERT temp206 INTO TABLE result.
       ENDLOOP.
     ENDLOOP.
 
@@ -2186,13 +2805,26 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         id   TYPE c LENGTH 32,
         step TYPE i,
       END OF ty_s_index.
-    DATA lt_index TYPE HASHED TABLE OF ty_s_index WITH UNIQUE KEY id.
+    TYPES temp30 TYPE HASHED TABLE OF ty_s_index WITH UNIQUE KEY id.
+DATA lt_index TYPE temp30.
     DATA lt_mine TYPE ty_t_node.
     DATA lv_last TYPE timestampl.
 
-    DATA(lv_root) = CONV ty_s_root-root( id ).
-    LOOP AT it_node INTO DATA(ls_node).
-      READ TABLE it_root INTO DATA(ls_root) WITH TABLE KEY id = ls_node-id.
+    DATA temp207 TYPE ty_s_root-root.
+    DATA lv_root LIKE temp207.
+    DATA ls_node LIKE LINE OF it_node.
+      DATA ls_root TYPE z2ui5_cl_cockpit_session=>ty_s_root.
+      DATA temp208 TYPE ty_s_step.
+      DATA ls_step LIKE temp208.
+      DATA temp209 TYPE ty_s_index.
+      DATA ls_index TYPE ty_s_index.
+    temp207 = id.
+
+    lv_root = temp207.
+
+    LOOP AT it_node INTO ls_node.
+
+      READ TABLE it_root INTO ls_root WITH TABLE KEY id = ls_node-id.
       IF sy-subrc = 0 AND ls_root-root = lv_root.
         APPEND ls_node TO lt_mine.
       ENDIF.
@@ -2200,20 +2832,24 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     SORT lt_mine BY timestampl ASCENDING id ASCENDING.
 
     LOOP AT lt_mine INTO ls_node.
-      DATA(ls_step) = VALUE ty_s_step( step  = sy-tabix
-                                       id    = ls_node-id
-                                       time          = z2ui5_cl_cockpit_setup=>ts_text( ls_node-timestampl )
-                                       timestampl    = ls_node-timestampl
-                                       state         = `None`
-                                       " never empty: UI5 rejects "" as a ValueState
-                                       " and terminates the app - with no recording
-                                       " fill_wire leaves these untouched
-                                       monitor_state  = `None`
-                                       shown_state    = `None`
-                                       messages_state = `None`
-                                       ms_state       = `None` ).
-      INSERT VALUE #( id   = ls_node-id
-                      step = ls_step-step ) INTO TABLE lt_index.
+
+      CLEAR temp208.
+      temp208-step = sy-tabix.
+      temp208-id = ls_node-id.
+      temp208-time = z2ui5_cl_cockpit_setup=>ts_text( ls_node-timestampl ).
+      temp208-timestampl = ls_node-timestampl.
+      temp208-state = `None`.
+      temp208-monitor_state = `None`.
+      temp208-shown_state = `None`.
+      temp208-messages_state = `None`.
+      temp208-ms_state = `None`.
+
+      ls_step = temp208.
+
+      CLEAR temp209.
+      temp209-id = ls_node-id.
+      temp209-step = ls_step-step.
+      INSERT temp209 INTO TABLE lt_index.
 
       IF ls_step-step > 1.
         ls_step-delta = |+{ duration_text( seconds_between( ts_from = lv_last
@@ -2221,7 +2857,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDIF.
       lv_last = ls_node-timestampl.
 
-      READ TABLE lt_index INTO DATA(ls_index) WITH TABLE KEY id = ls_node-id_prev.
+
+      READ TABLE lt_index INTO ls_index WITH TABLE KEY id = ls_node-id_prev.
       IF sy-subrc = 0.
         ls_step-follows = ls_index-step.
         IF ls_step-follows <> ls_step-step - 1.
@@ -2251,8 +2888,10 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         object TYPE string,
         value  TYPE string,
       END OF ty_s_seen.
-    DATA lt_data TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
-    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+    TYPES temp32 TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
+DATA lt_data TYPE temp32.
+    TYPES temp33 TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+DATA lt_seen TYPE temp33.
     DATA lt_range TYPE ty_r_id.
     DATA lt_prev TYPE ty_t_value.
     DATA lv_prev_id TYPE string.
@@ -2263,29 +2902,71 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_from TYPE i VALUE 1.
     DATA lv_idle TYPE i.
     DATA lv_messages TYPE string.
+    DATA ls_step LIKE LINE OF cs_steps-t_step.
+      DATA temp210 LIKE LINE OF lt_range.
+      FIELD-SYMBOLS <step> LIKE LINE OF cs_steps-t_step.
+        DATA temp211 TYPE ty_id.
+        DATA lv_key LIKE temp211.
+        DATA ls_row TYPE ty_s_row.
+        DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+          DATA lv_follows TYPE z2ui5_cl_cockpit_session=>ty_s_step-id.
+          FIELD-SYMBOLS <temp26> LIKE LINE OF cs_steps-t_step.
+          DATA temp27 LIKE sy-tabix.
+          DATA temp212 TYPE z2ui5_cl_cockpit_session=>ty_t_field.
+            DATA temp213 TYPE string.
+            DATA temp28 TYPE string.
+        DATA lt_message TYPE z2ui5_cl_cockpit_session=>ty_t_message.
+        DATA ls_message LIKE LINE OF lt_message.
+          DATA temp214 TYPE string.
+          DATA temp215 TYPE z2ui5_cl_cockpit_session=>ty_s_step-messages_state.
+          DATA temp29 LIKE sy-subrc.
+          DATA temp30 LIKE sy-subrc.
+          DATA temp31 LIKE sy-tabix.
+          DATA temp2 LIKE sy-subrc.
+          DATA temp3 LIKE sy-subrc.
+          DATA temp4 LIKE sy-tabix.
+          DATA temp5 LIKE sy-subrc.
+          DATA temp6 LIKE sy-subrc.
+          DATA temp7 LIKE sy-tabix.
+          DATA temp1 LIKE sy-subrc.
+          DATA temp8 LIKE sy-subrc.
+          DATA temp9 LIKE sy-tabix.
+        DATA temp216 TYPE z2ui5_cl_cockpit_session=>ty_t_business.
+        DATA ls_business LIKE LINE OF temp216.
+          DATA temp217 TYPE ty_s_seen.
+        DATA temp218 TYPE string.
 
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
-    LOOP AT cs_steps-t_step INTO DATA(ls_step).
+
+    LOOP AT cs_steps-t_step INTO ls_step.
       lv_done = lv_done + 1.
-      APPEND VALUE #( sign   = `I`
-                      option = `EQ`
-                      low    = ls_step-id ) TO lt_range.
+
+      CLEAR temp210.
+      temp210-sign = `I`.
+      temp210-option = `EQ`.
+      temp210-low = ls_step-id.
+      APPEND temp210 TO lt_range.
       IF lines( lt_range ) < 50 AND lv_done < lines( cs_steps-t_step ).
         CONTINUE.
       ENDIF.
 
       CLEAR lt_data.
-      SELECT id, data FROM (lv_tab)
-        WHERE id IN @lt_range
-        INTO CORRESPONDING FIELDS OF TABLE @lt_data.
+      SELECT id data FROM (lv_tab) INTO CORRESPONDING FIELDS OF TABLE lt_data
+        WHERE id IN lt_range
+        .
       CLEAR lt_range.
 
       " the steps of this batch in their order - each compared with the
       " step it continues, which is the one before it unless the user went
       " back in the browser
-      LOOP AT cs_steps-t_step ASSIGNING FIELD-SYMBOL(<step>) FROM lv_from TO lv_done.
-        DATA(lv_key) = CONV ty_id( <step>-id ).
-        READ TABLE lt_data INTO DATA(ls_row) WITH TABLE KEY id = lv_key.
+
+      LOOP AT cs_steps-t_step ASSIGNING <step> FROM lv_from TO lv_done.
+
+        temp211 = <step>-id.
+
+        lv_key = temp211.
+
+        READ TABLE lt_data INTO ls_row WITH TABLE KEY id = lv_key.
         IF sy-subrc <> 0.
           CLEAR lt_prev.
           CLEAR lv_prev_id.
@@ -2293,23 +2974,45 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ENDIF.
         <step>-app = app_of( ls_row-data ).
         <step>-kb  = ( strlen( ls_row-data ) + 1023 ) DIV 1024.
-        DATA(lt_values) = flatten( ls_row-data ).
+
+        lt_values = flatten( ls_row-data ).
 
         IF <step>-follows > 0.
-          DATA(lv_follows) = cs_steps-t_step[ <step>-follows ]-id.
+
+
+
+          temp27 = sy-tabix.
+          READ TABLE cs_steps-t_step INDEX <step>-follows ASSIGNING <temp26>.
+          sy-tabix = temp27.
+          IF sy-subrc <> 0.
+            ASSERT 1 = 0.
+          ENDIF.
+          lv_follows = <temp26>-id.
           IF lv_follows <> lv_prev_id.
             lt_prev = flatten( read_data( lv_follows ) ).
           ENDIF.
           <step>-changes = 0.
-          LOOP AT diff( it_new = lt_values
-                        it_old = lt_prev ) TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
+
+          temp212 = diff( it_new = lt_values it_old = lt_prev ).
+          LOOP AT temp212 TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
             <step>-changes = <step>-changes + 1.
           ENDLOOP.
           IF <step>-changes = 0.
             lv_idle = lv_idle + 1.
-            <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&
-                          |{ COND #( WHEN lv_idle > 1 THEN |no field changed - { lv_idle } times in a row|
-                                     ELSE `no field changed` ) }|.
+
+            IF <step>-note IS NOT INITIAL.
+              temp213 = `, `.
+            ELSE.
+              CLEAR temp213.
+            ENDIF.
+
+            IF lv_idle > 1.
+              temp28 = |no field changed - { lv_idle } times in a row|.
+            ELSE.
+              temp28 = `no field changed`.
+            ENDIF.
+            <step>-note = |{ <step>-note }{ temp213 }| &&
+                          |{ temp28 }|.
           ELSE.
             lv_idle = 0.
           ENDIF.
@@ -2319,31 +3022,84 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
         " a message is shown where it appears, not on every step that keeps it
         CLEAR lv_messages.
-        DATA(lt_message) = messages_of( lt_values ).
-        LOOP AT lt_message INTO DATA(ls_message).
+
+        lt_message = messages_of( lt_values ).
+
+        LOOP AT lt_message INTO ls_message.
           IF sy-tabix > 2.
             lv_messages = |{ lv_messages } (+{ lines( lt_message ) - 2 } more)|.
             EXIT.
           ENDIF.
-          lv_messages = |{ lv_messages }{ COND #( WHEN lv_messages IS NOT INITIAL THEN `; ` ) }| &&
+
+          IF lv_messages IS NOT INITIAL.
+            temp214 = `; `.
+          ELSE.
+            CLEAR temp214.
+          ENDIF.
+          lv_messages = |{ lv_messages }{ temp214 }| &&
                         |{ ls_message-type }: { ls_message-text }|.
         ENDLOOP.
         IF lv_messages <> lv_prev_messages.
           <step>-messages = lv_messages.
-          <step>-messages_state = COND #( WHEN line_exists( lt_message[ type = `E` ] )
-                                            OR line_exists( lt_message[ type = `A` ] )
-                                            OR line_exists( lt_message[ type = `X` ] )
-                                            OR line_exists( lt_message[ type = `ERROR` ] ) THEN `Error`
-                                          WHEN lt_message IS NOT INITIAL THEN `Warning`
-                                          ELSE `None` ).
+
+
+
+
+          temp30 = sy-subrc.
+          temp31 = sy-tabix.
+          READ TABLE lt_message WITH KEY type = `E` TRANSPORTING NO FIELDS.
+          temp29 = sy-subrc.
+          sy-subrc = temp30.
+          sy-tabix = temp31.
+
+
+
+          temp3 = sy-subrc.
+          temp4 = sy-tabix.
+          READ TABLE lt_message WITH KEY type = `A` TRANSPORTING NO FIELDS.
+          temp2 = sy-subrc.
+          sy-subrc = temp3.
+          sy-tabix = temp4.
+
+
+
+          temp6 = sy-subrc.
+          temp7 = sy-tabix.
+          READ TABLE lt_message WITH KEY type = `X` TRANSPORTING NO FIELDS.
+          temp5 = sy-subrc.
+          sy-subrc = temp6.
+          sy-tabix = temp7.
+
+
+
+          temp8 = sy-subrc.
+          temp9 = sy-tabix.
+          READ TABLE lt_message WITH KEY type = `ERROR` TRANSPORTING NO FIELDS.
+          temp1 = sy-subrc.
+          sy-subrc = temp8.
+          sy-tabix = temp9.
+          IF temp29 = 0 OR temp2 = 0 OR temp5 = 0 OR temp1 = 0.
+            temp215 = `Error`.
+          ELSEIF lt_message IS NOT INITIAL.
+            temp215 = `Warning`.
+          ELSE.
+            temp215 = `None`.
+          ENDIF.
+          <step>-messages_state = temp215.
         ELSE.
           <step>-messages_state = `None`.
         ENDIF.
         lv_prev_messages = lv_messages.
 
-        LOOP AT business_of( lt_values ) INTO DATA(ls_business).
-          INSERT VALUE #( object = ls_business-object
-                          value  = ls_business-value ) INTO TABLE lt_seen.
+
+        temp216 = business_of( lt_values ).
+
+        LOOP AT temp216 INTO ls_business.
+
+          CLEAR temp217.
+          temp217-object = ls_business-object.
+          temp217-value = ls_business-value.
+          INSERT temp217 INTO TABLE lt_seen.
           IF sy-subrc = 0 AND lines( cs_steps-t_business ) < 50.
             ls_business-step = <step>-step.
             APPEND ls_business TO cs_steps-t_business.
@@ -2361,7 +3117,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         <step>-messages_state = `None`.
       ENDIF.
       IF <step>-step > 1 AND <step>-app <> lv_app AND <step>-app IS NOT INITIAL.
-        <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&
+
+        IF <step>-note IS NOT INITIAL.
+          temp218 = `, `.
+        ELSE.
+          CLEAR temp218.
+        ENDIF.
+        <step>-note = |{ <step>-note }{ temp218 }| &&
                       |navigated to { <step>-app }|.
       ENDIF.
       IF <step>-app IS NOT INITIAL.
@@ -2375,42 +3137,119 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     " the classic field names of the SAP data model, the names of the ABAP
     " flight and RAP demo models, and plain English ones
-    result = VALUE #( ( n = `VBELN`       v = `Sales document` )
-                      ( n = `KUNNR`       v = `Customer` )
-                      ( n = `KUNAG`       v = `Sold-to party` )
-                      ( n = `LIFNR`       v = `Supplier` )
-                      ( n = `PARTNER`     v = `Business partner` )
-                      ( n = `MATNR`       v = `Material` )
-                      ( n = `EBELN`       v = `Purchase order` )
-                      ( n = `BANFN`       v = `Purchase requisition` )
-                      ( n = `BELNR`       v = `Accounting document` )
-                      ( n = `MBLNR`       v = `Material document` )
-                      ( n = `AUFNR`       v = `Order` )
-                      ( n = `QMNUM`       v = `Notification` )
-                      ( n = `EQUNR`       v = `Equipment` )
-                      ( n = `TPLNR`       v = `Functional location` )
-                      ( n = `PERNR`       v = `Personnel number` )
-                      ( n = `BUKRS`       v = `Company code` )
-                      ( n = `WERKS`       v = `Plant` )
-                      ( n = `LGORT`       v = `Storage location` )
-                      ( n = `VKORG`       v = `Sales organization` )
-                      ( n = `EKORG`       v = `Purchasing organization` )
-                      ( n = `KOSTL`       v = `Cost center` )
-                      ( n = `PRCTR`       v = `Profit center` )
-                      ( n = `POSID`       v = `WBS element` )
-                      ( n = `ANLN1`       v = `Asset` )
-                      ( n = `CHARG`       v = `Batch` )
-                      ( n = `CARRID`      v = `Airline` )
-                      ( n = `CONNID`      v = `Flight connection` )
-                      ( n = `TRAVEL_ID`   v = `Travel` )
-                      ( n = `BOOKING_ID`  v = `Booking` )
-                      ( n = `ORDER_ID`    v = `Order` )
-                      ( n = `CUSTOMER`    v = `Customer` )
-                      ( n = `CUSTOMER_ID` v = `Customer` )
-                      ( n = `SUPPLIER`    v = `Supplier` )
-                      ( n = `PRODUCT`     v = `Product` )
-                      ( n = `PRODUCT_ID`  v = `Product` )
-                      ( n = `INVOICE`     v = `Invoice` ) ).
+    DATA temp219 TYPE z2ui5_if_client=>ty_t_name_value.
+    DATA temp220 LIKE LINE OF temp219.
+    CLEAR temp219.
+
+    temp220-n = `VBELN`.
+    temp220-v = `Sales document`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `KUNNR`.
+    temp220-v = `Customer`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `KUNAG`.
+    temp220-v = `Sold-to party`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `LIFNR`.
+    temp220-v = `Supplier`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `PARTNER`.
+    temp220-v = `Business partner`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `MATNR`.
+    temp220-v = `Material`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `EBELN`.
+    temp220-v = `Purchase order`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `BANFN`.
+    temp220-v = `Purchase requisition`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `BELNR`.
+    temp220-v = `Accounting document`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `MBLNR`.
+    temp220-v = `Material document`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `AUFNR`.
+    temp220-v = `Order`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `QMNUM`.
+    temp220-v = `Notification`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `EQUNR`.
+    temp220-v = `Equipment`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `TPLNR`.
+    temp220-v = `Functional location`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `PERNR`.
+    temp220-v = `Personnel number`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `BUKRS`.
+    temp220-v = `Company code`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `WERKS`.
+    temp220-v = `Plant`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `LGORT`.
+    temp220-v = `Storage location`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `VKORG`.
+    temp220-v = `Sales organization`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `EKORG`.
+    temp220-v = `Purchasing organization`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `KOSTL`.
+    temp220-v = `Cost center`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `PRCTR`.
+    temp220-v = `Profit center`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `POSID`.
+    temp220-v = `WBS element`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `ANLN1`.
+    temp220-v = `Asset`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `CHARG`.
+    temp220-v = `Batch`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `CARRID`.
+    temp220-v = `Airline`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `CONNID`.
+    temp220-v = `Flight connection`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `TRAVEL_ID`.
+    temp220-v = `Travel`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `BOOKING_ID`.
+    temp220-v = `Booking`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `ORDER_ID`.
+    temp220-v = `Order`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `CUSTOMER`.
+    temp220-v = `Customer`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `CUSTOMER_ID`.
+    temp220-v = `Customer`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `SUPPLIER`.
+    temp220-v = `Supplier`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `PRODUCT`.
+    temp220-v = `Product`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `PRODUCT_ID`.
+    temp220-v = `Product`.
+    INSERT temp220 INTO TABLE temp219.
+    temp220-n = `INVOICE`.
+    temp220-v = `Invoice`.
+    INSERT temp220 INTO TABLE temp219.
+    result = temp219.
 
   ENDMETHOD.
 
@@ -2421,12 +3260,22 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         object TYPE string,
         value  TYPE string,
       END OF ty_s_seen.
-    DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+    TYPES temp34 TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
+DATA lt_seen TYPE temp34.
     DATA lv_name TYPE string.
 
-    DATA(lt_catalogue) = business_catalogue( ).
-    LOOP AT it_value INTO DATA(ls_value).
-      DATA(lv_value) = condense( ls_value-value ).
+    DATA lt_catalogue TYPE z2ui5_if_client=>ty_t_name_value.
+    DATA ls_value LIKE LINE OF it_value.
+      DATA lv_value TYPE string.
+      DATA lv_dash TYPE i.
+      DATA ls_entry LIKE LINE OF lt_catalogue.
+        DATA temp221 TYPE ty_s_seen.
+          DATA temp222 TYPE z2ui5_cl_cockpit_session=>ty_s_business.
+    lt_catalogue = business_catalogue( ).
+
+    LOOP AT it_value INTO ls_value.
+
+      lv_value = condense( ls_value-value ).
       " empty, or an initial number or date
       IF lv_value CO ` 0.:-` OR lv_value CP `->*`.
         CONTINUE.
@@ -2435,7 +3284,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       " find( occ = -1 ) and not substring_after( occ = -1 ): the transpiled
       " runtime ignores occ there and cuts at the first dash
       lv_name = ls_value-path.
-      DATA(lv_dash) = find( val = lv_name
+
+      lv_dash = find( val = lv_name
                             sub = `-`
                             occ = -1 ).
       IF lv_dash >= 0.
@@ -2448,16 +3298,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDIF.
       lv_name = to_upper( lv_name ).
 
-      LOOP AT lt_catalogue INTO DATA(ls_entry).
+
+      LOOP AT lt_catalogue INTO ls_entry.
         IF lv_name <> ls_entry-n AND lv_name NP |*_{ ls_entry-n }|.
           CONTINUE.
         ENDIF.
-        INSERT VALUE #( object = ls_entry-v
-                        value  = lv_value ) INTO TABLE lt_seen.
+
+        CLEAR temp221.
+        temp221-object = ls_entry-v.
+        temp221-value = lv_value.
+        INSERT temp221 INTO TABLE lt_seen.
         IF sy-subrc = 0.
-          APPEND VALUE #( object = ls_entry-v
-                          value  = lv_value
-                          field  = ls_value-path ) TO result.
+
+          CLEAR temp222.
+          temp222-object = ls_entry-v.
+          temp222-value = lv_value.
+          temp222-field = ls_value-path.
+          APPEND temp222 TO result.
         ENDIF.
         EXIT.
       ENDLOOP.
@@ -2474,13 +3331,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         text   TYPE string,
         weak   TYPE string,
       END OF ty_s_row.
-    DATA lt_row TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES temp35 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_row TYPE temp35.
     DATA lv_prefix TYPE string.
     DATA lv_comp TYPE string.
 
-    LOOP AT it_value INTO DATA(ls_value).
+    DATA ls_value LIKE LINE OF it_value.
+      DATA lv_dash TYPE i.
+      FIELD-SYMBOLS <row> TYPE ty_s_row.
+        DATA temp223 TYPE ty_s_row.
+    DATA ls_row LIKE LINE OF lt_row.
+      DATA lv_error TYPE abap_bool.
+      DATA temp11 TYPE xsdboolean.
+      DATA temp224 TYPE z2ui5_cl_cockpit_session=>ty_s_message.
+    LOOP AT it_value INTO ls_value.
       " find( occ = -1 ), see business_of
-      DATA(lv_dash) = find( val = ls_value-path
+
+      lv_dash = find( val = ls_value-path
                             sub = `-`
                             occ = -1 ).
       IF lv_dash < 0.
@@ -2494,9 +3361,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           AND lv_comp <> `MESSAGE` AND lv_comp <> `MSG` AND lv_comp <> `TEXT`.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_row ASSIGNING FIELD-SYMBOL(<row>) WITH KEY prefix = lv_prefix. "#EC CI_SORTSEQ
+
+      READ TABLE lt_row ASSIGNING <row> WITH KEY prefix = lv_prefix. "#EC CI_SORTSEQ
       IF sy-subrc <> 0.
-        APPEND VALUE #( prefix = lv_prefix ) TO lt_row ASSIGNING <row>.
+
+        CLEAR temp223.
+        temp223-prefix = lv_prefix.
+        APPEND temp223 TO lt_row ASSIGNING <row>.
       ENDIF.
       CASE lv_comp.
         WHEN `TYPE` OR `MSGTY` OR `SEVERITY`.
@@ -2508,9 +3379,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDCASE.
     ENDLOOP.
 
-    LOOP AT lt_row INTO DATA(ls_row).
-      DATA(lv_error) = xsdbool( ls_row-type = `E` OR ls_row-type = `A` OR ls_row-type = `X`
-                                OR ls_row-type = `ERROR` ).
+
+    LOOP AT lt_row INTO ls_row.
+
+
+      temp11 = boolc( ls_row-type = `E` OR ls_row-type = `A` OR ls_row-type = `X` OR ls_row-type = `ERROR` ).
+      lv_error = temp11.
       " TEXT is too common a name - it counts only next to an error type
       IF ls_row-text IS INITIAL AND lv_error = abap_true.
         ls_row-text = ls_row-weak.
@@ -2521,9 +3395,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF lv_error = abap_false AND ls_row-type <> `W` AND ls_row-type <> `WARNING`.
         CONTINUE.
       ENDIF.
-      APPEND VALUE #( type = ls_row-type
-                      text = ls_row-text
-                      path = ls_row-prefix ) TO result.
+
+      CLEAR temp224.
+      temp224-type = ls_row-type.
+      temp224-text = ls_row-text.
+      temp224-path = ls_row-prefix.
+      APPEND temp224 TO result.
     ENDLOOP.
 
   ENDMETHOD.
@@ -2543,31 +3420,41 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         error_class   TYPE c LENGTH 30,
         error_head    TYPE c LENGTH 200,
       END OF ty_s_log.
-    DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
+    TYPES temp36 TYPE STANDARD TABLE OF ty_s_log WITH DEFAULT KEY.
+DATA lt_log TYPE temp36.
     DATA lt_range TYPE ty_r_id.
     DATA lv_done TYPE i.
 
-    LOOP AT ct_step INTO DATA(ls_step).
+    DATA ls_step LIKE LINE OF ct_step.
+      DATA temp225 LIKE LINE OF lt_range.
+    DATA ls_log LIKE LINE OF lt_log.
+        FIELD-SYMBOLS <step> TYPE z2ui5_cl_cockpit_session=>ty_s_step.
+    LOOP AT ct_step INTO ls_step.
       lv_done = lv_done + 1.
-      APPEND VALUE #( sign   = `I`
-                      option = `EQ`
-                      low    = ls_step-id ) TO lt_range.
+
+      CLEAR temp225.
+      temp225-sign = `I`.
+      temp225-option = `EQ`.
+      temp225-low = ls_step-id.
+      APPEND temp225 TO lt_range.
       IF lines( lt_range ) < 50 AND lv_done < lines( ct_step ).
         CONTINUE.
       ENDIF.
-      SELECT draft_id, draft_id_prev, event, check_error, check_slow, ms_total, error_class, error_head
-        FROM z2ui5_t_25
-        WHERE draft_id IN @lt_range
-           OR draft_id_prev IN @lt_range
-        APPENDING CORRESPONDING FIELDS OF TABLE @lt_log.
+      SELECT draft_id draft_id_prev event check_error check_slow ms_total error_class error_head
+        FROM z2ui5_t_25 APPENDING CORRESPONDING FIELDS OF TABLE lt_log
+        WHERE draft_id IN lt_range
+           OR draft_id_prev IN lt_range
+        .
       CLEAR lt_range.
     ENDLOOP.
 
-    LOOP AT lt_log INTO DATA(ls_log).
+
+    LOOP AT lt_log INTO ls_log.
       IF ls_log-check_error = abap_true.
         " the roundtrip started from this step and failed - its own draft,
         " if it wrote one, is not where the user saw the screen
-        READ TABLE ct_step ASSIGNING FIELD-SYMBOL(<step>) WITH KEY id = ls_log-draft_id_prev. "#EC CI_SORTSEQ
+
+        READ TABLE ct_step ASSIGNING <step> WITH KEY id = ls_log-draft_id_prev. "#EC CI_SORTSEQ
         IF sy-subrc = 0.
           monitor_add( EXPORTING text  = |next roundtrip failed: { ls_log-error_class } { ls_log-error_head } | &&
                                          |(event { ls_log-event })|
@@ -2598,30 +3485,53 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         xml  TYPE string,
       END OF ty_s_screen.
     DATA lt_id TYPE ty_t_id.
-    DATA lt_screen TYPE HASHED TABLE OF ty_s_screen WITH UNIQUE KEY step.
+    TYPES temp37 TYPE HASHED TABLE OF ty_s_screen WITH UNIQUE KEY step.
+DATA lt_screen TYPE temp37.
     DATA lv_screen TYPE string.
     DATA lv_request TYPE string.
     DATA lv_response TYPE string.
 
-    LOOP AT ct_step INTO DATA(ls_step).
+    DATA ls_step LIKE LINE OF ct_step.
+    DATA lt_record TYPE z2ui5_cl_cockpit_wire=>ty_t_record.
+    FIELD-SYMBOLS <step> LIKE LINE OF ct_step.
+        DATA ls_screen TYPE ty_s_screen.
+      DATA ls_record TYPE z2ui5_cl_cockpit_wire=>ty_s_record.
+        DATA lv_browser TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip-ms_client_prev.
+          FIELD-SYMBOLS <before> TYPE z2ui5_cl_cockpit_session=>ty_s_step.
+        DATA lt_shown TYPE z2ui5_cl_cockpit_wire=>ty_t_shown.
+        DATA ls_shown LIKE LINE OF lt_shown.
+          DATA lv_type TYPE string.
+          DATA temp226 TYPE z2ui5_cl_cockpit_session=>ty_s_step-shown_state.
+        DATA temp227 TYPE z2ui5_if_client=>ty_t_name_value.
+        DATA ls_view LIKE LINE OF temp227.
+      DATA temp228 TYPE ty_s_screen.
+        DATA temp229 TYPE string.
+    DATA lv_slow TYPE z2ui5_cl_cockpit_setup=>ty_s_settings-slow_ms.
+      DATA temp230 TYPE string.
+      DATA temp231 TYPE z2ui5_cl_cockpit_session=>ty_s_step-ms_state.
+    LOOP AT ct_step INTO ls_step.
       APPEND ls_step-id TO lt_id.
     ENDLOOP.
-    DATA(lt_record) = z2ui5_cl_cockpit_wire=>get_records( lt_id ).
+
+    lt_record = z2ui5_cl_cockpit_wire=>get_records( lt_id ).
     IF lt_record IS INITIAL.
       RETURN.
     ENDIF.
 
-    LOOP AT ct_step ASSIGNING FIELD-SYMBOL(<step>).
+
+    LOOP AT ct_step ASSIGNING <step>.
       " the screen the user saw before this step: the one of the step it continues
       CLEAR lv_screen.
       IF <step>-follows > 0.
-        READ TABLE lt_screen INTO DATA(ls_screen) WITH TABLE KEY step = <step>-follows.
+
+        READ TABLE lt_screen INTO ls_screen WITH TABLE KEY step = <step>-follows.
         IF sy-subrc = 0.
           lv_screen = ls_screen-xml.
         ENDIF.
       ENDIF.
 
-      READ TABLE lt_record INTO DATA(ls_record) WITH KEY draft_id = <step>-id. "#EC CI_SORTSEQ
+
+      READ TABLE lt_record INTO ls_record WITH KEY draft_id = <step>-id. "#EC CI_SORTSEQ
       IF sy-subrc = 0.
         <step>-wire_id = ls_record-id.
         " the monitor may be off - the recording names the event too
@@ -2634,11 +3544,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         <step>-ms_server = ls_record-ms_total.
         " the browser sends the time it waited for the roundtrip before -
         " the one that wrote the step this one continues
-        DATA(lv_browser) = z2ui5_cl_cockpit_wire=>roundtrip_of( request     = lv_request
+
+        lv_browser = z2ui5_cl_cockpit_wire=>roundtrip_of( request     = lv_request
                                                                response    = ``
                                                                http_status = 200 )-ms_client_prev.
         IF lv_browser > 0 AND <step>-follows > 0.
-          READ TABLE ct_step ASSIGNING FIELD-SYMBOL(<before>) INDEX <step>-follows.
+
+          READ TABLE ct_step ASSIGNING <before> INDEX <step>-follows.
           IF sy-subrc = 0.
             <before>-ms_browser = lv_browser.
           ENDIF.
@@ -2646,21 +3558,36 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         <step>-did = did_of( screen  = lv_screen
                              event   = ls_record-event
                              request = lv_request ).
-        DATA(lt_shown) = z2ui5_cl_cockpit_wire=>shown_of( lv_response ).
+
+        lt_shown = z2ui5_cl_cockpit_wire=>shown_of( lv_response ).
         <step>-shown = z2ui5_cl_cockpit_wire=>shown_text( lt_shown ).
-        LOOP AT lt_shown INTO DATA(ls_shown) WHERE kind = z2ui5_cl_cockpit_wire=>cs_kind-box. "#EC CI_SORTSEQ
-          DATA(lv_type) = to_lower( ls_shown-type ).
-          <step>-shown_state = SWITCH #( lv_type
-                                         WHEN `error` THEN `Error`
-                                         WHEN `warning` THEN `Warning`
-                                         ELSE <step>-shown_state ).
+
+        LOOP AT lt_shown INTO ls_shown WHERE kind = z2ui5_cl_cockpit_wire=>cs_kind-box. "#EC CI_SORTSEQ
+
+          lv_type = to_lower( ls_shown-type ).
+
+          CASE lv_type.
+            WHEN `error`.
+              temp226 = `Error`.
+            WHEN `warning`.
+              temp226 = `Warning`.
+            WHEN OTHERS.
+              temp226 = <step>-shown_state.
+          ENDCASE.
+          <step>-shown_state = temp226.
         ENDLOOP.
-        LOOP AT z2ui5_cl_cockpit_wire=>views_of( lv_response ) INTO DATA(ls_view) WHERE n = `MAIN`. "#EC CI_SORTSEQ
+
+        temp227 = z2ui5_cl_cockpit_wire=>views_of( lv_response ).
+
+        LOOP AT temp227 INTO ls_view WHERE n = `MAIN`. "#EC CI_SORTSEQ
           lv_screen = ls_view-v.
         ENDLOOP.
       ENDIF.
-      INSERT VALUE #( step = <step>-step
-                      xml  = lv_screen ) INTO TABLE lt_screen.
+
+      CLEAR temp228.
+      temp228-step = <step>-step.
+      temp228-xml = lv_screen.
+      INSERT temp228 INTO TABLE lt_screen.
 
       " a roundtrip that started here and failed wrote no step - its request
       " is the user's last attempt
@@ -2669,7 +3596,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         <step>-wire_fail_event = ls_record-event.
         z2ui5_cl_cockpit_wire=>get_bodies( EXPORTING id      = ls_record-id
                                            IMPORTING request = lv_request ).
-        <step>-note = |{ <step>-note }{ COND #( WHEN <step>-note IS NOT INITIAL THEN `, ` ) }| &&
+
+        IF <step>-note IS NOT INITIAL.
+          temp229 = `, `.
+        ELSE.
+          CLEAR temp229.
+        ENDIF.
+        <step>-note = |{ <step>-note }{ temp229 }| &&
                       |next click failed: { did_of( screen  = lv_screen
                                                     event   = ls_record-event
                                                     request = lv_request ) }|.
@@ -2677,14 +3610,24 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDLOOP.
 
     " slow as the settings define it - on the server, or for the user
-    DATA(lv_slow) = z2ui5_cl_cockpit_setup=>get( )-slow_ms.
+
+    lv_slow = z2ui5_cl_cockpit_setup=>get( )-slow_ms.
     LOOP AT ct_step ASSIGNING <step> WHERE ms_server > 0 OR ms_browser > 0. "#EC CI_SORTSEQ
+
+      IF <step>-ms_browser > 0.
+        temp230 = |, { ms_text( <step>-ms_browser ) } waited|.
+      ELSE.
+        CLEAR temp230.
+      ENDIF.
       <step>-ms_text = |{ ms_text( <step>-ms_server ) } server| &&
-                       |{ COND #( WHEN <step>-ms_browser > 0
-                                  THEN |, { ms_text( <step>-ms_browser ) } waited| ) }|.
-      <step>-ms_state = COND #( WHEN lv_slow > 0 AND ( <step>-ms_server >= lv_slow OR <step>-ms_browser >= lv_slow )
-                                THEN `Warning`
-                                ELSE `None` ).
+                       |{ temp230 }|.
+
+      IF lv_slow > 0 AND ( <step>-ms_server >= lv_slow OR <step>-ms_browser >= lv_slow ).
+        temp231 = `Warning`.
+      ELSE.
+        temp231 = `None`.
+      ENDIF.
+      <step>-ms_state = temp231.
     ENDLOOP.
 
   ENDMETHOD.
@@ -2704,14 +3647,31 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lv_typed TYPE string.
     DATA lv_count TYPE i.
+      DATA lv_control TYPE string.
+      DATA temp232 TYPE string.
+    DATA temp233 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA ls_input LIKE LINE OF temp233.
+      DATA lv_field TYPE string.
+      DATA temp234 TYPE string.
+      DATA temp32 TYPE string.
+      DATA temp235 TYPE string.
 
     IF event IS NOT INITIAL.
-      DATA(lv_control) = z2ui5_cl_cockpit_wire=>control_of( xml   = screen
+
+      lv_control = z2ui5_cl_cockpit_wire=>control_of( xml   = screen
                                                            event = event ).
-      result = COND #( WHEN lv_control IS NOT INITIAL THEN |pressed { lv_control } ({ event })|
-                       ELSE |event { event }| ).
+
+      IF lv_control IS NOT INITIAL.
+        temp232 = |pressed { lv_control } ({ event })|.
+      ELSE.
+        temp232 = |event { event }|.
+      ENDIF.
+      result = temp232.
     ENDIF.
-    LOOP AT z2ui5_cl_cockpit_wire=>input_of( request ) INTO DATA(ls_input).
+
+    temp233 = z2ui5_cl_cockpit_wire=>input_of( request ).
+
+    LOOP AT temp233 INTO ls_input.
       IF ls_input-path CP `event argument*`.
         CONTINUE.
       ENDIF.
@@ -2719,23 +3679,48 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF lv_count > 3.
         CONTINUE.
       ENDIF.
-      DATA(lv_field) = z2ui5_cl_cockpit_wire=>field_control_of( xml  = screen
+
+      lv_field = z2ui5_cl_cockpit_wire=>field_control_of( xml  = screen
                                                                path = ls_input-path ).
-      lv_typed = |{ lv_typed }{ COND #( WHEN lv_typed IS NOT INITIAL THEN `, ` ) }| &&
-                 |{ COND #( WHEN lv_field IS NOT INITIAL THEN lv_field ELSE ls_input-path ) } = { cut( ls_input-value ) }|.
+
+      IF lv_typed IS NOT INITIAL.
+        temp234 = `, `.
+      ELSE.
+        CLEAR temp234.
+      ENDIF.
+
+      IF lv_field IS NOT INITIAL.
+        temp32 = lv_field.
+      ELSE.
+        temp32 = ls_input-path.
+      ENDIF.
+      lv_typed = |{ lv_typed }{ temp234 }| &&
+                 |{ temp32 } = { cut( ls_input-value ) }|.
     ENDLOOP.
     IF lv_count > 3.
       lv_typed = |{ lv_typed } (+{ lv_count - 3 } more)|.
     ENDIF.
     IF lv_typed IS NOT INITIAL.
-      result = |{ result }{ COND #( WHEN result IS NOT INITIAL THEN `, ` ) }typed { lv_typed }|.
+
+      IF result IS NOT INITIAL.
+        temp235 = `, `.
+      ELSE.
+        CLEAR temp235.
+      ENDIF.
+      result = |{ result }{ temp235 }typed { lv_typed }|.
     ENDIF.
 
   ENDMETHOD.
 
   METHOD monitor_add.
 
-    cs_step-monitor = |{ cs_step-monitor }{ COND #( WHEN cs_step-monitor IS NOT INITIAL THEN `; ` ) }{ text }|.
+    DATA temp236 TYPE string.
+    IF cs_step-monitor IS NOT INITIAL.
+      temp236 = `; `.
+    ELSE.
+      CLEAR temp236.
+    ENDIF.
+    cs_step-monitor = |{ cs_step-monitor }{ temp236 }{ text }|.
     IF cs_step-monitor_state <> `Error`.
       cs_step-monitor_state = state.
     ENDIF.
@@ -2762,11 +3747,14 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         label TYPE string,
         count TYPE i,
       END OF ty_s_count.
-    DATA lt_stack TYPE STANDARD TABLE OF ty_s_open WITH EMPTY KEY.
-    DATA lt_count TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY label.
+    TYPES temp38 TYPE STANDARD TABLE OF ty_s_open WITH DEFAULT KEY.
+DATA lt_stack TYPE temp38.
+    TYPES temp39 TYPE HASHED TABLE OF ty_s_count WITH UNIQUE KEY label.
+DATA lt_count TYPE temp39.
     DATA lt_entry TYPE ty_t_entry.
     DATA lt_leaf TYPE ty_t_leaf.
-    DATA lt_visible TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES temp40 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_visible TYPE temp40.
     DATA ls_open TYPE ty_s_open.
     DATA lv_pos TYPE i.
     DATA lv_attributes TYPE string.
@@ -2775,41 +3763,73 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     FIELD-SYMBOLS <top> TYPE ty_s_open.
     FIELD-SYMBOLS <parent> TYPE ty_s_open.
 
-    DATA(lv_len) = strlen( xml ).
+    DATA lv_len TYPE i.
+      DATA lv_lt TYPE i.
+      DATA lv_gt TYPE i.
+      DATA lv_tag TYPE string.
+      DATA lv_first TYPE string.
+      DATA temp12 TYPE xsdboolean.
+        DATA lv_blank TYPE i.
+          DATA lv_id TYPE string.
+          DATA lv_label LIKE ls_open-name.
+          FIELD-SYMBOLS <count> TYPE ty_s_count.
+            DATA temp237 TYPE ty_s_count.
+          DATA temp238 TYPE z2ui5_cl_cockpit_session=>ty_s_entry.
+          DATA temp13 TYPE xsdboolean.
+            DATA lv_name LIKE ls_open-name.
+        DATA lv_top TYPE i.
+          DATA temp239 TYPE z2ui5_cl_cockpit_session=>ty_s_leaf.
+          DATA temp33 TYPE z2ui5_cl_cockpit_session=>ty_s_leaf-value.
+      DATA ls_entry LIKE LINE OF lt_entry.
+        DATA lv_added LIKE abap_false.
+        DATA ls_leaf LIKE LINE OF lt_leaf.
+          DATA temp240 LIKE sy-subrc.
+          DATA temp241 LIKE sy-subrc.
+      DATA temp242 LIKE sy-subrc.
+      DATA temp243 LIKE sy-subrc.
+        DATA temp244 TYPE z2ui5_cl_cockpit_session=>ty_s_leaf-value.
+      DATA temp245 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+    lv_len = strlen( xml ).
     WHILE lv_pos < lv_len.
 
-      DATA(lv_lt) = find( val = xml
+
+      lv_lt = find( val = xml
                           sub = `<`
                           off = lv_pos ).
       IF lv_lt < 0.
         EXIT.
       ENDIF.
       IF lv_lt > lv_pos AND lt_stack IS NOT INITIAL.
-        ASSIGN lt_stack[ lines( lt_stack ) ] TO <top>.
+        READ TABLE lt_stack INDEX lines( lt_stack ) ASSIGNING <top>.
         <top>-text = <top>-text && substring( val = xml
                                               off = lv_pos
                                               len = lv_lt - lv_pos ).
       ENDIF.
-      DATA(lv_gt) = find( val = xml
+
+      lv_gt = find( val = xml
                           sub = `>`
                           off = lv_lt ).
       IF lv_gt < 0.
         EXIT.
       ENDIF.
-      DATA(lv_tag) = substring( val = xml
+
+      lv_tag = substring( val = xml
                                 off = lv_lt + 1
                                 len = lv_gt - lv_lt - 1 ).
       lv_pos = lv_gt + 1.
       IF lv_tag IS INITIAL.
         CONTINUE.
       ENDIF.
-      DATA(lv_first) = substring( val = lv_tag
+
+      lv_first = substring( val = lv_tag
                                   len = 1 ).
       IF lv_first = `?` OR lv_first = `!`.
         CONTINUE.
       ENDIF.
 
-      lv_close = xsdbool( lv_first = `/` ).
+
+      temp12 = boolc( lv_first = `/` ).
+      lv_close = temp12.
       lv_self = abap_false.
       IF lv_close = abap_false.
         IF substring( val = lv_tag
@@ -2821,7 +3841,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
         CLEAR ls_open.
         CLEAR lv_attributes.
-        DATA(lv_blank) = find( val = lv_tag
+
+        lv_blank = find( val = lv_tag
                                sub = ` ` ).
         IF lv_blank >= 0.
           ls_open-name = substring( val = lv_tag
@@ -2843,7 +3864,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
         UNASSIGN <parent>.
         IF lt_stack IS NOT INITIAL.
-          ASSIGN lt_stack[ lines( lt_stack ) ] TO <parent>.
+          READ TABLE lt_stack INDEX lines( lt_stack ) ASSIGNING <parent>.
         ENDIF.
 
         IF ls_open-name = `asx:abap` OR ls_open-name = `asx:values` OR ls_open-name = `asx:heap`.
@@ -2856,17 +3877,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           ls_open-kind = `V`.
         ELSEIF <parent>-kind = `S` AND <parent>-name = `asx:heap`.
           ls_open-kind = `E`.
-          DATA(lv_id) = attribute( attributes = lv_attributes
+
+          lv_id = attribute( attributes = lv_attributes
                                    name       = `id` ).
-          DATA(lv_label) = ls_open-name.
+
+          lv_label = ls_open-name.
           IF lv_label CS `:`.
             lv_label = substring_after( val = lv_label
                                         sub = `:` ).
           ENDIF.
           REPLACE ALL OCCURRENCES OF `_-` IN lv_label WITH `/`.
-          READ TABLE lt_count ASSIGNING FIELD-SYMBOL(<count>) WITH TABLE KEY label = lv_label.
+
+          READ TABLE lt_count ASSIGNING <count> WITH TABLE KEY label = lv_label.
           IF sy-subrc <> 0.
-            INSERT VALUE #( label = lv_label ) INTO TABLE lt_count ASSIGNING <count>.
+
+            CLEAR temp237.
+            temp237-label = lv_label.
+            INSERT temp237 INTO TABLE lt_count ASSIGNING <count>.
           ENDIF.
           <count>-count = <count>-count + 1.
           IF <count>-count > 1.
@@ -2874,9 +3901,14 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           ENDIF.
           ls_open-path = lv_label.
           ls_open-root = lv_id.
-          INSERT VALUE #( id           = lv_id
-                          label        = lv_label
-                          check_object = xsdbool( lv_id CP `o*` ) ) INTO TABLE lt_entry.
+
+          CLEAR temp238.
+          temp238-id = lv_id.
+          temp238-label = lv_label.
+
+          temp13 = boolc( lv_id CP `o*` ).
+          temp238-check_object = temp13.
+          INSERT temp238 INTO TABLE lt_entry.
         ELSEIF <parent>-kind = `E` AND <parent>-root CP `o*`.
           " a class part of an object: its attributes belong to the object
           ls_open-kind = `P`.
@@ -2889,7 +3921,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
             <parent>-items = <parent>-items + 1.
             ls_open-path = |{ <parent>-path }[{ <parent>-items }]|.
           ELSE.
-            DATA(lv_name) = ls_open-name.
+
+            lv_name = ls_open-name.
             REPLACE ALL OCCURRENCES OF `_-` IN lv_name WITH `/`.
             ls_open-path = |{ <parent>-path }-{ lv_name }|.
           ENDIF.
@@ -2904,14 +3937,24 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         IF lt_stack IS INITIAL.
           CONTINUE.
         ENDIF.
-        DATA(lv_top) = lines( lt_stack ).
-        ASSIGN lt_stack[ lv_top ] TO <top>.
+
+        lv_top = lines( lt_stack ).
+        READ TABLE lt_stack INDEX lv_top ASSIGNING <top>.
         IF ( <top>-kind = `N` OR ( <top>-kind = `E` AND <top>-root NP `o*` ) )
             AND <top>-children = abap_false.
-          APPEND VALUE #( path  = <top>-path
-                          value = COND #( WHEN <top>-href IS INITIAL THEN decode( <top>-text ) )
-                          root  = <top>-root
-                          href  = <top>-href ) TO lt_leaf.
+
+          CLEAR temp239.
+          temp239-path = <top>-path.
+
+          IF <top>-href IS INITIAL.
+            temp33 = decode( <top>-text ).
+          ELSE.
+            CLEAR temp33.
+          ENDIF.
+          temp239-value = temp33.
+          temp239-root = <top>-root.
+          temp239-href = <top>-href.
+          APPEND temp239 TO lt_leaf.
         ENDIF.
         DELETE lt_stack INDEX lv_top.
       ENDIF.
@@ -2919,7 +3962,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDWHILE.
 
     IF check_all = abap_true.
-      LOOP AT lt_entry INTO DATA(ls_entry).
+
+      LOOP AT lt_entry INTO ls_entry.
         INSERT ls_entry-id INTO TABLE lt_visible.
       ENDLOOP.
     ELSE.
@@ -2931,9 +3975,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ENDIF.
       ENDLOOP.
       DO.
-        DATA(lv_added) = abap_false.
-        LOOP AT lt_leaf INTO DATA(ls_leaf) WHERE href IS NOT INITIAL. "#EC CI_SORTSEQ
-          IF NOT line_exists( lt_visible[ table_line = ls_leaf-root ] ).
+
+        lv_added = abap_false.
+
+        LOOP AT lt_leaf INTO ls_leaf WHERE href IS NOT INITIAL. "#EC CI_SORTSEQ
+
+
+          temp241 = sy-subrc.
+          READ TABLE lt_visible WITH KEY table_line = ls_leaf-root TRANSPORTING NO FIELDS.
+          temp240 = sy-subrc.
+          sy-subrc = temp241.
+          IF NOT temp240 = 0.
             CONTINUE.
           ENDIF.
           READ TABLE lt_entry INTO ls_entry WITH TABLE KEY id = ls_leaf-href.
@@ -2952,37 +4004,63 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
 
     LOOP AT lt_leaf INTO ls_leaf.
-      IF ls_leaf-root IS NOT INITIAL AND NOT line_exists( lt_visible[ table_line = ls_leaf-root ] ).
+
+
+      temp243 = sy-subrc.
+      READ TABLE lt_visible WITH KEY table_line = ls_leaf-root TRANSPORTING NO FIELDS.
+      temp242 = sy-subrc.
+      sy-subrc = temp243.
+      IF ls_leaf-root IS NOT INITIAL AND NOT temp242 = 0.
         CONTINUE.
       ENDIF.
       IF ls_leaf-href IS NOT INITIAL.
         READ TABLE lt_entry INTO ls_entry WITH TABLE KEY id = ls_leaf-href.
-        ls_leaf-value = COND #( WHEN sy-subrc = 0 THEN |-> { ls_entry-label }|
-                                ELSE |-> #{ ls_leaf-href }| ).
+
+        IF sy-subrc = 0.
+          temp244 = |-> { ls_entry-label }|.
+        ELSE.
+          temp244 = |-> #{ ls_leaf-href }|.
+        ENDIF.
+        ls_leaf-value = temp244.
       ENDIF.
-      APPEND VALUE #( path  = ls_leaf-path
-                      value = ls_leaf-value ) TO result.
+
+      CLEAR temp245.
+      temp245-path = ls_leaf-path.
+      temp245-value = ls_leaf-value.
+      APPEND temp245 TO result.
     ENDLOOP.
 
   ENDMETHOD.
 
   METHOD diff.
 
-    DATA lt_old TYPE HASHED TABLE OF ty_s_value WITH UNIQUE KEY path.
-    DATA lt_seen TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES temp41 TYPE HASHED TABLE OF ty_s_value WITH UNIQUE KEY path.
+DATA lt_old TYPE temp41.
+    TYPES temp42 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_seen TYPE temp42.
 
-    LOOP AT it_old INTO DATA(ls_old).
+    DATA ls_old LIKE LINE OF it_old.
+    DATA ls_new LIKE LINE OF it_new.
+      DATA temp246 TYPE ty_s_field.
+      DATA ls_field LIKE temp246.
+      DATA temp247 TYPE z2ui5_cl_cockpit_session=>ty_s_field.
+    LOOP AT it_old INTO ls_old.
       INSERT ls_old INTO TABLE lt_old.
     ENDLOOP.
 
-    LOOP AT it_new INTO DATA(ls_new).
+
+    LOOP AT it_new INTO ls_new.
       INSERT ls_new-path INTO TABLE lt_seen.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      DATA(ls_field) = VALUE ty_s_field( path  = ls_new-path
-                                         value = ls_new-value
-                                         state = `None` ).
+
+      CLEAR temp246.
+      temp246-path = ls_new-path.
+      temp246-value = ls_new-value.
+      temp246-state = `None`.
+
+      ls_field = temp246.
       IF check_first = abap_false.
         READ TABLE lt_old INTO ls_old WITH TABLE KEY path = ls_new-path.
         IF sy-subrc <> 0.
@@ -3005,10 +4083,13 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      APPEND VALUE #( path   = ls_old-path
-                      prev   = ls_old-value
-                      change = cs_change-removed
-                      state  = `Error` ) TO result.
+
+      CLEAR temp247.
+      temp247-path = ls_old-path.
+      temp247-prev = ls_old-value.
+      temp247-change = cs_change-removed.
+      temp247-state = `Error`.
+      APPEND temp247 TO result.
     ENDLOOP.
 
   ENDMETHOD.
@@ -3016,23 +4097,29 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD app_of.
 
     DATA lv_pos TYPE i.
+      DATA lv_hit TYPE i.
+      DATA lv_open TYPE i.
+      DATA lv_name TYPE string.
 
     DO.
-      DATA(lv_hit) = find( val = xml
+
+      lv_hit = find( val = xml
                            sub = ` id="o`
                            off = lv_pos ).
       IF lv_hit < 0.
         RETURN.
       ENDIF.
       lv_pos = lv_hit + 1.
-      DATA(lv_open) = find( val = substring( val = xml
+
+      lv_open = find( val = substring( val = xml
                                              len = lv_hit )
                             sub = `<`
                             occ = -1 ).
       IF lv_open < 0.
         CONTINUE.
       ENDIF.
-      DATA(lv_name) = substring( val = xml
+
+      lv_name = substring( val = xml
                                  off = lv_open + 1
                                  len = lv_hit - lv_open - 1 ).
       IF lv_name CS ` `.
@@ -3102,10 +4189,10 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lv_tab TYPE string.
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
-    SELECT id, id_prev, uname, timestampl FROM (lv_tab)
+    SELECT id id_prev uname timestampl FROM (lv_tab)
       ORDER BY timestampl DESCENDING
-      INTO CORRESPONDING FIELDS OF TABLE @result
-      UP TO @c_max_nodes ROWS.                        "#EC CI_NOWHERE
+      INTO CORRESPONDING FIELDS OF TABLE result
+      UP TO c_max_nodes ROWS.                        "#EC CI_NOWHERE
 
   ENDMETHOD.
 
@@ -3125,9 +4212,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_id TYPE c LENGTH 32.
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     lv_id = id.
-    SELECT SINGLE data FROM (lv_tab)
-      WHERE id = @lv_id
-      INTO @result.
+    SELECT SINGLE data FROM (lv_tab) INTO result
+      WHERE id = lv_id
+      .
     IF sy-subrc <> 0.
       CLEAR result.
     ENDIF.
@@ -3135,6 +4222,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD user_text.
+    DATA lv_key TYPE string.
 
     IF z2ui5_cl_cockpit_setup=>check_privacy( ) = abap_false.
       result = uname.
@@ -3142,7 +4230,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
     " the pseudonym of today - the one the Errors tab shows for today's
     " occurrences, so a session can be matched with an error
-    DATA(lv_key) = z2ui5_cl_cockpit_setup=>user_key( uname = uname
+
+    lv_key = z2ui5_cl_cockpit_setup=>user_key( uname = uname
                                                      day   = z2ui5_cl_cockpit_setup=>day_minus( 0 ) ).
     IF strlen( lv_key ) >= 8.
       result = |pseudonym { substring( val = lv_key
@@ -3167,7 +4256,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD attribute.
 
-    DATA(lv_off) = find( val = attributes
+    DATA lv_off TYPE i.
+    lv_off = find( val = attributes
                          sub = | { name }="| ).
     IF lv_off < 0.
       RETURN.
@@ -3185,15 +4275,16 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     " behind the installation's prefix - a rename rewrites references,
     " never a literal
-    result = xsdbool( label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` )
-                      OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` )
-                      OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ) ).
+    DATA temp14 TYPE xsdboolean.
+    temp14 = boolc( label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` ) OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` ) OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ) ).
+    result = temp14.
 
   ENDMETHOD.
 
   METHOD cut.
 
-    DATA(lv_len) = strlen( val ).
+    DATA lv_len TYPE i.
+    lv_len = strlen( val ).
     IF lv_len <= c_max_value.
       result = val.
       RETURN.
