@@ -52,6 +52,8 @@ ENDCLASS.
 CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
   METHOD run.
+        DATA lx TYPE REF TO cx_root.
+        DATA lx_alert TYPE REF TO cx_root.
 
     result = purge_own( ).
     COMMIT WORK.
@@ -62,7 +64,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
                          |{ result-log_deleted } log rows, { result-agg_deleted } aggregate rows, | &&
                          |{ result-usr_deleted } user rows, { result-act_deleted } activity rows, | &&
                          |{ result-wir_deleted } recorded roundtrips past retention|.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-message = |Drafts not deleted: { lx->get_text( ) }|.
     ENDTRY.
 
@@ -70,7 +73,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
         result-alerts = z2ui5_cl_cockpit_alert=>run( ).
         COMMIT WORK.
         result-message = |{ result-message }; { result-alerts-message }|.
-      CATCH cx_root INTO DATA(lx_alert).
+
+      CATCH cx_root INTO lx_alert.
         ROLLBACK WORK.                                   "#EC CI_ROLLBACK
         result-message = |{ result-message }; alerts not evaluated: { lx_alert->get_text( ) }|.
     ENDTRY.
@@ -79,33 +83,46 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
   METHOD purge_own.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA lv_log_ts TYPE timestampl.
+    DATA lv_usr_day TYPE string.
+    DATA lv_agg_day TYPE string.
+    DATA lv_act_ts TYPE timestampl.
+    DATA lv_aud_ts TYPE timestampl.
+    DATA lv_wir_ts TYPE timestampl.
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
 
-    DATA(lv_log_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-retention_days * 86400 ).
-    DATA(lv_usr_day) = z2ui5_cl_cockpit_setup=>day_minus( ls_set-retention_days ).
-    DATA(lv_agg_day) = z2ui5_cl_cockpit_setup=>day_minus( ls_set-agg_retention_days ).
+
+    lv_log_ts = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-retention_days * 86400 ).
+
+    lv_usr_day = z2ui5_cl_cockpit_setup=>day_minus( ls_set-retention_days ).
+
+    lv_agg_day = z2ui5_cl_cockpit_setup=>day_minus( ls_set-agg_retention_days ).
     " the live table only answers "who is active now" - a day is plenty
-    DATA(lv_act_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( 86400 ).
 
-    DELETE FROM z2ui5_t_25 WHERE timestampl < @lv_log_ts.
+    lv_act_ts = z2ui5_cl_cockpit_setup=>now_minus_seconds( 86400 ).
+
+    DELETE FROM z2ui5_t_25 WHERE timestampl < lv_log_ts.
     result-log_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_27 WHERE utc_day < @lv_usr_day.
+    DELETE FROM z2ui5_t_27 WHERE utc_day < lv_usr_day.
     result-usr_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_22 WHERE utc_day < @lv_agg_day.
+    DELETE FROM z2ui5_t_22 WHERE utc_day < lv_agg_day.
     result-agg_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_20 WHERE last_seen < @lv_act_ts.
+    DELETE FROM z2ui5_t_20 WHERE last_seen < lv_act_ts.
     result-act_deleted = sy-dbcnt.
     " the change log follows the long retention of the aggregates
-    DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-agg_retention_days * 86400 ).
-    DELETE FROM z2ui5_t_24 WHERE timestampl < @lv_aud_ts.
+
+    lv_aud_ts = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-agg_retention_days * 86400 ).
+    DELETE FROM z2ui5_t_24 WHERE timestampl < lv_aud_ts.
     result-aud_deleted = sy-dbcnt.
     " and so does the alert history
-    DELETE FROM z2ui5_t_23 WHERE raised < @lv_aud_ts.
+    DELETE FROM z2ui5_t_23 WHERE raised < lv_aud_ts.
     result-alr_deleted = sy-dbcnt.
     " the recorder's raw requests and responses are the biggest and the most
     " sensitive rows - their own, short retention; 0 days deletes them all
-    DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-wire_days * 86400 ).
-    DELETE FROM z2ui5_t_28 WHERE timestampl < @lv_wir_ts.
+
+    lv_wir_ts = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-wire_days * 86400 ).
+    DELETE FROM z2ui5_t_28 WHERE timestampl < lv_wir_ts.
     result-wir_deleted = sy-dbcnt.
 
   ENDMETHOD.

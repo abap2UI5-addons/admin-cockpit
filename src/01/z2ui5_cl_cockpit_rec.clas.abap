@@ -79,7 +79,7 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
     " entries of sticky roundtrips waiting for a roundtrip that may commit
     CONSTANTS c_buffer_max TYPE i VALUE 500.
 
-    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_roundtrip WITH EMPTY KEY.
+    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_roundtrip WITH DEFAULT KEY.
     CLASS-DATA gv_count TYPE i.
 
     CLASS-METHODS write_agg
@@ -136,6 +136,8 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD record.
+        DATA lt_buffer LIKE gt_buffer.
+        DATA ls_buffered LIKE LINE OF lt_buffer.
 
     gv_count = gv_count + 1.
 
@@ -159,9 +161,11 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
           RETURN.
         ENDIF.
 
-        DATA(lt_buffer) = gt_buffer.
+
+        lt_buffer = gt_buffer.
         CLEAR gt_buffer.
-        LOOP AT lt_buffer INTO DATA(ls_buffered).
+
+        LOOP AT lt_buffer INTO ls_buffered.
           write( ls_buffered ).
         ENDLOOP.
         write( is_roundtrip ).
@@ -179,19 +183,34 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
   METHOD write.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA ls_rt LIKE is_roundtrip.
+    DATA lv_slow TYPE abap_bool.
+    DATA temp1 TYPE xsdboolean.
+    DATA lv_weight TYPE i.
+          DATA temp7 TYPE i.
+          DATA lv_ms LIKE temp7.
+    DATA lv_day TYPE string.
+    DATA lv_hour TYPE string.
+    DATA lv_user_key TYPE string.
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
     IF ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-off.
       RETURN.
     ENDIF.
 
-    DATA(ls_rt) = is_roundtrip.
+
+    ls_rt = is_roundtrip.
     IF ls_rt-timestampl IS INITIAL.
       ls_rt-timestampl = z2ui5_cl_cockpit_setup=>now( ).
     ENDIF.
     ls_rt-app = to_upper( ls_rt-app ).
 
-    DATA(lv_slow) = xsdbool( ls_rt-ms_total >= ls_set-slow_ms ).
-    DATA(lv_weight) = 1.
+
+
+    temp1 = boolc( ls_rt-ms_total >= ls_set-slow_ms ).
+    lv_slow = temp1.
+
+    lv_weight = 1.
 
     CASE ls_set-mode.
       WHEN z2ui5_cl_cockpit_setup=>cs_mode-errors.
@@ -206,7 +225,10 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
         " then counts for 100 / pct, so counts and sums stay estimates of
         " the real totals
         IF ls_rt-check_error = abap_false.
-          DATA(lv_ms) = CONV i( trunc( frac( ls_rt-timestampl ) * 1000 ) ).
+
+          temp7 = trunc( frac( ls_rt-timestampl ) * 1000 ).
+
+          lv_ms = temp7.
           IF lv_ms MOD 100 >= ls_set-sample_pct.
             RETURN.
           ENDIF.
@@ -214,8 +236,10 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
         ENDIF.
     ENDCASE.
 
-    DATA(lv_day) = z2ui5_cl_cockpit_setup=>day_of( ls_rt-timestampl ).
-    DATA(lv_hour) = z2ui5_cl_cockpit_setup=>hour_of( ls_rt-timestampl ).
+
+    lv_day = z2ui5_cl_cockpit_setup=>day_of( ls_rt-timestampl ).
+
+    lv_hour = z2ui5_cl_cockpit_setup=>hour_of( ls_rt-timestampl ).
 
     IF ls_set-last_purge <> lv_day.
       purge_daily( lv_day ).
@@ -227,7 +251,8 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
                weight = lv_weight
                slow   = lv_slow ).
 
-    DATA(lv_user_key) = z2ui5_cl_cockpit_setup=>user_key( uname = ls_rt-uname
+
+    lv_user_key = z2ui5_cl_cockpit_setup=>user_key( uname = ls_rt-uname
                                                           day   = lv_day ).
     write_user( is_rt    = ls_rt
                 day      = lv_day
@@ -250,109 +275,303 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     " process created it in between. No SELECT ... FOR UPDATE - nothing waits
     " for a row lock, and the statement is the same on ABAP Cloud.
     DATA ls_agg TYPE z2ui5_t_22.
-    DATA lt_h TYPE STANDARD TABLE OF i WITH EMPTY KEY.
+    TYPES temp1 TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
+DATA lt_h TYPE temp1.
 
     " host variables named like no column - after the 7.02 downport drops
     " the @ escapes, a host variable named like a column compares it to itself
-    DATA(lv_day) = CONV z2ui5_t_22-utc_day( day ).
-    DATA(lv_hour) = CONV z2ui5_t_22-utc_hour( hour ).
-    DATA(lv_event) = CONV z2ui5_t_22-event( is_rt-event ).
-    DATA(lv_app) = CONV z2ui5_t_22-app( is_rt-app ).
+    DATA temp8 TYPE z2ui5_t_22-utc_day.
+    DATA lv_day LIKE temp8.
+    DATA temp9 TYPE z2ui5_t_22-utc_hour.
+    DATA lv_hour LIKE temp9.
+    DATA temp10 TYPE z2ui5_t_22-event.
+    DATA lv_event LIKE temp10.
+    DATA temp11 TYPE z2ui5_t_22-app.
+    DATA lv_app LIKE temp11.
+    DATA lv_cnt LIKE weight.
+    DATA temp12 TYPE i.
+    DATA lv_start LIKE temp12.
+    DATA temp13 TYPE i.
+    DATA lv_err LIKE temp13.
+    DATA temp14 TYPE i.
+    DATA lv_slow LIKE temp14.
+    DATA lv_ms_sum TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    DATA lv_ms_load TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    DATA lv_ms_main TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    DATA lv_ms_render TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    DATA lv_ms_client TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    DATA temp15 TYPE i.
+    DATA lv_cnt_client LIKE temp15.
+    DATA lv_kb_req TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    DATA lv_kb_res TYPE z2ui5_cl_cockpit_rec=>ty_sum.
+    FIELD-SYMBOLS <temp16> LIKE LINE OF lt_h.
+    DATA temp17 LIKE sy-tabix.
+    DATA lv_h01 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp3> LIKE LINE OF lt_h.
+    DATA temp4 LIKE sy-tabix.
+    DATA lv_h02 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp5> LIKE LINE OF lt_h.
+    DATA temp6 LIKE sy-tabix.
+    DATA lv_h03 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp7> LIKE LINE OF lt_h.
+    DATA temp16 LIKE sy-tabix.
+    DATA lv_h04 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp17> LIKE LINE OF lt_h.
+    DATA temp18 LIKE sy-tabix.
+    DATA lv_h05 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp19> LIKE LINE OF lt_h.
+    DATA temp20 LIKE sy-tabix.
+    DATA lv_h06 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp21> LIKE LINE OF lt_h.
+    DATA temp22 LIKE sy-tabix.
+    DATA lv_h07 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp23> LIKE LINE OF lt_h.
+    DATA temp24 LIKE sy-tabix.
+    DATA lv_h08 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp25> LIKE LINE OF lt_h.
+    DATA temp26 LIKE sy-tabix.
+    DATA lv_h09 LIKE LINE OF lt_h.
+    FIELD-SYMBOLS <temp27> LIKE LINE OF lt_h.
+    DATA temp28 LIKE sy-tabix.
+    DATA lv_ms_max LIKE is_rt-ms_total.
+    DATA lv_res_max LIKE is_rt-bytes_response.
+    DATA lv_mod_max LIKE is_rt-bytes_model.
+    temp8 = day.
+
+    lv_day = temp8.
+
+    temp9 = hour.
+
+    lv_hour = temp9.
+
+    temp10 = is_rt-event.
+
+    lv_event = temp10.
+
+    temp11 = is_rt-app.
+
+    lv_app = temp11.
 
     " the increments - counts in INT4, sums in DEC 15, each saturated
-    DATA(lv_cnt) = weight.
-    DATA(lv_start) = COND i( WHEN is_rt-check_start = abap_true THEN weight ).
-    DATA(lv_err) = COND i( WHEN is_rt-check_error = abap_true THEN 1 ).
-    DATA(lv_slow) = COND i( WHEN slow = abap_true THEN weight ).
-    DATA(lv_ms_sum) = sum_inc( val    = is_rt-ms_total
+
+    lv_cnt = weight.
+
+    IF is_rt-check_start = abap_true.
+      temp12 = weight.
+    ELSE.
+      CLEAR temp12.
+    ENDIF.
+
+    lv_start = temp12.
+
+    IF is_rt-check_error = abap_true.
+      temp13 = 1.
+    ELSE.
+      CLEAR temp13.
+    ENDIF.
+
+    lv_err = temp13.
+
+    IF slow = abap_true.
+      temp14 = weight.
+    ELSE.
+      CLEAR temp14.
+    ENDIF.
+
+    lv_slow = temp14.
+
+    lv_ms_sum = sum_inc( val    = is_rt-ms_total
                                weight = weight ).
-    DATA(lv_ms_load) = sum_inc( val    = is_rt-ms_load
+
+    lv_ms_load = sum_inc( val    = is_rt-ms_load
                                 weight = weight ).
-    DATA(lv_ms_main) = sum_inc( val    = is_rt-ms_main
+
+    lv_ms_main = sum_inc( val    = is_rt-ms_main
                                 weight = weight ).
-    DATA(lv_ms_render) = sum_inc( val    = is_rt-ms_render
+
+    lv_ms_render = sum_inc( val    = is_rt-ms_render
                                   weight = weight ).
-    DATA(lv_ms_client) = sum_inc( val    = is_rt-ms_client_prev
+
+    lv_ms_client = sum_inc( val    = is_rt-ms_client_prev
                                   weight = weight ).
-    DATA(lv_cnt_client) = COND i( WHEN is_rt-ms_client_prev > 0 THEN weight ).
-    DATA(lv_kb_req) = sum_inc( val    = is_rt-bytes_request DIV 1024
+
+    IF is_rt-ms_client_prev > 0.
+      temp15 = weight.
+    ELSE.
+      CLEAR temp15.
+    ENDIF.
+
+    lv_cnt_client = temp15.
+
+    lv_kb_req = sum_inc( val    = is_rt-bytes_request DIV 1024
                                weight = weight ).
-    DATA(lv_kb_res) = sum_inc( val    = is_rt-bytes_response DIV 1024
+
+    lv_kb_res = sum_inc( val    = is_rt-bytes_response DIV 1024
                                weight = weight ).
     DO 9 TIMES.
       APPEND 0 TO lt_h.
     ENDDO.
-    lt_h[ z2ui5_cl_cockpit_setup=>bucket_index( is_rt-ms_total ) ] = weight.
-    DATA(lv_h01) = lt_h[ 1 ].
-    DATA(lv_h02) = lt_h[ 2 ].
-    DATA(lv_h03) = lt_h[ 3 ].
-    DATA(lv_h04) = lt_h[ 4 ].
-    DATA(lv_h05) = lt_h[ 5 ].
-    DATA(lv_h06) = lt_h[ 6 ].
-    DATA(lv_h07) = lt_h[ 7 ].
-    DATA(lv_h08) = lt_h[ 8 ].
-    DATA(lv_h09) = lt_h[ 9 ].
+
+
+    temp17 = sy-tabix.
+    READ TABLE lt_h INDEX z2ui5_cl_cockpit_setup=>bucket_index( is_rt-ms_total ) ASSIGNING <temp16>.
+    sy-tabix = temp17.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    <temp16> = weight.
+
+
+
+    temp4 = sy-tabix.
+    READ TABLE lt_h INDEX 1 ASSIGNING <temp3>.
+    sy-tabix = temp4.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h01 = <temp3>.
+
+
+
+    temp6 = sy-tabix.
+    READ TABLE lt_h INDEX 2 ASSIGNING <temp5>.
+    sy-tabix = temp6.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h02 = <temp5>.
+
+
+
+    temp16 = sy-tabix.
+    READ TABLE lt_h INDEX 3 ASSIGNING <temp7>.
+    sy-tabix = temp16.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h03 = <temp7>.
+
+
+
+    temp18 = sy-tabix.
+    READ TABLE lt_h INDEX 4 ASSIGNING <temp17>.
+    sy-tabix = temp18.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h04 = <temp17>.
+
+
+
+    temp20 = sy-tabix.
+    READ TABLE lt_h INDEX 5 ASSIGNING <temp19>.
+    sy-tabix = temp20.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h05 = <temp19>.
+
+
+
+    temp22 = sy-tabix.
+    READ TABLE lt_h INDEX 6 ASSIGNING <temp21>.
+    sy-tabix = temp22.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h06 = <temp21>.
+
+
+
+    temp24 = sy-tabix.
+    READ TABLE lt_h INDEX 7 ASSIGNING <temp23>.
+    sy-tabix = temp24.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h07 = <temp23>.
+
+
+
+    temp26 = sy-tabix.
+    READ TABLE lt_h INDEX 8 ASSIGNING <temp25>.
+    sy-tabix = temp26.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h08 = <temp25>.
+
+
+
+    temp28 = sy-tabix.
+    READ TABLE lt_h INDEX 9 ASSIGNING <temp27>.
+    sy-tabix = temp28.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    lv_h09 = <temp27>.
 
     DO 2 TIMES.
       UPDATE z2ui5_t_22
-        SET cnt        = cnt + @lv_cnt,
-            cnt_start  = cnt_start + @lv_start,
-            cnt_err    = cnt_err + @lv_err,
-            cnt_slow   = cnt_slow + @lv_slow,
-            ms_sum     = ms_sum + @lv_ms_sum,
-            ms_load    = ms_load + @lv_ms_load,
-            ms_main    = ms_main + @lv_ms_main,
-            ms_render  = ms_render + @lv_ms_render,
-            ms_client  = ms_client + @lv_ms_client,
-            cnt_client = cnt_client + @lv_cnt_client,
-            kb_req     = kb_req + @lv_kb_req,
-            kb_res     = kb_res + @lv_kb_res,
-            h01        = h01 + @lv_h01,
-            h02        = h02 + @lv_h02,
-            h03        = h03 + @lv_h03,
-            h04        = h04 + @lv_h04,
-            h05        = h05 + @lv_h05,
-            h06        = h06 + @lv_h06,
-            h07        = h07 + @lv_h07,
-            h08        = h08 + @lv_h08,
-            h09        = h09 + @lv_h09
-        WHERE utc_day  = @lv_day
-          AND utc_hour = @lv_hour
-          AND app      = @lv_app
-          AND event    = @lv_event.
+        SET cnt        = cnt + lv_cnt,
+            cnt_start  = cnt_start + lv_start,
+            cnt_err    = cnt_err + lv_err,
+            cnt_slow   = cnt_slow + lv_slow,
+            ms_sum     = ms_sum + lv_ms_sum,
+            ms_load    = ms_load + lv_ms_load,
+            ms_main    = ms_main + lv_ms_main,
+            ms_render  = ms_render + lv_ms_render,
+            ms_client  = ms_client + lv_ms_client,
+            cnt_client = cnt_client + lv_cnt_client,
+            kb_req     = kb_req + lv_kb_req,
+            kb_res     = kb_res + lv_kb_res,
+            h01        = h01 + lv_h01,
+            h02        = h02 + lv_h02,
+            h03        = h03 + lv_h03,
+            h04        = h04 + lv_h04,
+            h05        = h05 + lv_h05,
+            h06        = h06 + lv_h06,
+            h07        = h07 + lv_h07,
+            h08        = h08 + lv_h08,
+            h09        = h09 + lv_h09
+        WHERE utc_day  = lv_day
+          AND utc_hour = lv_hour
+          AND app      = lv_app
+          AND event    = lv_event.
       IF sy-dbcnt > 0.
         EXIT.
       ENDIF.
 
-      ls_agg = VALUE #( utc_day       = lv_day
-                        utc_hour      = lv_hour
-                        app           = lv_app
-                        event         = lv_event
-                        cnt           = lv_cnt
-                        cnt_start     = lv_start
-                        cnt_err       = lv_err
-                        cnt_slow      = lv_slow
-                        ms_sum        = lv_ms_sum
-                        ms_max        = is_rt-ms_total
-                        ms_load       = lv_ms_load
-                        ms_main       = lv_ms_main
-                        ms_render     = lv_ms_render
-                        ms_client     = lv_ms_client
-                        cnt_client    = lv_cnt_client
-                        kb_req        = lv_kb_req
-                        kb_res        = lv_kb_res
-                        bytes_res_max = is_rt-bytes_response
-                        bytes_mod_max = is_rt-bytes_model
-                        h01           = lv_h01
-                        h02           = lv_h02
-                        h03           = lv_h03
-                        h04           = lv_h04
-                        h05           = lv_h05
-                        h06           = lv_h06
-                        h07           = lv_h07
-                        h08           = lv_h08
-                        h09           = lv_h09 ).
-      INSERT z2ui5_t_22 FROM @ls_agg.
+      CLEAR ls_agg.
+      ls_agg-utc_day = lv_day.
+      ls_agg-utc_hour = lv_hour.
+      ls_agg-app = lv_app.
+      ls_agg-event = lv_event.
+      ls_agg-cnt = lv_cnt.
+      ls_agg-cnt_start = lv_start.
+      ls_agg-cnt_err = lv_err.
+      ls_agg-cnt_slow = lv_slow.
+      ls_agg-ms_sum = lv_ms_sum.
+      ls_agg-ms_max = is_rt-ms_total.
+      ls_agg-ms_load = lv_ms_load.
+      ls_agg-ms_main = lv_ms_main.
+      ls_agg-ms_render = lv_ms_render.
+      ls_agg-ms_client = lv_ms_client.
+      ls_agg-cnt_client = lv_cnt_client.
+      ls_agg-kb_req = lv_kb_req.
+      ls_agg-kb_res = lv_kb_res.
+      ls_agg-bytes_res_max = is_rt-bytes_response.
+      ls_agg-bytes_mod_max = is_rt-bytes_model.
+      ls_agg-h01 = lv_h01.
+      ls_agg-h02 = lv_h02.
+      ls_agg-h03 = lv_h03.
+      ls_agg-h04 = lv_h04.
+      ls_agg-h05 = lv_h05.
+      ls_agg-h06 = lv_h06.
+      ls_agg-h07 = lv_h07.
+      ls_agg-h08 = lv_h08.
+      ls_agg-h09 = lv_h09.
+      INSERT z2ui5_t_22 FROM ls_agg.
       IF sy-subrc = 0.
         " the maxima are in the new row already
         RETURN.
@@ -362,23 +581,26 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ENDDO.
 
     " the maxima: a conditional UPDATE each, atomic as well
-    DATA(lv_ms_max) = is_rt-ms_total.
-    DATA(lv_res_max) = is_rt-bytes_response.
-    DATA(lv_mod_max) = is_rt-bytes_model.
+
+    lv_ms_max = is_rt-ms_total.
+
+    lv_res_max = is_rt-bytes_response.
+
+    lv_mod_max = is_rt-bytes_model.
     IF lv_ms_max > 0.
-      UPDATE z2ui5_t_22 SET ms_max = @lv_ms_max
-        WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
-          AND ms_max < @lv_ms_max.
+      UPDATE z2ui5_t_22 SET ms_max = lv_ms_max
+        WHERE utc_day = lv_day AND utc_hour = lv_hour AND app = lv_app AND event = lv_event
+          AND ms_max < lv_ms_max.
     ENDIF.
     IF lv_res_max > 0.
-      UPDATE z2ui5_t_22 SET bytes_res_max = @lv_res_max
-        WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
-          AND bytes_res_max < @lv_res_max.
+      UPDATE z2ui5_t_22 SET bytes_res_max = lv_res_max
+        WHERE utc_day = lv_day AND utc_hour = lv_hour AND app = lv_app AND event = lv_event
+          AND bytes_res_max < lv_res_max.
     ENDIF.
     IF lv_mod_max > 0.
-      UPDATE z2ui5_t_22 SET bytes_mod_max = @lv_mod_max
-        WHERE utc_day = @lv_day AND utc_hour = @lv_hour AND app = @lv_app AND event = @lv_event
-          AND bytes_mod_max < @lv_mod_max.
+      UPDATE z2ui5_t_22 SET bytes_mod_max = lv_mod_max
+        WHERE utc_day = lv_day AND utc_hour = lv_hour AND app = lv_app AND event = lv_event
+          AND bytes_mod_max < lv_mod_max.
     ENDIF.
 
   ENDMETHOD.
@@ -387,8 +609,14 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
     DATA ls_act TYPE z2ui5_t_20.
     DATA ls_usr TYPE z2ui5_t_27.
-    DATA(lv_app) = CONV z2ui5_t_27-app( is_rt-app ).
-    DATA(lv_now) = z2ui5_cl_cockpit_setup=>now( ).
+    DATA temp18 TYPE z2ui5_t_27-app.
+    DATA lv_app LIKE temp18.
+    DATA lv_now TYPE timestampl.
+    temp18 = is_rt-app.
+
+    lv_app = temp18.
+
+    lv_now = z2ui5_cl_cockpit_setup=>now( ).
 
     IF user_key IS NOT INITIAL.
       ls_usr-utc_day    = day.
@@ -396,7 +624,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
       ls_usr-user_key   = user_key.
       ls_usr-first_seen = lv_now.
       " a duplicate key is the normal case - the user was counted already
-      INSERT z2ui5_t_27 FROM @ls_usr ##SUBRC_OK.
+      INSERT z2ui5_t_27 FROM ls_usr ##SUBRC_OK.
     ENDIF.
 
     ls_act-user_key  = user_key.
@@ -404,7 +632,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ls_act-last_seen = lv_now.
     ls_act-event     = is_rt-event.
     ls_act-cnt       = 1.
-    MODIFY z2ui5_t_20 FROM @ls_act.
+    MODIFY z2ui5_t_20 FROM ls_act.
 
   ENDMETHOD.
 
@@ -439,7 +667,7 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ls_log-error_head     = first_line( is_rt-error_text ).
     ls_log-error_text     = is_rt-error_text.
 
-    INSERT z2ui5_t_25 FROM @ls_log.
+    INSERT z2ui5_t_25 FROM ls_log.
 
   ENDMETHOD.
 
@@ -470,9 +698,11 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD first_line.
+    DATA lv_off TYPE i.
 
     result = val.
-    FIND FIRST OCCURRENCE OF cl_abap_char_utilities=>newline IN result MATCH OFFSET DATA(lv_off).
+
+    FIND FIRST OCCURRENCE OF cl_abap_char_utilities=>newline IN result MATCH OFFSET lv_off.
     IF sy-subrc = 0.
       result = result(lv_off).
     ENDIF.

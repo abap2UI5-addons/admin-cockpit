@@ -11,7 +11,7 @@ CLASS ltcl_rec DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
     CONSTANTS c_app TYPE string VALUE `ZZ_COCKPIT_UNIT_TEST`.
     CONSTANTS c_day TYPE string VALUE `20990101`.
 
-    TYPES ty_t_log TYPE STANDARD TABLE OF z2ui5_t_25 WITH EMPTY KEY.
+    TYPES ty_t_log TYPE STANDARD TABLE OF z2ui5_t_25 WITH DEFAULT KEY.
 
     METHODS setup.
     METHODS teardown.
@@ -65,10 +65,10 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     DATA lv_app TYPE z2ui5_t_22-app.
     lv_app = c_app.
-    DELETE FROM z2ui5_t_22 WHERE app = @lv_app.
-    DELETE FROM z2ui5_t_27 WHERE app = @lv_app.
-    DELETE FROM z2ui5_t_20 WHERE app = @lv_app.
-    DELETE FROM z2ui5_t_25 WHERE app = @lv_app.
+    DELETE FROM z2ui5_t_22 WHERE app = lv_app.
+    DELETE FROM z2ui5_t_27 WHERE app = lv_app.
+    DELETE FROM z2ui5_t_20 WHERE app = lv_app.
+    DELETE FROM z2ui5_t_25 WHERE app = lv_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     CLEAR z2ui5_cl_cockpit_rec=>gt_buffer.
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
@@ -77,7 +77,8 @@ CLASS ltcl_rec IMPLEMENTATION.
 
   METHOD use.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    ls_set = z2ui5_cl_cockpit_setup=>get_default( ).
     ls_set-mode          = mode.
     ls_set-user_tracking = tracking.
     " purged today already - the test rows are not followed by a purge
@@ -88,19 +89,20 @@ CLASS ltcl_rec IMPLEMENTATION.
 
   METHOD roundtrip.
 
-    result = VALUE #( app            = c_app
-                      event          = event
-                      draft_id       = `NEW`
-                      draft_id_prev  = `PREV`
-                      uname          = `ALICE`
-                      timestampl     = ts
-                      ms_total       = ms
-                      ms_load        = ms DIV 4
-                      ms_main        = ms DIV 2
-                      ms_render      = ms DIV 4
-                      bytes_request  = 1024
-                      bytes_response = 2048
-                      bytes_model    = 4096 ).
+    CLEAR result.
+    result-app = c_app.
+    result-event = event.
+    result-draft_id = `NEW`.
+    result-draft_id_prev = `PREV`.
+    result-uname = `ALICE`.
+    result-timestampl = ts.
+    result-ms_total = ms.
+    result-ms_load = ms DIV 4.
+    result-ms_main = ms DIV 2.
+    result-ms_render = ms DIV 4.
+    result-bytes_request = 1024.
+    result-bytes_response = 2048.
+    result-bytes_model = 4096.
 
   ENDMETHOD.
 
@@ -112,11 +114,11 @@ CLASS ltcl_rec IMPLEMENTATION.
     lv_app = c_app.
     lv_day = c_day.
     lv_event = event.
-    SELECT SINGLE * FROM z2ui5_t_22
-      WHERE utc_day = @lv_day
-        AND app     = @lv_app
-        AND event   = @lv_event
-      INTO @result. "#EC CI_NOORDER
+    SELECT SINGLE * FROM z2ui5_t_22 INTO result
+      WHERE utc_day = lv_day
+        AND app     = lv_app
+        AND event   = lv_event
+      . "#EC CI_NOORDER
     IF sy-subrc <> 0.
       CLEAR result.
     ENDIF.
@@ -127,24 +129,29 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     DATA lv_app TYPE z2ui5_t_25-app.
     lv_app = c_app.
-    SELECT * FROM z2ui5_t_25
-      WHERE app = @lv_app
+    SELECT * FROM z2ui5_t_25 INTO TABLE result
+      WHERE app = lv_app
       ORDER BY timestampl
-      INTO TABLE @result.
+      .
 
   ENDMETHOD.
 
   METHOD aggregates_one_hour.
 
-    DATA(ls_first) = roundtrip( 120 ).
+    DATA ls_first TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
+    DATA ls_second TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
+    DATA ls_agg TYPE z2ui5_t_22.
+    ls_first = roundtrip( 120 ).
     ls_first-check_start = abap_true.
     z2ui5_cl_cockpit_rec=>write( ls_first ).
-    DATA(ls_second) = roundtrip( 3000 ).
+
+    ls_second = roundtrip( 3000 ).
     ls_second-bytes_response = 1024.
     ls_second-bytes_model    = 8192.
     z2ui5_cl_cockpit_rec=>write( ls_second ).
 
-    DATA(ls_agg) = agg( ).
+
+    ls_agg = agg( ).
     cl_abap_unit_assert=>assert_equals( exp = `10`
                                         act = ls_agg-utc_hour ).
     cl_abap_unit_assert=>assert_equals( exp = 2
@@ -180,7 +187,12 @@ CLASS ltcl_rec IMPLEMENTATION.
 
   METHOD error_writes_log.
 
-    DATA(ls_rt) = roundtrip( ms    = 50
+    DATA ls_rt TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
+    DATA lt_log TYPE ltcl_rec=>ty_t_log.
+    DATA ls_log LIKE LINE OF lt_log.
+    FIELD-SYMBOLS <temp1> LIKE LINE OF lt_log.
+    DATA temp2 LIKE sy-tabix.
+    ls_rt = roundtrip( ms    = 50
                              event = `GO` ).
     ls_rt-check_error = abap_true.
     ls_rt-error_class = `CX_SY_ZERODIVIDE`.
@@ -189,10 +201,20 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = agg( `GO` )-cnt_err ).
-    DATA(lt_log) = log_rows( ).
+
+    lt_log = log_rows( ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lines( lt_log ) ).
-    DATA(ls_log) = lt_log[ 1 ].
+
+
+
+    temp2 = sy-tabix.
+    READ TABLE lt_log INDEX 1 ASSIGNING <temp1>.
+    sy-tabix = temp2.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_log = <temp1>.
     cl_abap_unit_assert=>assert_equals( exp = abap_true
                                         act = ls_log-check_error ).
     cl_abap_unit_assert=>assert_equals( exp = abap_false
@@ -210,18 +232,40 @@ CLASS ltcl_rec IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD slow_writes_log.
+    DATA lt_log TYPE ltcl_rec=>ty_t_log.
+    FIELD-SYMBOLS <temp1> LIKE LINE OF lt_log.
+    DATA temp2 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp3> LIKE LINE OF lt_log.
+    DATA temp4 LIKE sy-tabix.
 
     z2ui5_cl_cockpit_rec=>write( roundtrip( 1999 ) ).
     cl_abap_unit_assert=>assert_initial( log_rows( ) ).
 
     z2ui5_cl_cockpit_rec=>write( roundtrip( 2000 ) ).
-    DATA(lt_log) = log_rows( ).
+
+    lt_log = log_rows( ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lines( lt_log ) ).
+
+
+    temp2 = sy-tabix.
+    READ TABLE lt_log INDEX 1 ASSIGNING <temp1>.
+    sy-tabix = temp2.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = abap_true
-                                        act = lt_log[ 1 ]-check_slow ).
+                                        act = <temp1>-check_slow ).
+
+
+    temp4 = sy-tabix.
+    READ TABLE lt_log INDEX 1 ASSIGNING <temp3>.
+    sy-tabix = temp4.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 1000
-                                        act = lt_log[ 1 ]-ms_main ).
+                                        act = <temp3>-ms_main ).
 
   ENDMETHOD.
 
@@ -230,34 +274,50 @@ CLASS ltcl_rec IMPLEMENTATION.
     DATA lv_count TYPE i.
     DATA lv_app TYPE z2ui5_t_27-app.
     DATA lv_day TYPE z2ui5_t_27-utc_day.
+    DATA ls_rt TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
+    DATA lt_log TYPE ltcl_rec=>ty_t_log.
+    FIELD-SYMBOLS <temp5> LIKE LINE OF lt_log.
+    DATA temp6 LIKE sy-tabix.
 
     use( tracking = z2ui5_cl_cockpit_setup=>cs_users-name ).
-    DATA(ls_rt) = roundtrip( 10 ).
+
+    ls_rt = roundtrip( 10 ).
     ls_rt-check_error = abap_true.
     z2ui5_cl_cockpit_rec=>write( ls_rt ).
 
-    DATA(lt_log) = log_rows( ).
+
+    lt_log = log_rows( ).
+
+
+    temp6 = sy-tabix.
+    READ TABLE lt_log INDEX 1 ASSIGNING <temp5>.
+    sy-tabix = temp6.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `ALICE`
-                                        act = lt_log[ 1 ]-uname ).
+                                        act = <temp5>-uname ).
 
     lv_app = c_app.
     lv_day = c_day.
-    SELECT COUNT( * ) FROM z2ui5_t_27
-      WHERE app = @lv_app
-        AND utc_day = @lv_day
-      INTO @lv_count.
+    SELECT COUNT( * ) FROM z2ui5_t_27 INTO lv_count
+      WHERE app = lv_app
+        AND utc_day = lv_day
+      .
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lv_count ).
 
   ENDMETHOD.
 
   METHOD errors_mode_skips_success.
+    DATA ls_rt TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
 
     use( mode = z2ui5_cl_cockpit_setup=>cs_mode-errors ).
     z2ui5_cl_cockpit_rec=>write( roundtrip( 100 ) ).
     cl_abap_unit_assert=>assert_initial( agg( ) ).
 
-    DATA(ls_rt) = roundtrip( 100 ).
+
+    ls_rt = roundtrip( 100 ).
     ls_rt-check_error = abap_true.
     z2ui5_cl_cockpit_rec=>write( ls_rt ).
     cl_abap_unit_assert=>assert_equals( exp = 1
@@ -269,7 +329,9 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     " SAMPLE with 10 %: the milliseconds of the start decide - 5 is in the
     " sample and counts 10 times, 55 is not recorded at all
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA ls_agg TYPE z2ui5_t_22.
+    ls_set = z2ui5_cl_cockpit_setup=>get_default( ).
     ls_set-mode          = z2ui5_cl_cockpit_setup=>cs_mode-sample.
     ls_set-sample_pct    = 10.
     ls_set-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-none.
@@ -282,7 +344,8 @@ CLASS ltcl_rec IMPLEMENTATION.
 
     z2ui5_cl_cockpit_rec=>write( roundtrip( ms = 100
                                             ts = '20990101101500.0050000' ) ).
-    DATA(ls_agg) = agg( ).
+
+    ls_agg = agg( ).
     cl_abap_unit_assert=>assert_equals( exp = 10
                                         act = ls_agg-cnt ).
     cl_abap_unit_assert=>assert_equals( exp = 1000
@@ -293,9 +356,11 @@ CLASS ltcl_rec IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD off_mode_writes_nothing.
+    DATA ls_rt TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
 
     use( mode = z2ui5_cl_cockpit_setup=>cs_mode-off ).
-    DATA(ls_rt) = roundtrip( 5000 ).
+
+    ls_rt = roundtrip( 5000 ).
     ls_rt-check_error = abap_true.
     z2ui5_cl_cockpit_rec=>write( ls_rt ).
     cl_abap_unit_assert=>assert_initial( agg( ) ).
@@ -306,7 +371,8 @@ CLASS ltcl_rec IMPLEMENTATION.
   METHOD sticky_is_buffered.
 
     " a sticky roundtrip owns the LUW: nothing is written, nothing committed
-    DATA(ls_rt) = roundtrip( 100 ).
+    DATA ls_rt TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
+    ls_rt = roundtrip( 100 ).
     ls_rt-check_sticky = abap_true.
     z2ui5_cl_cockpit_rec=>record( ls_rt ).
 

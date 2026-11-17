@@ -22,7 +22,7 @@ CLASS z2ui5_cl_cockpit_draft DEFINITION PUBLIC FINAL CREATE PUBLIC.
         oldest  TYPE string,
         newest  TYPE string,
       END OF ty_s_user.
-    TYPES ty_t_user TYPE STANDARD TABLE OF ty_s_user WITH EMPTY KEY.
+    TYPES ty_t_user TYPE STANDARD TABLE OF ty_s_user WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_app,
@@ -32,7 +32,7 @@ CLASS z2ui5_cl_cockpit_draft DEFINITION PUBLIC FINAL CREATE PUBLIC.
         kb_avg TYPE i,
         kb_max TYPE i,
       END OF ty_s_app.
-    TYPES ty_t_app TYPE STANDARD TABLE OF ty_s_app WITH EMPTY KEY.
+    TYPES ty_t_app TYPE STANDARD TABLE OF ty_s_app WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_info,
@@ -135,31 +135,43 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
         oldest TYPE timestampl,
         newest TYPE timestampl,
       END OF ty_s_grp.
-    DATA lt_grp TYPE STANDARD TABLE OF ty_s_grp WITH EMPTY KEY.
+    TYPES temp2 TYPE STANDARD TABLE OF ty_s_grp WITH DEFAULT KEY.
+DATA lt_grp TYPE temp2.
     DATA lv_min TYPE timestampl.
     DATA lv_max TYPE timestampl.
     DATA lv_tab TYPE string.
+    DATA lv_cutoff TYPE timestampl.
+    DATA lv_active TYPE timestampl.
+        DATA lx TYPE REF TO cx_root.
+    DATA temp3 TYPE xsdboolean.
+    DATA ls_grp LIKE LINE OF lt_grp.
+    DATA lv_privacy TYPE abap_bool.
+      DATA temp1 TYPE ty_s_user.
+      DATA ls_user LIKE temp1.
 
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
     result-expiry_hours = get_expiry_hours( ).
-    DATA(lv_cutoff) = cutoff( ).
+
+    lv_cutoff = cutoff( ).
     result-cutoff = z2ui5_cl_cockpit_setup=>ts_text( lv_cutoff ).
-    DATA(lv_active) = z2ui5_cl_cockpit_setup=>now_minus_seconds( active_minutes * 60 ).
+
+    lv_active = z2ui5_cl_cockpit_setup=>now_minus_seconds( active_minutes * 60 ).
 
     TRY.
         result-rows = count_rows( ).
         result-rows_expired = count_rows( lv_cutoff ).
         result-rows_active = result-rows - count_rows( lv_active ).
 
-        SELECT MIN( timestampl ), MAX( timestampl ) FROM (lv_tab)
-          INTO (@lv_min, @lv_max).                      "#EC CI_NOWHERE
+        SELECT MIN( timestampl ) MAX( timestampl ) FROM (lv_tab)
+          INTO (lv_min, lv_max).                      "#EC CI_NOWHERE
 
-        SELECT uname, COUNT( * ) AS cnt, MIN( timestampl ) AS oldest, MAX( timestampl ) AS newest
+        SELECT uname COUNT( * ) AS cnt MIN( timestampl ) AS oldest MAX( timestampl ) AS newest
           FROM (lv_tab)
           GROUP BY uname
-          INTO CORRESPONDING FIELDS OF TABLE @lt_grp.   "#EC CI_NOWHERE
+          INTO CORRESPONDING FIELDS OF TABLE lt_grp.   "#EC CI_NOWHERE
         result-check_readable = abap_true.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -170,21 +182,28 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     " expired rows that are still there mean nobody deletes them - the
     " framework cleans up on its own, so a backlog of more than a day's
     " worth points at a failing cleanup
-    result-check_backlog = xsdbool( result-rows_expired > 0
-        AND lv_min < z2ui5_cl_cockpit_setup=>now_minus_seconds( ( result-expiry_hours + 24 ) * 3600 ) ).
 
-    LOOP AT lt_grp INTO DATA(ls_grp).
+    temp3 = boolc( result-rows_expired > 0 AND lv_min < z2ui5_cl_cockpit_setup=>now_minus_seconds( ( result-expiry_hours + 24 ) * 3600 ) ).
+    result-check_backlog = temp3.
+
+
+    LOOP AT lt_grp INTO ls_grp.
       IF ls_grp-newest >= lv_active.
         result-users_active = result-users_active + 1.
       ENDIF.
     ENDLOOP.
 
     SORT lt_grp BY cnt DESCENDING.
-    DATA(lv_privacy) = z2ui5_cl_cockpit_setup=>check_privacy( ).
+
+    lv_privacy = z2ui5_cl_cockpit_setup=>check_privacy( ).
     LOOP AT lt_grp INTO ls_grp.
-      DATA(ls_user) = VALUE ty_s_user( drafts = ls_grp-cnt
-                                       oldest = z2ui5_cl_cockpit_setup=>ts_text( ls_grp-oldest )
-                                       newest = z2ui5_cl_cockpit_setup=>ts_text( ls_grp-newest ) ).
+
+      CLEAR temp1.
+      temp1-drafts = ls_grp-cnt.
+      temp1-oldest = z2ui5_cl_cockpit_setup=>ts_text( ls_grp-oldest ).
+      temp1-newest = z2ui5_cl_cockpit_setup=>ts_text( ls_grp-newest ).
+
+      ls_user = temp1.
       IF lv_privacy = abap_true.
         ls_user-user = |User { sy-tabix }|.
       ELSE.
@@ -202,35 +221,49 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
         id   TYPE c LENGTH 32,
         data TYPE string,
       END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES temp3 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp3.
     DATA lv_last TYPE c LENGTH 32.
     DATA lv_tab TYPE string.
-    DATA lt_app TYPE SORTED TABLE OF ty_s_app WITH UNIQUE KEY app.
+    TYPES temp4 TYPE SORTED TABLE OF ty_s_app WITH UNIQUE KEY app.
+DATA lt_app TYPE temp4.
     DATA lv_bytes_total TYPE p LENGTH 16 DECIMALS 0.
+      DATA ls_row LIKE LINE OF lt_rows.
+        DATA lv_len TYPE i.
+        DATA lv_app TYPE string.
+        FIELD-SYMBOLS <app> TYPE z2ui5_cl_cockpit_draft=>ty_s_app.
+          DATA temp2 TYPE z2ui5_cl_cockpit_draft=>ty_s_app.
 
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
 
     DO.
       CLEAR lt_rows.
-      SELECT id, data FROM (lv_tab)
-        WHERE id > @lv_last
+      SELECT id data FROM (lv_tab) INTO CORRESPONDING FIELDS OF TABLE lt_rows
+        WHERE id > lv_last
         ORDER BY id
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+
         UP TO 200 ROWS.
       IF lt_rows IS INITIAL.
         EXIT.
       ENDIF.
 
-      LOOP AT lt_rows INTO DATA(ls_row).
-        DATA(lv_len) = strlen( ls_row-data ).
+
+      LOOP AT lt_rows INTO ls_row.
+
+        lv_len = strlen( ls_row-data ).
         lv_bytes_total = lv_bytes_total + lv_len.
-        DATA(lv_app) = app_of_draft( ls_row-data ).
+
+        lv_app = app_of_draft( ls_row-data ).
         IF lv_app IS INITIAL.
           lv_app = `(unknown)`.
         ENDIF.
-        READ TABLE lt_app WITH TABLE KEY app = lv_app ASSIGNING FIELD-SYMBOL(<app>).
+
+        READ TABLE lt_app WITH TABLE KEY app = lv_app ASSIGNING <app>.
         IF sy-subrc <> 0.
-          INSERT VALUE #( app = lv_app ) INTO TABLE lt_app ASSIGNING <app>.
+
+          CLEAR temp2.
+          temp2-app = lv_app.
+          INSERT temp2 INTO TABLE lt_app ASSIGNING <app>.
         ENDIF.
         <app>-drafts = <app>-drafts + 1.
         <app>-kb = <app>-kb + lv_len DIV 1024.
@@ -266,26 +299,36 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     " that is not the framework's.
     CONSTANTS lc_marker TYPE string VALUE `/classes/global"`.
     DATA lv_offset TYPE i.
+      DATA lv_rest TYPE string.
+      DATA lv_hit TYPE i.
+      DATA lv_head TYPE string.
+      DATA lv_open TYPE i.
+      DATA lv_tag TYPE string.
 
     DO 20 TIMES.
-      DATA(lv_rest) = substring( val = data
+
+      lv_rest = substring( val = data
                                  off = lv_offset ).
-      DATA(lv_hit) = find( val = lv_rest
+
+      lv_hit = find( val = lv_rest
                            sub = lc_marker ).
       IF lv_hit < 0.
         RETURN.
       ENDIF.
-      DATA(lv_head) = substring( val = lv_rest
+
+      lv_head = substring( val = lv_rest
                                  len = lv_hit ).
       lv_offset = lv_offset + lv_hit + strlen( lc_marker ).
 
-      DATA(lv_open) = find( val  = lv_head
+
+      lv_open = find( val  = lv_head
                             sub  = `<`
                             occ  = -1 ).
       IF lv_open < 0.
         CONTINUE.
       ENDIF.
-      DATA(lv_tag) = substring( val = lv_head
+
+      lv_tag = substring( val = lv_head
                                 off = lv_open + 1 ).
       lv_tag = substring_before( val = lv_tag
                                  sub = ` ` ).
@@ -314,12 +357,20 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
   METHOD delete_expired.
 
     DATA lv_tab TYPE string.
-    DATA(lv_cutoff) = cutoff( ).
-    DATA(lv_before) = count_rows( lv_cutoff ).
-
+    DATA lv_cutoff TYPE timestampl.
+    DATA lv_before TYPE i.
     DATA lo_store TYPE REF TO object.
-    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_SRV_DRAFT` ).
-    DATA(lv_cleanup) = z2ui5_cl_cockpit_inst=>obj_name( `IF_UI5_DRAFT_STORE~CLEANUP` ).
+    DATA lv_class TYPE string.
+    DATA lv_cleanup TYPE string.
+    lv_cutoff = cutoff( ).
+
+    lv_before = count_rows( lv_cutoff ).
+
+
+
+    lv_class = z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_SRV_DRAFT` ).
+
+    lv_cleanup = z2ui5_cl_cockpit_inst=>obj_name( `IF_UI5_DRAFT_STORE~CLEANUP` ).
     TRY.
         CALL METHOD (lv_class)=>(`GET_INSTANCE`)
           RECEIVING
@@ -329,7 +380,7 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
         " the framework's store is not reachable under that name - delete
         " directly, with the same cutoff
         lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
-        DELETE FROM (lv_tab) WHERE timestampl < @lv_cutoff.
+        DELETE FROM (lv_tab) WHERE timestampl < lv_cutoff.
         COMMIT WORK.
     ENDTRY.
 
@@ -354,12 +405,12 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
     DATA lv_tab TYPE string.
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
     IF before IS SUPPLIED.
-      SELECT COUNT( * ) FROM (lv_tab)
-        WHERE timestampl < @before
-        INTO @result.
+      SELECT COUNT( * ) FROM (lv_tab) INTO result
+        WHERE timestampl < before
+        .
     ELSE.
       SELECT COUNT( * ) FROM (lv_tab)
-        INTO @result.                                   "#EC CI_NOWHERE
+        INTO result.                                   "#EC CI_NOWHERE
     ENDIF.
 
   ENDMETHOD.

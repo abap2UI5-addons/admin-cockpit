@@ -50,7 +50,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         type TYPE string,
         text TYPE string,
       END OF ty_s_shown.
-    TYPES ty_t_shown TYPE STANDARD TABLE OF ty_s_shown WITH EMPTY KEY.
+    TYPES ty_t_shown TYPE STANDARD TABLE OF ty_s_shown WITH DEFAULT KEY.
 
     TYPES:
       "! A recorded roundtrip without its bodies.
@@ -67,7 +67,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the user as stored - name or pseudonym, filled by get_variants only
         user          TYPE string,
       END OF ty_s_record.
-    TYPES ty_t_record TYPE STANDARD TABLE OF ty_s_record WITH EMPTY KEY.
+    TYPES ty_t_record TYPE STANDARD TABLE OF ty_s_record WITH DEFAULT KEY.
 
     TYPES:
       "! One recorded roundtrip in full, as the recorder view shows it.
@@ -116,7 +116,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the draft of the last roundtrip that showed it - its session opens there
         example TYPE string,
       END OF ty_s_message.
-    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
+    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_messages,
@@ -148,7 +148,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         " the newest run's last draft - its session opens there
         example  TYPE string,
       END OF ty_s_variant.
-    TYPES ty_t_variant TYPE STANDARD TABLE OF ty_s_variant WITH EMPTY KEY.
+    TYPES ty_t_variant TYPE STANDARD TABLE OF ty_s_variant WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_variants,
@@ -168,7 +168,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         response    TYPE string,
         http_status TYPE i,
       END OF ty_s_exchange.
-    TYPES ty_t_exchange TYPE STANDARD TABLE OF ty_s_exchange WITH EMPTY KEY.
+    TYPES ty_t_exchange TYPE STANDARD TABLE OF ty_s_exchange WITH DEFAULT KEY.
 
     TYPES:
       "! A field users typed, and how often an error followed in the same roundtrip.
@@ -182,7 +182,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         samples TYPE string,
         state   TYPE string,
       END OF ty_s_input.
-    TYPES ty_t_input TYPE STANDARD TABLE OF ty_s_input WITH EMPTY KEY.
+    TYPES ty_t_input TYPE STANDARD TABLE OF ty_s_input WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_inputs,
@@ -461,7 +461,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
-    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
+    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_28 WITH DEFAULT KEY.
 
     "! The content of a copy without what runs in the browser by itself: a
     "! sap.ui.core.HTML renders its content with the scripts and on...
@@ -560,9 +560,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_sticky TYPE abap_bool.
     DATA lv_start TYPE timestampl.
     DATA lv_end TYPE timestampl.
+    DATA lv_count TYPE i.
+        DATA lv_ms TYPE i.
+        DATA ls_roundtrip TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip.
 
     GET TIME STAMP FIELD lv_start.
-    DATA(lv_count) = z2ui5_cl_cockpit_rec=>get_count( ).
+
+    lv_count = z2ui5_cl_cockpit_rec=>get_count( ).
     IF server IS BOUND.
       z2ui5_cl_ui5_http_handler=>run( server ).
     ELSE.
@@ -581,7 +585,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                     check_sticky = lv_sticky ) = abap_false.
           RETURN.
         ENDIF.
-        DATA(lv_ms) = ms_between( ts_from = lv_start
+
+        lv_ms = ms_between( ts_from = lv_start
                                   ts_to   = lv_end ).
         record_bodies( request      = lv_request
                        response     = lv_response
@@ -593,7 +598,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         IF z2ui5_cl_cockpit_rec=>get_count( ) > lv_count.
           RETURN.
         ENDIF.
-        DATA(ls_roundtrip) = roundtrip_of( request      = lv_request
+
+        ls_roundtrip = roundtrip_of( request      = lv_request
                                            response     = lv_response
                                            http_status  = lv_status
                                            check_sticky = lv_sticky ).
@@ -647,6 +653,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     FIELD-SYMBOLS <any> TYPE any.
     FIELD-SYMBOLS <status> TYPE any.
     FIELD-SYMBOLS <code> TYPE any.
+        DATA temp1 TYPE xsdboolean.
 
     CLEAR request.
     CLEAR response.
@@ -689,7 +696,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       UNASSIGN <any>.
       ASSIGN server->(`STATEFUL`) TO <any>.
       IF <any> IS ASSIGNED.
-        check_sticky = xsdbool( <any> = 1 ).
+
+        temp1 = boolc( <any> = 1 ).
+        check_sticky = temp1.
       ENDIF.
 
     ELSEIF req IS BOUND AND res IS BOUND.
@@ -729,34 +738,106 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD roundtrip_of.
 
     DATA lv_root TYPE string.
+    DATA temp3 TYPE xsdboolean.
+        DATA lt_request TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+        DATA temp45 TYPE string.
+        DATA temp9 LIKE sy-subrc.
+        DATA temp10 LIKE sy-subrc.
+        DATA temp1 LIKE sy-subrc.
+        DATA temp2 LIKE sy-subrc.
+        DATA lv_id_path TYPE string.
+        DATA lv_event_path TYPE string.
+        DATA lv_client_path TYPE string.
+        DATA temp46 TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip-draft_id_prev.
+        DATA temp47 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+        DATA temp48 TYPE z2ui5_cl_cockpit_rec=>ty_s_roundtrip-event.
+        DATA temp49 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+        DATA temp50 TYPE string.
+        DATA temp51 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+        DATA lv_client LIKE temp50.
+    DATA temp4 TYPE xsdboolean.
+      DATA lv_protocol TYPE i.
+      DATA lv_model TYPE i.
+    DATA lv_at TYPE i.
+      DATA lv_close TYPE i.
+        DATA lv_class TYPE string.
+        DATA lv_end TYPE i.
 
     result-check_sticky   = check_sticky.
     result-bytes_request  = strlen( request ).
     result-bytes_response = strlen( response ).
-    result-check_error    = xsdbool( http_status >= 500 ).
+
+    temp3 = boolc( http_status >= 500 ).
+    result-check_error    = temp3.
 
     TRY.
-        DATA(lt_request) = json_flatten( request ).
-        lv_root = COND #( WHEN line_exists( lt_request[ path = `value/S_FRONT/ID` ] )
-                            OR line_exists( lt_request[ path = `value/S_FRONT/EVENT` ] ) THEN `value/` ).
+
+        lt_request = json_flatten( request ).
+
+
+
+        temp10 = sy-subrc.
+        READ TABLE lt_request WITH KEY path = `value/S_FRONT/ID` TRANSPORTING NO FIELDS.
+        temp9 = sy-subrc.
+        sy-subrc = temp10.
+
+
+        temp2 = sy-subrc.
+        READ TABLE lt_request WITH KEY path = `value/S_FRONT/EVENT` TRANSPORTING NO FIELDS.
+        temp1 = sy-subrc.
+        sy-subrc = temp2.
+        IF temp9 = 0 OR temp1 = 0.
+          temp45 = `value/`.
+        ELSE.
+          CLEAR temp45.
+        ENDIF.
+        lv_root = temp45.
         " the keys in variables - a template is no key operand on 7.02
-        DATA(lv_id_path) = |{ lv_root }S_FRONT/ID|.
-        DATA(lv_event_path) = |{ lv_root }S_FRONT/EVENT|.
-        DATA(lv_client_path) = |{ lv_root }S_FRONT/MS_CLIENT_PREV|.
-        result-draft_id_prev = VALUE #( lt_request[ path = lv_id_path ]-value OPTIONAL ).
-        result-event         = VALUE #( lt_request[ path = lv_event_path ]-value OPTIONAL ).
-        DATA(lv_client) = VALUE string( lt_request[ path = lv_client_path ]-value OPTIONAL ).
+
+        lv_id_path = |{ lv_root }S_FRONT/ID|.
+
+        lv_event_path = |{ lv_root }S_FRONT/EVENT|.
+
+        lv_client_path = |{ lv_root }S_FRONT/MS_CLIENT_PREV|.
+
+        CLEAR temp46.
+
+        READ TABLE lt_request INTO temp47 WITH KEY path = lv_id_path.
+        IF sy-subrc = 0.
+          temp46 = temp47-value.
+        ENDIF.
+        result-draft_id_prev = temp46.
+
+        CLEAR temp48.
+
+        READ TABLE lt_request INTO temp49 WITH KEY path = lv_event_path.
+        IF sy-subrc = 0.
+          temp48 = temp49-value.
+        ENDIF.
+        result-event         = temp48.
+
+        CLEAR temp50.
+
+        READ TABLE lt_request INTO temp51 WITH KEY path = lv_client_path.
+        IF sy-subrc = 0.
+          temp50 = temp51-value.
+        ENDIF.
+
+        lv_client = temp50.
         IF lv_client CO `0123456789` AND lv_client IS NOT INITIAL AND strlen( lv_client ) < 10.
           result-ms_client_prev = lv_client.
         ENDIF.
       CATCH cx_root ##NO_HANDLER.
         " no JSON - counted as it came
     ENDTRY.
-    result-check_start = xsdbool( result-draft_id_prev IS INITIAL ).
+
+    temp4 = boolc( result-draft_id_prev IS INITIAL ).
+    result-check_start = temp4.
 
     IF result-check_error = abap_false.
       " id and app stand first in S_FRONT, before PROTOCOL - found by text
-      DATA(lv_protocol) = find( val = response
+
+      lv_protocol = find( val = response
                                 sub = `"PROTOCOL":` ).
       IF lv_protocol > 0.
         result-draft_id = member_before( json   = response
@@ -766,7 +847,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                                    name   = `APP`
                                                    before = lv_protocol ) ).
       ENDIF.
-      DATA(lv_model) = find( val = response
+
+      lv_model = find( val = response
                              sub = `,"MODEL":` ).
       IF lv_model > 0.
         " up to the closing brace of the response itself
@@ -778,17 +860,21 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     " the 500 body: the error text, then the exception chain as lines
     " [1] CLASS ... [n] CLASS - the last one is the root cause
     result-error_text = response.
-    DATA(lv_at) = find( val = response
+
+    lv_at = find( val = response
                         sub = |\n[|
                         occ = -1 ).
     IF lv_at >= 0.
-      DATA(lv_close) = find( val = response
+
+      lv_close = find( val = response
                              sub = `] `
                              off = lv_at ).
       IF lv_close > lv_at.
-        DATA(lv_class) = substring( val = response
+
+        lv_class = substring( val = response
                                     off = lv_close + 2 ).
-        DATA(lv_end) = find( val = lv_class
+
+        lv_end = find( val = lv_class
                              regex = `[\s:]` ).
         IF lv_end > 0.
           lv_class = substring( val = lv_class
@@ -808,7 +894,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_frac TYPE p LENGTH 16 DECIMALS 7.
 
     " whole seconds by hand, then the fractions of both - see seconds_between
-    DATA(lv_seconds) = z2ui5_cl_cockpit_session=>seconds_between( ts_from = ts_from
+    DATA lv_seconds TYPE i.
+    lv_seconds = z2ui5_cl_cockpit_session=>seconds_between( ts_from = ts_from
                                                                   ts_to   = ts_to ).
     lv_frac = frac( ts_to ) - frac( ts_from ).
     result = lv_seconds * 1000 + round( val = lv_frac * 1000
@@ -822,9 +909,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD record_bodies.
 
     DATA ls_row TYPE z2ui5_t_28.
+        DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+        DATA lt_buffer LIKE gt_buffer.
+        DATA ls_buffered LIKE LINE OF lt_buffer.
 
     TRY.
-        DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+
+        ls_set = z2ui5_cl_cockpit_setup=>get( ).
         IF ls_set-wire_days <= 0 OR request IS INITIAL.
           RETURN.
         ENDIF.
@@ -849,11 +940,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           z2ui5_cl_cockpit_setup=>set_last_purge( ls_row-utc_day ).
           z2ui5_cl_cockpit_job=>purge_own( ).
         ENDIF.
-        DATA(lt_buffer) = gt_buffer.
+
+        lt_buffer = gt_buffer.
         CLEAR gt_buffer.
         APPEND ls_row TO lt_buffer.
-        LOOP AT lt_buffer INTO DATA(ls_buffered).
-          INSERT z2ui5_t_28 FROM @ls_buffered.
+
+        LOOP AT lt_buffer INTO ls_buffered.
+          INSERT z2ui5_t_28 FROM ls_buffered.
         ENDLOOP.
         COMMIT WORK.
       CATCH cx_root.
@@ -870,6 +963,17 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD row_of.
 
     DATA lv_root TYPE string.
+        DATA lt_request TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+        DATA temp52 TYPE string.
+        DATA temp11 LIKE sy-subrc.
+        DATA temp12 LIKE sy-subrc.
+        DATA lv_id_path TYPE string.
+        DATA lv_event_path TYPE string.
+        DATA temp53 LIKE result-draft_id_prev.
+        DATA temp54 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+        DATA temp55 LIKE result-event.
+        DATA temp56 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+    DATA lv_protocol TYPE i.
 
     result-id           = cl_system_uuid=>create_uuid_c32_static( ).
     result-timestampl   = z2ui5_cl_cockpit_setup=>now( ).
@@ -886,20 +990,50 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     " the request is small: taken apart for the draft it started from and
     " its event; the request of a first start has no draft
     TRY.
-        DATA(lt_request) = json_flatten( request ).
-        lv_root = COND #( WHEN line_exists( lt_request[ path = `value/S_FRONT/ID` ] ) THEN `value/` ).
+
+        lt_request = json_flatten( request ).
+
+
+
+        temp12 = sy-subrc.
+        READ TABLE lt_request WITH KEY path = `value/S_FRONT/ID` TRANSPORTING NO FIELDS.
+        temp11 = sy-subrc.
+        sy-subrc = temp12.
+        IF temp11 = 0.
+          temp52 = `value/`.
+        ELSE.
+          CLEAR temp52.
+        ENDIF.
+        lv_root = temp52.
         " the keys in variables - a template is no key operand on 7.02
-        DATA(lv_id_path) = |{ lv_root }S_FRONT/ID|.
-        DATA(lv_event_path) = |{ lv_root }S_FRONT/EVENT|.
-        result-draft_id_prev = VALUE #( lt_request[ path = lv_id_path ]-value OPTIONAL ).
-        result-event         = VALUE #( lt_request[ path = lv_event_path ]-value OPTIONAL ).
+
+        lv_id_path = |{ lv_root }S_FRONT/ID|.
+
+        lv_event_path = |{ lv_root }S_FRONT/EVENT|.
+
+        CLEAR temp53.
+
+        READ TABLE lt_request INTO temp54 WITH KEY path = lv_id_path.
+        IF sy-subrc = 0.
+          temp53 = temp54-value.
+        ENDIF.
+        result-draft_id_prev = temp53.
+
+        CLEAR temp55.
+
+        READ TABLE lt_request INTO temp56 WITH KEY path = lv_event_path.
+        IF sy-subrc = 0.
+          temp55 = temp56-value.
+        ENDIF.
+        result-event         = temp55.
       CATCH cx_root ##NO_HANDLER.
         " no JSON - recorded as it came
     ENDTRY.
 
     " the response can be large - its id and app stand first in S_FRONT,
     " before PROTOCOL and the actions, and are found by text
-    DATA(lv_protocol) = find( val = response
+
+    lv_protocol = find( val = response
                               sub = `"PROTOCOL":` ).
     IF lv_protocol > 0.
       result-draft_id = member_before( json   = response
@@ -942,17 +1076,26 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         http_status   TYPE i,
         ms_total      TYPE i,
       END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES temp1 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp1.
     DATA lt_range TYPE ty_r_id.
     DATA lv_done TYPE i.
+        DATA lv_id LIKE LINE OF it_id.
+            DATA temp57 LIKE LINE OF lt_range.
+    DATA ls_row LIKE LINE OF lt_rows.
+      DATA temp58 TYPE z2ui5_cl_cockpit_wire=>ty_s_record.
 
     TRY.
-        LOOP AT it_id INTO DATA(lv_id).
+
+        LOOP AT it_id INTO lv_id.
           lv_done = lv_done + 1.
           IF lv_id IS NOT INITIAL.
-            APPEND VALUE #( sign   = `I`
-                            option = `EQ`
-                            low    = lv_id ) TO lt_range.
+
+            CLEAR temp57.
+            temp57-sign = `I`.
+            temp57-option = `EQ`.
+            temp57-low = lv_id.
+            APPEND temp57 TO lt_range.
           ENDIF.
           IF lines( lt_range ) < 50 AND lv_done < lines( it_id ).
             CONTINUE.
@@ -960,11 +1103,11 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           IF lt_range IS INITIAL.
             CONTINUE.
           ENDIF.
-          SELECT id, timestampl, app, event, draft_id, draft_id_prev, http_status, ms_total
-            FROM z2ui5_t_28
-            WHERE draft_id IN @lt_range
-               OR draft_id_prev IN @lt_range
-            APPENDING CORRESPONDING FIELDS OF TABLE @lt_rows.
+          SELECT id timestampl app event draft_id draft_id_prev http_status ms_total
+            FROM z2ui5_t_28 APPENDING CORRESPONDING FIELDS OF TABLE lt_rows
+            WHERE draft_id IN lt_range
+               OR draft_id_prev IN lt_range
+            .
           CLEAR lt_range.
         ENDLOOP.
       CATCH cx_root.
@@ -973,15 +1116,19 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     SORT lt_rows BY timestampl ASCENDING id ASCENDING.
     DELETE ADJACENT DUPLICATES FROM lt_rows COMPARING id.
-    LOOP AT lt_rows INTO DATA(ls_row).
-      APPEND VALUE #( id            = ls_row-id
-                      timestampl    = ls_row-timestampl
-                      app           = ls_row-app
-                      event         = ls_row-event
-                      draft_id      = ls_row-draft_id
-                      draft_id_prev = ls_row-draft_id_prev
-                      http_status   = ls_row-http_status
-                      ms_total      = ls_row-ms_total ) TO result.
+
+    LOOP AT lt_rows INTO ls_row.
+
+      CLEAR temp58.
+      temp58-id = ls_row-id.
+      temp58-timestampl = ls_row-timestampl.
+      temp58-app = ls_row-app.
+      temp58-event = ls_row-event.
+      temp58-draft_id = ls_row-draft_id.
+      temp58-draft_id_prev = ls_row-draft_id_prev.
+      temp58-http_status = ls_row-http_status.
+      temp58-ms_total = ls_row-ms_total.
+      APPEND temp58 TO result.
     ENDLOOP.
 
   ENDMETHOD.
@@ -993,9 +1140,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     CLEAR response.
     lv_id = id.
     TRY.
-        SELECT SINGLE req_body, res_body FROM z2ui5_t_28
-          WHERE id = @lv_id
-          INTO (@request, @response).
+        SELECT SINGLE req_body res_body FROM z2ui5_t_28 INTO (request, response)
+          WHERE id = lv_id
+          .
         IF sy-subrc <> 0.
           CLEAR request.
           CLEAR response.
@@ -1012,17 +1159,25 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_id TYPE c LENGTH 32.
     DATA ls_row TYPE z2ui5_t_28.
     DATA lv_input TYPE string.
+        DATA lx TYPE REF TO cx_root.
+    DATA temp59 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA ls_value LIKE LINE OF temp59.
+      DATA temp60 TYPE string.
+    DATA temp61 TYPE z2ui5_if_client=>ty_t_name_value.
+    DATA ls_view LIKE LINE OF temp61.
+      DATA temp62 TYPE string.
 
     lv_id = id.
     TRY.
-        SELECT SINGLE * FROM z2ui5_t_28
-          WHERE id = @lv_id
-          INTO @ls_row.
+        SELECT SINGLE * FROM z2ui5_t_28 INTO ls_row
+          WHERE id = lv_id
+          .
         IF sy-subrc <> 0.
           result-error = `The recording is gone - deleted by its retention.`.
           RETURN.
         ENDIF.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -1035,14 +1190,31 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     result-request     = ls_row-req_body.
     result-response    = ls_row-res_body.
     result-shown       = shown_text( shown_of( ls_row-res_body ) ).
-    LOOP AT input_of( ls_row-req_body ) INTO DATA(ls_value).
-      lv_input = |{ lv_input }{ COND #( WHEN lv_input IS NOT INITIAL THEN cl_abap_char_utilities=>newline ) }| &&
+
+    temp59 = input_of( ls_row-req_body ).
+
+    LOOP AT temp59 INTO ls_value.
+
+      IF lv_input IS NOT INITIAL.
+        temp60 = cl_abap_char_utilities=>newline.
+      ELSE.
+        CLEAR temp60.
+      ENDIF.
+      lv_input = |{ lv_input }{ temp60 }| &&
                  |{ ls_value-path } = { ls_value-value }|.
     ENDLOOP.
     result-input = lv_input.
-    LOOP AT views_of( ls_row-res_body ) INTO DATA(ls_view).
-      result-view_xml = |{ result-view_xml }{ COND #( WHEN result-view_xml IS NOT INITIAL
-                                                       THEN cl_abap_char_utilities=>newline ) }| &&
+
+    temp61 = views_of( ls_row-res_body ).
+
+    LOOP AT temp61 INTO ls_view.
+
+      IF result-view_xml IS NOT INITIAL.
+        temp62 = cl_abap_char_utilities=>newline.
+      ELSE.
+        CLEAR temp62.
+      ENDIF.
+      result-view_xml = |{ result-view_xml }{ temp62 }| &&
                         |<!-- { ls_view-n } -->{ cl_abap_char_utilities=>newline }{ ls_view-v }|.
     ENDLOOP.
 
@@ -1068,57 +1240,106 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         text TYPE string,
         user TYPE string,
       END OF ty_s_user.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_users TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY app kind type text user.
+    TYPES temp2 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp2.
+    TYPES temp3 TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY app kind type text user.
+DATA lt_users TYPE temp3.
     DATA lv_from TYPE c LENGTH 8.
+        DATA lx TYPE REF TO cx_root.
+    DATA temp5 TYPE xsdboolean.
+    DATA ls_row LIKE LINE OF lt_rows.
+      DATA temp63 TYPE string.
+      DATA lv_user LIKE temp63.
+      DATA temp64 TYPE z2ui5_cl_cockpit_wire=>ty_t_shown.
+      DATA ls_shown LIKE LINE OF temp64.
+        FIELD-SYMBOLS <message> TYPE z2ui5_cl_cockpit_wire=>ty_s_message.
+          DATA lv_type TYPE string.
+          DATA temp65 TYPE z2ui5_cl_cockpit_wire=>ty_s_message.
+          DATA temp13 TYPE z2ui5_cl_cockpit_wire=>ty_s_message-example.
+          DATA temp14 TYPE z2ui5_cl_cockpit_wire=>ty_s_message-state.
+          DATA temp66 TYPE ty_s_user.
 
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, res_body FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
+        SELECT app uname user_key timestampl draft_id draft_id_prev res_body FROM z2ui5_t_28 INTO CORRESPONDING FIELDS OF TABLE lt_rows
+          WHERE utc_day >= lv_from
           ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @c_max_read ROWS.
-      CATCH cx_root INTO DATA(lx).
+
+          UP TO c_max_read ROWS.
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
     result-records = lines( lt_rows ).
-    result-check_capped = xsdbool( result-records >= c_max_read ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
-      DATA(lv_user) = COND string( WHEN ls_row-uname IS NOT INITIAL THEN ls_row-uname ELSE ls_row-user_key ).
-      LOOP AT shown_of( ls_row-res_body ) INTO DATA(ls_shown).
+    temp5 = boolc( result-records >= c_max_read ).
+    result-check_capped = temp5.
+
+
+    LOOP AT lt_rows INTO ls_row.
+
+      IF ls_row-uname IS NOT INITIAL.
+        temp63 = ls_row-uname.
+      ELSE.
+        temp63 = ls_row-user_key.
+      ENDIF.
+
+      lv_user = temp63.
+
+      temp64 = shown_of( ls_row-res_body ).
+
+      LOOP AT temp64 INTO ls_shown.
         IF ls_shown-kind = cs_kind-view.
           CONTINUE.
         ENDIF.
-        READ TABLE result-t_message ASSIGNING FIELD-SYMBOL(<message>)
+
+        READ TABLE result-t_message ASSIGNING <message>
              WITH KEY app = ls_row-app kind = ls_shown-kind type = ls_shown-type text = ls_shown-text. "#EC CI_SORTSEQ
         IF sy-subrc <> 0.
           " a variable, not to_lower( ) in the SWITCH - no CASE operand on 7.02
-          DATA(lv_type) = to_lower( ls_shown-type ).
+
+          lv_type = to_lower( ls_shown-type ).
           " rows come newest first - the first one is the last time it was shown
           " a failed roundtrip wrote no draft - its session opens where it started
-          APPEND VALUE #( app     = ls_row-app
-                          kind    = ls_shown-kind
-                          type    = ls_shown-type
-                          text    = ls_shown-text
-                          example = COND #( WHEN ls_row-draft_id IS NOT INITIAL THEN ls_row-draft_id
-                                            ELSE ls_row-draft_id_prev )
-                          last    = z2ui5_cl_cockpit_setup=>ts_text( ls_row-timestampl )
-                          state = SWITCH #( lv_type
-                                            WHEN `error` THEN `Error`
-                                            WHEN `warning` THEN `Warning`
-                                            WHEN `success` THEN `Success`
-                                            ELSE `None` ) ) TO result-t_message ASSIGNING <message>.
+
+          CLEAR temp65.
+          temp65-app = ls_row-app.
+          temp65-kind = ls_shown-kind.
+          temp65-type = ls_shown-type.
+          temp65-text = ls_shown-text.
+
+          IF ls_row-draft_id IS NOT INITIAL.
+            temp13 = ls_row-draft_id.
+          ELSE.
+            temp13 = ls_row-draft_id_prev.
+          ENDIF.
+          temp65-example = temp13.
+          temp65-last = z2ui5_cl_cockpit_setup=>ts_text( ls_row-timestampl ).
+
+          CASE lv_type.
+            WHEN `error`.
+              temp14 = `Error`.
+            WHEN `warning`.
+              temp14 = `Warning`.
+            WHEN `success`.
+              temp14 = `Success`.
+            WHEN OTHERS.
+              temp14 = `None`.
+          ENDCASE.
+          temp65-state = temp14.
+          APPEND temp65 TO result-t_message ASSIGNING <message>.
         ENDIF.
         <message>-count = <message>-count + 1.
         IF lv_user IS NOT INITIAL.
-          INSERT VALUE #( app  = ls_row-app
-                          kind = ls_shown-kind
-                          type = ls_shown-type
-                          text = ls_shown-text
-                          user = lv_user ) INTO TABLE lt_users.
+
+          CLEAR temp66.
+          temp66-app = ls_row-app.
+          temp66-kind = ls_shown-kind.
+          temp66-type = ls_shown-type.
+          temp66-text = ls_shown-text.
+          temp66-user = lv_user.
+          INSERT temp66 INTO TABLE lt_users.
           IF sy-subrc = 0.
             <message>-users = <message>-users + 1.
           ENDIF.
@@ -1134,9 +1355,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_from TYPE c LENGTH 8.
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT COUNT( * ) FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
-          INTO @result.
+        SELECT COUNT( * ) FROM z2ui5_t_28 INTO result
+          WHERE utc_day >= lv_from
+          .
       CATCH cx_root.
         CLEAR result.
     ENDTRY.
@@ -1152,20 +1373,30 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         children TYPE i,
         name     TYPE string,
       END OF ty_s_open.
-    DATA lt_stack TYPE STANDARD TABLE OF ty_s_open WITH EMPTY KEY.
+    TYPES temp4 TYPE STANDARD TABLE OF ty_s_open WITH DEFAULT KEY.
+DATA lt_stack TYPE temp4.
     DATA lo_open TYPE REF TO if_sxml_open_element.
     DATA lo_value TYPE REF TO if_sxml_value_node.
     DATA lv_name TYPE string.
     DATA lv_leaf_path TYPE string.
     FIELD-SYMBOLS <top> TYPE ty_s_open.
+    DATA lo_reader TYPE REF TO if_sxml_reader.
+      DATA lo_node TYPE REF TO if_sxml_node.
+              DATA temp67 TYPE if_sxml_attribute=>attributes.
+              DATA lo_attribute LIKE LINE OF temp67.
+          DATA temp68 TYPE ty_s_open.
+          DATA temp15 TYPE ty_s_open-path.
+            DATA temp69 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
 
     IF json IS INITIAL.
       RETURN.
     ENDIF.
-    DATA(lo_reader) = cl_sxml_string_reader=>create( to_utf8( json ) ).
+
+    lo_reader = cl_sxml_string_reader=>create( to_utf8( json ) ).
 
     DO.
-      DATA(lo_node) = lo_reader->read_next_node( ).
+
+      lo_node = lo_reader->read_next_node( ).
       IF lo_node IS NOT BOUND.
         EXIT.
       ENDIF.
@@ -1176,30 +1407,45 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           CLEAR lv_name.
           UNASSIGN <top>.
           IF lt_stack IS NOT INITIAL.
-            ASSIGN lt_stack[ lines( lt_stack ) ] TO <top>.
+            READ TABLE lt_stack INDEX lines( lt_stack ) ASSIGNING <top>.
             <top>-children = <top>-children + 1.
             IF <top>-type = `array`.
               lv_name = |{ <top>-children }|.
             ELSE.
-              LOOP AT lo_open->get_attributes( ) INTO DATA(lo_attribute).
+
+              temp67 = lo_open->get_attributes( ).
+
+              LOOP AT temp67 INTO lo_attribute.
                 lv_name = lo_attribute->get_value( ).
                 EXIT.
               ENDLOOP.
             ENDIF.
           ENDIF.
-          APPEND VALUE #( type = lo_open->qname-name
-                          name = lv_name
-                          path = COND #( WHEN <top> IS NOT ASSIGNED THEN ``
-                                         WHEN <top>-path IS INITIAL THEN lv_name
-                                         ELSE |{ <top>-path }/{ lv_name }| ) ) TO lt_stack.
+
+          CLEAR temp68.
+          temp68-type = lo_open->qname-name.
+          temp68-name = lv_name.
+
+          IF <top> IS NOT ASSIGNED.
+            temp15 = ``.
+          ELSEIF <top>-path IS INITIAL.
+            temp15 = lv_name.
+          ELSE.
+            temp15 = |{ <top>-path }/{ lv_name }|.
+          ENDIF.
+          temp68-path = temp15.
+          APPEND temp68 TO lt_stack.
 
         WHEN if_sxml_node=>co_nt_value.
           lo_value ?= lo_node.
           IF lt_stack IS NOT INITIAL.
-            ASSIGN lt_stack[ lines( lt_stack ) ] TO <top>.
+            READ TABLE lt_stack INDEX lines( lt_stack ) ASSIGNING <top>.
             lv_leaf_path = <top>-path.
-            APPEND VALUE #( path  = lv_leaf_path
-                            value = lo_value->get_value( ) ) TO result.
+
+            CLEAR temp69.
+            temp69-path = lv_leaf_path.
+            temp69-value = lo_value->get_value( ).
+            APPEND temp69 TO result.
           ENDIF.
 
         WHEN if_sxml_node=>co_nt_element_close.
@@ -1218,10 +1464,35 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         nr     TYPE string,
         values TYPE z2ui5_cl_cockpit_session=>ty_t_value,
       END OF ty_s_action.
-    DATA lt_action TYPE STANDARD TABLE OF ty_s_action WITH EMPTY KEY.
+    TYPES temp5 TYPE STANDARD TABLE OF ty_s_action WITH DEFAULT KEY.
+DATA lt_action TYPE temp5.
     DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
     DATA lv_rest TYPE string.
     DATA lv_nr TYPE string.
+    DATA ls_value LIKE LINE OF lt_values.
+      DATA lv_slash TYPE i.
+      DATA lv_after TYPE string.
+      DATA lv_slash2 TYPE i.
+      FIELD-SYMBOLS <action> TYPE ty_s_action.
+        DATA temp70 TYPE ty_s_action.
+      DATA temp71 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+    DATA ls_action LIKE LINE OF lt_action.
+      DATA temp72 TYPE z2ui5_cl_cockpit_session=>ty_s_value-value.
+      DATA temp73 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA lv_1 LIKE temp72.
+      DATA temp74 TYPE z2ui5_cl_cockpit_session=>ty_s_value-value.
+      DATA temp75 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA lv_2 LIKE temp74.
+      DATA temp76 TYPE z2ui5_cl_cockpit_session=>ty_s_value-value.
+      DATA temp77 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA lv_3 LIKE temp76.
+      DATA temp78 TYPE z2ui5_cl_cockpit_session=>ty_s_value-value.
+      DATA temp79 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA lv_4 LIKE temp78.
+          DATA temp80 TYPE z2ui5_cl_cockpit_wire=>ty_s_shown.
+          DATA temp81 TYPE z2ui5_cl_cockpit_wire=>ty_s_shown.
+              DATA temp82 TYPE z2ui5_cl_cockpit_wire=>ty_s_shown.
+              DATA temp83 TYPE z2ui5_cl_cockpit_wire=>ty_s_shown.
 
     TRY.
         lt_values = json_flatten( response ).
@@ -1230,62 +1501,115 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDTRY.
 
     " one action is one array - S_FRONT/S_ACTION/T_CUSTOM/<n>/<position>
-    LOOP AT lt_values INTO DATA(ls_value).
+
+    LOOP AT lt_values INTO ls_value.
       IF ls_value-path NP `S_FRONT/S_ACTION/T_*`.
         CONTINUE.
       ENDIF.
       lv_rest = substring_after( val = ls_value-path
                                  sub = `S_FRONT/S_ACTION/` ).
       " the queue and the number of the action: T_CUSTOM/3
-      DATA(lv_slash) = find( val = lv_rest
+
+      lv_slash = find( val = lv_rest
                              sub = `/` ).
       IF lv_slash < 0.
         CONTINUE.
       ENDIF.
-      DATA(lv_after) = substring( val = lv_rest
+
+      lv_after = substring( val = lv_rest
                                   off = lv_slash + 1 ).
-      DATA(lv_slash2) = find( val = lv_after
+
+      lv_slash2 = find( val = lv_after
                               sub = `/` ).
       IF lv_slash2 < 0.
         CONTINUE.
       ENDIF.
       lv_nr = substring( val = lv_rest
                          len = lv_slash + 1 + lv_slash2 ).
-      READ TABLE lt_action ASSIGNING FIELD-SYMBOL(<action>) WITH KEY nr = lv_nr. "#EC CI_SORTSEQ
+
+      READ TABLE lt_action ASSIGNING <action> WITH KEY nr = lv_nr. "#EC CI_SORTSEQ
       IF sy-subrc <> 0.
-        APPEND VALUE #( nr = lv_nr ) TO lt_action ASSIGNING <action>.
+
+        CLEAR temp70.
+        temp70-nr = lv_nr.
+        APPEND temp70 TO lt_action ASSIGNING <action>.
       ENDIF.
-      APPEND VALUE #( path  = substring( val = lv_after
-                                         off = lv_slash2 + 1 )
-                      value = ls_value-value ) TO <action>-values.
+
+      CLEAR temp71.
+      temp71-path = substring( val = lv_after off = lv_slash2 + 1 ).
+      temp71-value = ls_value-value.
+      APPEND temp71 TO <action>-values.
     ENDLOOP.
 
-    LOOP AT lt_action INTO DATA(ls_action).
-      DATA(lv_1) = VALUE #( ls_action-values[ path = `1` ]-value OPTIONAL ).
-      DATA(lv_2) = VALUE #( ls_action-values[ path = `2` ]-value OPTIONAL ).
-      DATA(lv_3) = VALUE #( ls_action-values[ path = `3` ]-value OPTIONAL ).
-      DATA(lv_4) = VALUE #( ls_action-values[ path = `4` ]-value OPTIONAL ).
+
+    LOOP AT lt_action INTO ls_action.
+
+      CLEAR temp72.
+
+      READ TABLE ls_action-values INTO temp73 WITH KEY path = `1`.
+      IF sy-subrc = 0.
+        temp72 = temp73-value.
+      ENDIF.
+
+      lv_1 = temp72.
+
+      CLEAR temp74.
+
+      READ TABLE ls_action-values INTO temp75 WITH KEY path = `2`.
+      IF sy-subrc = 0.
+        temp74 = temp75-value.
+      ENDIF.
+
+      lv_2 = temp74.
+
+      CLEAR temp76.
+
+      READ TABLE ls_action-values INTO temp77 WITH KEY path = `3`.
+      IF sy-subrc = 0.
+        temp76 = temp77-value.
+      ENDIF.
+
+      lv_3 = temp76.
+
+      CLEAR temp78.
+
+      READ TABLE ls_action-values INTO temp79 WITH KEY path = `4`.
+      IF sy-subrc = 0.
+        temp78 = temp79-value.
+      ENDIF.
+
+      lv_4 = temp78.
       CASE lv_1.
         WHEN cs_kind-box.
-          APPEND VALUE #( kind = cs_kind-box
-                          type = lv_2
-                          text = lv_3 ) TO result.
+
+          CLEAR temp80.
+          temp80-kind = cs_kind-box.
+          temp80-type = lv_2.
+          temp80-text = lv_3.
+          APPEND temp80 TO result.
         WHEN cs_kind-toast.
-          APPEND VALUE #( kind = cs_kind-toast
-                          text = lv_3 ) TO result.
+
+          CLEAR temp81.
+          temp81-kind = cs_kind-toast.
+          temp81-text = lv_3.
+          APPEND temp81 TO result.
         WHEN `VIEW_SLOTS`.
           IF lv_2 <> `display`.
             CONTINUE.
           ENDIF.
           CASE lv_3.
             WHEN cs_kind-popup OR cs_kind-popover.
-              APPEND VALUE #( kind = lv_3
-                              text = xml_attribute( xml  = lv_4
-                                                    name = `title` ) ) TO result.
+
+              CLEAR temp82.
+              temp82-kind = lv_3.
+              temp82-text = xml_attribute( xml = lv_4 name = `title` ).
+              APPEND temp82 TO result.
             WHEN `MAIN`.
-              APPEND VALUE #( kind = cs_kind-view
-                              text = xml_attribute( xml  = lv_4
-                                                    name = `title` ) ) TO result.
+
+              CLEAR temp83.
+              temp83-kind = cs_kind-view.
+              temp83-text = xml_attribute( xml = lv_4 name = `title` ).
+              APPEND temp83 TO result.
           ENDCASE.
       ENDCASE.
     ENDLOOP.
@@ -1295,26 +1619,36 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD input_of.
 
     DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA ls_value LIKE LINE OF lt_values.
+      DATA lv_path LIKE ls_value-path.
+        DATA temp84 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+        DATA temp85 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
 
     TRY.
         lt_values = json_flatten( request ).
       CATCH cx_root.
         RETURN.
     ENDTRY.
-    LOOP AT lt_values INTO DATA(ls_value).
-      DATA(lv_path) = ls_value-path.
+
+    LOOP AT lt_values INTO ls_value.
+
+      lv_path = ls_value-path.
       IF lv_path CP `value/*`.
         lv_path = substring( val = lv_path
                              off = 6 ).
       ENDIF.
       IF lv_path CP `MODEL/*`.
-        APPEND VALUE #( path  = substring( val = lv_path
-                                           off = 6 )
-                        value = ls_value-value ) TO result.
+
+        CLEAR temp84.
+        temp84-path = substring( val = lv_path off = 6 ).
+        temp84-value = ls_value-value.
+        APPEND temp84 TO result.
       ELSEIF lv_path CP `S_FRONT/T_EVENT_ARG/*`.
-        APPEND VALUE #( path  = |event argument { substring( val = lv_path
-                                                              off = 20 ) }|
-                        value = ls_value-value ) TO result.
+
+        CLEAR temp85.
+        temp85-path = |event argument { substring( val = lv_path off = 20 ) }|.
+        temp85-value = ls_value-value.
+        APPEND temp85 TO result.
       ENDIF.
     ENDLOOP.
 
@@ -1323,6 +1657,17 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD views_of.
 
     DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA ls_value LIKE LINE OF lt_values.
+      DATA lv_base TYPE string.
+      DATA lv_slot_path TYPE string.
+      DATA lv_xml_path TYPE string.
+      DATA temp86 TYPE z2ui5_cl_cockpit_session=>ty_s_value-value.
+      DATA temp87 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA lv_slot LIKE temp86.
+      DATA temp88 TYPE z2ui5_cl_cockpit_session=>ty_s_value-value.
+      DATA temp89 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA lv_xml LIKE temp88.
+        DATA temp90 TYPE z2ui5_if_client=>ty_s_name_value.
 
     TRY.
         lt_values = json_flatten( response ).
@@ -1330,20 +1675,43 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         RETURN.
     ENDTRY.
     " a display action: ["VIEW_SLOTS","display","<slot>","<xml>",{...}]
-    LOOP AT lt_values INTO DATA(ls_value) WHERE value = `display`. "#EC CI_SORTSEQ
+
+    LOOP AT lt_values INTO ls_value WHERE value = `display`. "#EC CI_SORTSEQ
       IF ls_value-path NP `S_FRONT/S_ACTION/T_SYSTEM/*/2`.
         CONTINUE.
       ENDIF.
-      DATA(lv_base) = substring( val = ls_value-path
+
+      lv_base = substring( val = ls_value-path
                                  len = strlen( ls_value-path ) - 1 ).
       " the keys in variables - a template is no key operand on 7.02
-      DATA(lv_slot_path) = |{ lv_base }3|.
-      DATA(lv_xml_path) = |{ lv_base }4|.
-      DATA(lv_slot) = VALUE #( lt_values[ path = lv_slot_path ]-value OPTIONAL ).
-      DATA(lv_xml) = VALUE #( lt_values[ path = lv_xml_path ]-value OPTIONAL ).
+
+      lv_slot_path = |{ lv_base }3|.
+
+      lv_xml_path = |{ lv_base }4|.
+
+      CLEAR temp86.
+
+      READ TABLE lt_values INTO temp87 WITH KEY path = lv_slot_path.
+      IF sy-subrc = 0.
+        temp86 = temp87-value.
+      ENDIF.
+
+      lv_slot = temp86.
+
+      CLEAR temp88.
+
+      READ TABLE lt_values INTO temp89 WITH KEY path = lv_xml_path.
+      IF sy-subrc = 0.
+        temp88 = temp89-value.
+      ENDIF.
+
+      lv_xml = temp88.
       IF lv_xml IS NOT INITIAL.
-        APPEND VALUE #( n = lv_slot
-                        v = lv_xml ) TO result.
+
+        CLEAR temp90.
+        temp90-n = lv_slot.
+        temp90-v = lv_xml.
+        APPEND temp90 TO result.
       ENDIF.
     ENDLOOP.
 
@@ -1352,12 +1720,19 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD control_of.
 
     DATA lv_open TYPE i.
+    DATA lv_hit TYPE i.
+    DATA lv_close TYPE i.
+    DATA lv_element TYPE string.
+    DATA lv_name TYPE string.
+    DATA lv_label TYPE string.
+    DATA temp91 TYPE string.
 
     IF event IS INITIAL OR xml IS INITIAL.
       RETURN.
     ENDIF.
     " an event wire is .eB(['NAME'... in an attribute of the control
-    DATA(lv_hit) = find( val = xml
+
+    lv_hit = find( val = xml
                          sub = |['{ event }'| ).
     IF lv_hit < 0.
       RETURN.
@@ -1369,16 +1744,19 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     IF lv_open < 0.
       RETURN.
     ENDIF.
-    DATA(lv_close) = find( val = xml
+
+    lv_close = find( val = xml
                            sub = `>`
                            off = lv_hit ).
     IF lv_close < 0.
       RETURN.
     ENDIF.
-    DATA(lv_element) = substring( val = xml
+
+    lv_element = substring( val = xml
                                   off = lv_open
                                   len = lv_close - lv_open + 1 ).
-    DATA(lv_name) = substring( val = lv_element
+
+    lv_name = substring( val = lv_element
                                off = 1 ).
     IF lv_name CS ` `.
       lv_name = substring_before( val = lv_name
@@ -1389,7 +1767,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                  sub = `:` ).
     ENDIF.
 
-    DATA(lv_label) = xml_attribute( xml  = lv_element
+
+    lv_label = xml_attribute( xml  = lv_element
                                     name = `text` ).
     IF lv_label IS INITIAL.
       lv_label = xml_attribute( xml  = lv_element
@@ -1404,19 +1783,32 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       lv_label = xml_attribute( xml  = lv_element
                                 name = `id` ).
     ENDIF.
-    result = |{ lv_name }{ COND #( WHEN lv_label IS NOT INITIAL THEN | "{ lv_label }"| ) }|.
+
+    IF lv_label IS NOT INITIAL.
+      temp91 = | "{ lv_label }"|.
+    ELSE.
+      CLEAR temp91.
+    ENDIF.
+    result = |{ lv_name }{ temp91 }|.
 
   ENDMETHOD.
 
   METHOD field_control_of.
 
     DATA lv_open TYPE i.
+    DATA lv_hit TYPE i.
+    DATA lv_name TYPE string.
+    DATA lv_before TYPE string.
+    DATA lv_label_at TYPE i.
+    DATA lv_text TYPE string.
+    DATA temp92 TYPE string.
 
     IF path IS INITIAL OR xml IS INITIAL.
       RETURN.
     ENDIF.
     " {/PATH} or path:'/PATH'
-    DATA(lv_hit) = find( val = xml
+
+    lv_hit = find( val = xml
                          sub = |\{/{ path }\}| ).
     IF lv_hit < 0.
       lv_hit = find( val = xml
@@ -1432,7 +1824,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     IF lv_open < 0.
       RETURN.
     ENDIF.
-    DATA(lv_name) = substring( val = xml
+
+    lv_name = substring( val = xml
                                off = lv_open + 1 ).
     lv_name = substring_before( val = lv_name
                                 sub = ` ` ).
@@ -1442,18 +1835,27 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDIF.
 
     " a form puts the Label right before its field
-    DATA(lv_before) = substring( val = xml
+
+    lv_before = substring( val = xml
                                  len = lv_open ).
-    DATA(lv_label_at) = find( val = lv_before
+
+    lv_label_at = find( val = lv_before
                               sub = `<Label `
                               occ = -1 ).
-    DATA(lv_text) = ``.
+
+    lv_text = ``.
     IF lv_label_at >= 0 AND lv_open - lv_label_at < 400.
       lv_text = xml_attribute( xml  = substring( val = lv_before
                                                  off = lv_label_at )
                                name = `text` ).
     ENDIF.
-    result = |{ lv_name }{ COND #( WHEN lv_text IS NOT INITIAL THEN | "{ lv_text }"| ) }|.
+
+    IF lv_text IS NOT INITIAL.
+      temp92 = | "{ lv_text }"|.
+    ELSE.
+      CLEAR temp92.
+    ENDIF.
+    result = |{ lv_name }{ temp92 }|.
 
   ENDMETHOD.
 
@@ -1463,7 +1865,32 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_out TYPE string.
 
     " the root element: <mvc:View xmlns="sap.m" xmlns:mvc="..." ...>
-    DATA(lv_start) = find( val = xml
+    DATA lv_start TYPE i.
+    DATA lv_root_end TYPE i.
+    DATA lv_last TYPE i.
+    DATA lv_root TYPE string.
+      DATA lv_ns TYPE i.
+      DATA lv_eq TYPE i.
+      DATA lv_end TYPE i.
+    DATA lv_content TYPE string.
+      DATA lv_wire TYPE i.
+      DATA lv_quote TYPE i.
+      DATA lv_items TYPE i.
+      DATA lv_path_end TYPE i.
+      DATA lv_list TYPE string.
+      DATA lv_tmpl_open TYPE i.
+      DATA lv_tmpl_close TYPE i.
+      DATA lv_template TYPE string.
+        DATA lv_row LIKE sy-index.
+        DATA lv_prefix TYPE string.
+        DATA lv_row_path TYPE string.
+        DATA lv_pattern TYPE string.
+        DATA temp93 LIKE sy-subrc.
+          DATA lv_found LIKE abap_false.
+          DATA ls_model LIKE LINE OF it_model.
+        DATA lv_copy LIKE lv_template.
+          DATA lv_col TYPE string.
+    lv_start = find( val = xml
                            sub = `<` ).
     WHILE lv_start >= 0 AND substring( val = xml
                                        off = lv_start + 1
@@ -1476,33 +1903,39 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-error = `The recorded view is not XML.`.
       RETURN.
     ENDIF.
-    DATA(lv_root_end) = find( val = xml
+
+    lv_root_end = find( val = xml
                               sub = `>`
                               off = lv_start ).
-    DATA(lv_last) = find( val = xml
+
+    lv_last = find( val = xml
                           sub = `</`
                           occ = -1 ).
     IF lv_root_end < 0 OR lv_last <= lv_root_end.
       result-error = `The recorded view is empty.`.
       RETURN.
     ENDIF.
-    DATA(lv_root) = substring( val = xml
+
+    lv_root = substring( val = xml
                                off = lv_start
                                len = lv_root_end - lv_start ).
 
     " its namespace declarations move to the element the copy is shown in
     lv_pos = 0.
     DO.
-      DATA(lv_ns) = find( val = lv_root
+
+      lv_ns = find( val = lv_root
                           sub = ` xmlns`
                           off = lv_pos ).
       IF lv_ns < 0.
         EXIT.
       ENDIF.
-      DATA(lv_eq) = find( val = lv_root
+
+      lv_eq = find( val = lv_root
                           sub = `="`
                           off = lv_ns ).
-      DATA(lv_end) = find( val = lv_root
+
+      lv_end = find( val = lv_root
                            sub = `"`
                            off = lv_eq + 2 ).
       IF lv_eq < 0 OR lv_end < 0.
@@ -1516,7 +1949,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     result-title = xml_attribute( xml  = xml
                                   name = `title` ).
 
-    DATA(lv_content) = substring( val = xml
+
+    lv_content = substring( val = xml
                                   off = lv_root_end + 1
                                   len = lv_last - lv_root_end - 1 ).
 
@@ -1528,13 +1962,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     " event handlers emptied: .eB( .eBP( .eF( are the framework's wires
     lv_pos = 0.
     DO.
-      DATA(lv_wire) = find( val = lv_content
+
+      lv_wire = find( val = lv_content
                             sub = `=".e`
                             off = lv_pos ).
       IF lv_wire < 0.
         EXIT.
       ENDIF.
-      DATA(lv_quote) = find( val = lv_content
+
+      lv_quote = find( val = lv_content
                              sub = `"`
                              off = lv_wire + 2 ).
       IF lv_quote < 0.
@@ -1549,44 +1985,59 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     " a table: items="{/PATH}" and its <items> template, repeated per row
     lv_pos = 0.
     DO.
-      DATA(lv_items) = find( val = lv_content
+
+      lv_items = find( val = lv_content
                              sub = ` items="{/`
                              off = lv_pos ).
       IF lv_items < 0.
         EXIT.
       ENDIF.
-      DATA(lv_path_end) = find( val = lv_content
+
+      lv_path_end = find( val = lv_content
                                 sub = `}"`
                                 off = lv_items ).
       IF lv_path_end < 0.
         EXIT.
       ENDIF.
-      DATA(lv_list) = substring( val = lv_content
+
+      lv_list = substring( val = lv_content
                                  off = lv_items + 10
                                  len = lv_path_end - lv_items - 10 ).
-      DATA(lv_tmpl_open) = find( val = lv_content
+
+      lv_tmpl_open = find( val = lv_content
                                  sub = `<items>`
                                  off = lv_path_end ).
-      DATA(lv_tmpl_close) = find( val = lv_content
+
+      lv_tmpl_close = find( val = lv_content
                                   sub = `</items>`
                                   off = lv_path_end ).
       IF lv_tmpl_open < 0 OR lv_tmpl_close < lv_tmpl_open.
         lv_pos = lv_path_end.
         CONTINUE.
       ENDIF.
-      DATA(lv_template) = substring( val = lv_content
+
+      lv_template = substring( val = lv_content
                                      off = lv_tmpl_open + 7
                                      len = lv_tmpl_close - lv_tmpl_open - 7 ).
       CLEAR lv_out.
       DO 50 TIMES.
-        DATA(lv_row) = sy-index.
+
+        lv_row = sy-index.
         " keys and patterns in variables - no template there on 7.02
-        DATA(lv_prefix) = |{ lv_list }/{ lv_row }/|.
-        DATA(lv_row_path) = |{ lv_list }/{ lv_row }|.
-        DATA(lv_pattern) = |{ lv_prefix }*|.
-        IF NOT line_exists( it_model[ path = lv_row_path ] ).
-          DATA(lv_found) = abap_false.
-          LOOP AT it_model INTO DATA(ls_model) WHERE path CP lv_pattern. "#EC CI_SORTSEQ
+
+        lv_prefix = |{ lv_list }/{ lv_row }/|.
+
+        lv_row_path = |{ lv_list }/{ lv_row }|.
+
+        lv_pattern = |{ lv_prefix }*|.
+
+        READ TABLE it_model WITH KEY path = lv_row_path TRANSPORTING NO FIELDS.
+        temp93 = sy-subrc.
+        IF NOT temp93 = 0.
+
+          lv_found = abap_false.
+
+          LOOP AT it_model INTO ls_model WHERE path CP lv_pattern. "#EC CI_SORTSEQ
             lv_found = abap_true.
             EXIT.
           ENDLOOP.
@@ -1595,9 +2046,11 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           ENDIF.
         ENDIF.
         " the relative bindings of the template, {COL}, from this row
-        DATA(lv_copy) = lv_template.
+
+        lv_copy = lv_template.
         LOOP AT it_model INTO ls_model WHERE path CP lv_pattern. "#EC CI_SORTSEQ
-          DATA(lv_col) = substring( val = ls_model-path
+
+          lv_col = substring( val = ls_model-path
                                     off = strlen( lv_prefix ) ).
           lv_copy = replace( val  = lv_copy
                              sub  = |\{{ lv_col }\}|
@@ -1636,13 +2089,29 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lt_html TYPE string_table.
     DATA lt_keep TYPE string_table.
     DATA lt_lib TYPE string_table.
-    DATA lt_ok TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lt_bad TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES temp6 TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_ok TYPE temp6.
+    TYPES temp7 TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_bad TYPE temp7.
     DATA lv_prefix TYPE string.
     DATA lv_pos TYPE i.
     DATA lv_at TYPE i.
     DATA lv_end TYPE i.
     DATA lv_ws TYPE string.
+    DATA temp94 TYPE string_table.
+        DATA lv_char TYPE string.
+      DATA lv_name TYPE string.
+      DATA lv_delim TYPE string.
+      DATA lv_uri TYPE string.
+      DATA temp96 LIKE sy-subrc.
+      DATA temp97 LIKE sy-subrc.
+      DATA lv_tag TYPE string.
+        DATA lv_after TYPE i.
+        DATA lv_next TYPE string.
+        DATA lv_attrs TYPE string.
+          DATA lv_san TYPE i.
+          DATA lv_quote TYPE string.
+          DATA lv_close TYPE i.
 
     result = content.
     lv_ws = | \t\n\r|.
@@ -1652,17 +2121,20 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     " HTML control sanitized below. Everything else is left out: XHTML, SVG,
     " the framework's helper controls (z2ui5.cc), the addons' custom
     " controls (z2ui5_cci.cc, ...), any third-party library
-    lt_lib = VALUE #( ( `sap.m` )
-                      ( `sap.f` )
-                      ( `sap.ui.core` )
-                      ( `sap.ui.core.mvc` )
-                      ( `sap.ui.layout` )
-                      ( `sap.ui.layout.form` )
-                      ( `sap.ui.table` )
-                      ( `sap.ui.unified` )
-                      ( `sap.uxap` )
-                      ( `sap.tnt` )
-                      ( `sap.suite.ui.microchart` ) ).
+
+    CLEAR temp94.
+    INSERT `sap.m` INTO TABLE temp94.
+    INSERT `sap.f` INTO TABLE temp94.
+    INSERT `sap.ui.core` INTO TABLE temp94.
+    INSERT `sap.ui.core.mvc` INTO TABLE temp94.
+    INSERT `sap.ui.layout` INTO TABLE temp94.
+    INSERT `sap.ui.layout.form` INTO TABLE temp94.
+    INSERT `sap.ui.table` INTO TABLE temp94.
+    INSERT `sap.ui.unified` INTO TABLE temp94.
+    INSERT `sap.uxap` INTO TABLE temp94.
+    INSERT `sap.tnt` INTO TABLE temp94.
+    INSERT `sap.suite.ui.microchart` INTO TABLE temp94.
+    lt_lib = temp94.
 
     " the prefixes, from every declaration - xmlns:p="uri" or xmlns='uri';
     " a prefix (or the default namespace) declared once with another uri
@@ -1688,7 +2160,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       " transpiled, the unit tests could not run it)
       lv_end = lv_pos.
       WHILE lv_end < strlen( xml ).
-        DATA(lv_char) = substring( val = xml
+
+        lv_char = substring( val = xml
                                    off = lv_end
                                    len = 1 ).
         IF lv_char = `=` OR find( val = lv_ws
@@ -1700,7 +2173,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       IF lv_end >= strlen( xml ).
         EXIT.
       ENDIF.
-      DATA(lv_name) = substring( val = xml
+
+      lv_name = substring( val = xml
                                  off = lv_pos
                                  len = lv_end - lv_pos ).
       " the = and the quote, blanks allowed around the =
@@ -1729,7 +2203,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       IF lv_pos >= strlen( xml ).
         EXIT.
       ENDIF.
-      DATA(lv_delim) = substring( val = xml
+
+      lv_delim = substring( val = xml
                                   off = lv_pos
                                   len = 1 ).
       IF lv_delim <> `"` AND lv_delim <> `'`.
@@ -1741,7 +2216,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       IF lv_end < 0.
         EXIT.
       ENDIF.
-      DATA(lv_uri) = substring( val = xml
+
+      lv_uri = substring( val = xml
                                 off = lv_pos + 1
                                 len = lv_end - lv_pos - 1 ).
       lv_pos = lv_end + 1.
@@ -1754,7 +2230,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         lv_prefix = |{ substring( val = lv_name
                                   off = 1 ) }:|.
       ENDIF.
-      IF line_exists( lt_lib[ table_line = lv_uri ] ).               "#EC CI_SORTSEQ
+
+      READ TABLE lt_lib WITH KEY table_line = lv_uri TRANSPORTING NO FIELDS.
+      temp96 = sy-subrc.
+      IF temp96 = 0.               "#EC CI_SORTSEQ
         INSERT lv_prefix INTO TABLE lt_ok.
         IF lv_uri = `sap.ui.core`.
           INSERT lv_prefix INTO TABLE lt_html.
@@ -1765,7 +2244,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDDO.
 
     LOOP AT lt_ok INTO lv_prefix.
-      IF NOT line_exists( lt_bad[ table_line = lv_prefix ] ).
+
+      READ TABLE lt_bad WITH KEY table_line = lv_prefix TRANSPORTING NO FIELDS.
+      temp97 = sy-subrc.
+      IF NOT temp97 = 0.
         INSERT lv_prefix INTO TABLE lt_keep.
       ENDIF.
     ENDLOOP.
@@ -1774,7 +2256,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     " every HTML control: its own sanitizeContent goes, true comes in
     LOOP AT lt_html INTO lv_prefix.
-      DATA(lv_tag) = |<{ lv_prefix }HTML|.
+
+      lv_tag = |<{ lv_prefix }HTML|.
       lv_pos = 0.
       DO.
         lv_at = find( val = result
@@ -1783,7 +2266,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         IF lv_at < 0.
           EXIT.
         ENDIF.
-        DATA(lv_after) = lv_at + strlen( lv_tag ).
+
+        lv_after = lv_at + strlen( lv_tag ).
         lv_pos = lv_after.
         lv_end = find( val = result
                        sub = `>`
@@ -1792,26 +2276,31 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           EXIT.
         ENDIF.
         " <core:HTMLx is another control
-        DATA(lv_next) = substring( val = result
+
+        lv_next = substring( val = result
                                    off = lv_after
                                    len = 1 ).
         IF lv_next <> ` ` AND lv_next <> `/` AND lv_next <> `>`
             AND lv_next <> cl_abap_char_utilities=>newline AND lv_next <> cl_abap_char_utilities=>horizontal_tab.
           CONTINUE.
         ENDIF.
-        DATA(lv_attrs) = substring( val = result
+
+        lv_attrs = substring( val = result
                                     off = lv_after
                                     len = lv_end - lv_after ).
         DO.
-          DATA(lv_san) = find( val = lv_attrs
+
+          lv_san = find( val = lv_attrs
                                sub = `sanitizeContent=` ).
           IF lv_san < 0 OR lv_san + 17 > strlen( lv_attrs ).
             EXIT.
           ENDIF.
-          DATA(lv_quote) = substring( val = lv_attrs
+
+          lv_quote = substring( val = lv_attrs
                                       off = lv_san + 16
                                       len = 1 ).
-          DATA(lv_close) = find( val = lv_attrs
+
+          lv_close = find( val = lv_attrs
                                  sub = lv_quote
                                  off = lv_san + 17 ).
           IF lv_close < 0.
@@ -1848,17 +2337,33 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_next_sq TYPE i VALUE -2.
     DATA lv_next_gt TYPE i VALUE -2.
 
-    DATA(lv_len) = strlen( xml ).
+    DATA lv_len TYPE i.
+      DATA lv_lt TYPE i.
+      DATA lv_next TYPE string.
+      DATA lv_gt TYPE i.
+      DATA lv_scan TYPE i.
+        DATA lv_hit LIKE lv_next_gt.
+        DATA lv_char TYPE string.
+      DATA lv_closing TYPE abap_bool.
+      DATA temp6 TYPE xsdboolean.
+      DATA lv_empty TYPE abap_bool.
+      DATA temp7 TYPE xsdboolean.
+      DATA lv_name TYPE string.
+      DATA lv_colon TYPE i.
+      DATA temp98 LIKE sy-subrc.
+    lv_len = strlen( xml ).
     lv_ws = | \t\n\r|.
 
     DO.
-      DATA(lv_lt) = find( val = xml
+
+      lv_lt = find( val = xml
                           sub = `<`
                           off = lv_pos ).
       IF lv_lt < 0 OR lv_lt + 1 >= lv_len.
         EXIT.
       ENDIF.
-      DATA(lv_next) = substring( val = xml
+
+      lv_next = substring( val = xml
                                  off = lv_lt + 1
                                  len = 1 ).
 
@@ -1893,8 +2398,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
       " the end of the tag - a > inside a quoted value does not end it; the
       " next ", ' and > are kept until passed, the scan stays linear
-      DATA(lv_gt) = -1.
-      DATA(lv_scan) = lv_lt + 1.
+
+      lv_gt = -1.
+
+      lv_scan = lv_lt + 1.
       DO.
         IF lv_next_dq <> -1 AND lv_next_dq < lv_scan.
           lv_next_dq = find( val = xml
@@ -1911,7 +2418,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                              sub = `>`
                              off = lv_scan ).
         ENDIF.
-        DATA(lv_hit) = lv_next_gt.
+
+        lv_hit = lv_next_gt.
         IF lv_next_dq >= 0 AND ( lv_hit < 0 OR lv_next_dq < lv_hit ).
           lv_hit = lv_next_dq.
         ENDIF.
@@ -1921,7 +2429,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         IF lv_hit < 0.
           EXIT.
         ENDIF.
-        DATA(lv_char) = substring( val = xml
+
+        lv_char = substring( val = xml
                                    off = lv_hit
                                    len = 1 ).
         IF lv_char = `>`.
@@ -1947,10 +2456,14 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       ENDIF.
       lv_pos = lv_gt + 1.
 
-      DATA(lv_closing) = xsdbool( lv_next = `/` ).
-      DATA(lv_empty) = xsdbool( lv_closing = abap_false AND substring( val = xml
-                                                                        off = lv_gt - 1
-                                                                        len = 1 ) = `/` ).
+
+
+      temp6 = boolc( lv_next = `/` ).
+      lv_closing = temp6.
+
+
+      temp7 = boolc( lv_closing = abap_false AND substring( val = xml off = lv_gt - 1 len = 1 ) = `/` ).
+      lv_empty = temp7.
       IF lv_depth > 0.
         IF lv_closing = abap_true.
           lv_depth = lv_depth - 1.
@@ -1978,17 +2491,22 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         ENDIF.
         lv_end = lv_end + 1.
       ENDWHILE.
-      DATA(lv_name) = substring( val = xml
+
+      lv_name = substring( val = xml
                                  off = lv_lt + 1
                                  len = lv_end - lv_lt - 1 ).
       CLEAR lv_prefix.
-      DATA(lv_colon) = find( val = lv_name
+
+      lv_colon = find( val = lv_name
                              sub = `:` ).
       IF lv_colon >= 0.
         lv_prefix = substring( val = lv_name
                                len = lv_colon + 1 ).
       ENDIF.
-      IF line_exists( it_keep[ table_line = lv_prefix ] ).            "#EC CI_SORTSEQ
+
+      READ TABLE it_keep WITH KEY table_line = lv_prefix TRANSPORTING NO FIELDS.
+      temp98 = sy-subrc.
+      IF temp98 = 0.            "#EC CI_SORTSEQ
         CONTINUE.
       ENDIF.
 
@@ -2024,13 +2542,37 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         path  TYPE string,
         value TYPE string,
       END OF ty_s_model.
-    DATA lt_model TYPE SORTED TABLE OF ty_s_model WITH UNIQUE KEY path.
+    TYPES temp8 TYPE SORTED TABLE OF ty_s_model WITH UNIQUE KEY path.
+DATA lt_model TYPE temp8.
     DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
     DATA ls_row TYPE ty_s_row.
     DATA lv_id TYPE c LENGTH 32.
     DATA lv_main TYPE string.
     DATA lv_popup TYPE string.
     DATA lv_first TYPE i VALUE 1.
+        DATA lv_rec LIKE LINE OF it_id.
+          DATA lv_index LIKE sy-tabix.
+          DATA temp99 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+          DATA ls_input LIKE LINE OF temp99.
+            DATA temp100 TYPE ty_s_model.
+              FIELD-SYMBOLS <temp101> LIKE LINE OF lt_model.
+              DATA temp102 LIKE sy-tabix.
+          DATA lv_model_at TYPE i.
+            DATA lv_model TYPE string.
+            DATA ls_value LIKE LINE OF lt_values.
+              DATA temp103 TYPE ty_s_model.
+                FIELD-SYMBOLS <temp104> LIKE LINE OF lt_model.
+                DATA temp105 LIKE sy-tabix.
+          DATA temp106 TYPE z2ui5_if_client=>ty_t_name_value.
+          DATA ls_view LIKE LINE OF temp106.
+        DATA lx TYPE REF TO cx_root.
+    DATA ls_model LIKE LINE OF lt_model.
+      DATA temp107 TYPE z2ui5_cl_cockpit_session=>ty_s_value.
+      DATA ls_popup TYPE z2ui5_cl_cockpit_wire=>ty_s_screen.
+      TYPES temp9 TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+DATA lt_ns TYPE temp9.
+      DATA lv_ns LIKE LINE OF lt_ns.
+        DATA lv_declared TYPE string.
 
     " the model the client held is rebuilt from the last 30 recordings - the
     " responses push what changed, the requests carry what the user typed
@@ -2039,32 +2581,50 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDIF.
 
     TRY.
-        LOOP AT it_id INTO DATA(lv_rec) FROM lv_first.
-          DATA(lv_index) = sy-tabix.
+
+        LOOP AT it_id INTO lv_rec FROM lv_first.
+
+          lv_index = sy-tabix.
           lv_id = lv_rec.
           CLEAR ls_row.
-          SELECT SINGLE id, req_body, res_body FROM z2ui5_t_28
-            WHERE id = @lv_id
-            INTO CORRESPONDING FIELDS OF @ls_row.
+          SELECT SINGLE id req_body res_body FROM z2ui5_t_28 INTO CORRESPONDING FIELDS OF ls_row
+            WHERE id = lv_id
+            .
           IF sy-subrc <> 0.
             CONTINUE.
           ENDIF.
 
-          LOOP AT input_of( ls_row-req_body ) INTO DATA(ls_input).
+
+          temp99 = input_of( ls_row-req_body ).
+
+          LOOP AT temp99 INTO ls_input.
             IF ls_input-path CP `event argument*`.
               CONTINUE.
             ENDIF.
-            INSERT VALUE #( path  = ls_input-path
-                            value = ls_input-value ) INTO TABLE lt_model.
+
+            CLEAR temp100.
+            temp100-path = ls_input-path.
+            temp100-value = ls_input-value.
+            INSERT temp100 INTO TABLE lt_model.
             IF sy-subrc <> 0.
-              lt_model[ path = ls_input-path ]-value = ls_input-value.
+
+
+              temp102 = sy-tabix.
+              READ TABLE lt_model WITH KEY path = ls_input-path ASSIGNING <temp101>.
+              sy-tabix = temp102.
+              IF sy-subrc <> 0.
+                ASSERT 1 = 0.
+              ENDIF.
+              <temp101>-value = ls_input-value.
             ENDIF.
           ENDLOOP.
 
-          DATA(lv_model_at) = find( val = ls_row-res_body
+
+          lv_model_at = find( val = ls_row-res_body
                                     sub = `,"MODEL":` ).
           IF lv_model_at > 0.
-            DATA(lv_model) = substring( val = ls_row-res_body
+
+            lv_model = substring( val = ls_row-res_body
                                         off = lv_model_at + 9
                                         len = strlen( ls_row-res_body ) - lv_model_at - 10 ).
             TRY.
@@ -2072,17 +2632,32 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
               CATCH cx_root.
                 CLEAR lt_values.
             ENDTRY.
-            LOOP AT lt_values INTO DATA(ls_value).
-              INSERT VALUE #( path  = ls_value-path
-                              value = ls_value-value ) INTO TABLE lt_model.
+
+            LOOP AT lt_values INTO ls_value.
+
+              CLEAR temp103.
+              temp103-path = ls_value-path.
+              temp103-value = ls_value-value.
+              INSERT temp103 INTO TABLE lt_model.
               IF sy-subrc <> 0.
-                lt_model[ path = ls_value-path ]-value = ls_value-value.
+
+
+                temp105 = sy-tabix.
+                READ TABLE lt_model WITH KEY path = ls_value-path ASSIGNING <temp104>.
+                sy-tabix = temp105.
+                IF sy-subrc <> 0.
+                  ASSERT 1 = 0.
+                ENDIF.
+                <temp104>-value = ls_value-value.
               ENDIF.
             ENDLOOP.
           ENDIF.
 
           CLEAR lv_popup.
-          LOOP AT views_of( ls_row-res_body ) INTO DATA(ls_view).
+
+          temp106 = views_of( ls_row-res_body ).
+
+          LOOP AT temp106 INTO ls_view.
             CASE ls_view-n.
               WHEN `MAIN`.
                 lv_main = ls_view-v.
@@ -2094,7 +2669,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
             ENDCASE.
           ENDLOOP.
         ENDLOOP.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
@@ -2105,9 +2681,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDIF.
 
     CLEAR lt_values.
-    LOOP AT lt_model INTO DATA(ls_model).
-      APPEND VALUE #( path  = ls_model-path
-                      value = ls_model-value ) TO lt_values.
+
+    LOOP AT lt_model INTO ls_model.
+
+      CLEAR temp107.
+      temp107-path = ls_model-path.
+      temp107-value = ls_model-value.
+      APPEND temp107 TO lt_values.
     ENDLOOP.
     " a popup on top takes the click - the screen below it cannot
     IF lv_popup IS INITIAL.
@@ -2117,16 +2697,21 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ELSE.
       result = screen_of( xml      = lv_main
                           it_model = lt_values ).
-      DATA(ls_popup) = screen_of( xml      = lv_popup
+
+      ls_popup = screen_of( xml      = lv_popup
                                   it_model = lt_values
                                   event    = event ).
       result-marked      = ls_popup-marked.
       result-popup       = ls_popup-content.
       result-popup_title = ls_popup-title.
       " a prefix declared twice on one element breaks the XML
-      SPLIT ls_popup-xmlns AT ` xmlns` INTO TABLE DATA(lt_ns).
-      LOOP AT lt_ns INTO DATA(lv_ns) WHERE table_line IS NOT INITIAL.
-        DATA(lv_declared) = | xmlns{ substring_before( val = lv_ns
+
+
+      SPLIT ls_popup-xmlns AT ` xmlns` INTO TABLE lt_ns.
+
+      LOOP AT lt_ns INTO lv_ns WHERE table_line IS NOT INITIAL.
+
+        lv_declared = | xmlns{ substring_before( val = lv_ns
                                                        sub = `=` ) }=|.
         IF find( val = result-xmlns
                  sub = lv_declared ) < 0.
@@ -2145,21 +2730,39 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         field TYPE string,
         value TYPE string,
       END OF ty_s_sample.
-    DATA lt_sample TYPE HASHED TABLE OF ty_s_sample WITH UNIQUE KEY app field value.
+    TYPES temp10 TYPE HASHED TABLE OF ty_s_sample WITH UNIQUE KEY app field value.
+DATA lt_sample TYPE temp10.
     DATA lv_message TYPE string.
     DATA lv_field TYPE string.
     DATA lv_part TYPE string.
     DATA lt_part TYPE string_table.
     DATA lv_rate TYPE i.
 
-    LOOP AT it_exchange INTO DATA(ls_exchange).
+    DATA ls_exchange LIKE LINE OF it_exchange.
+        DATA temp108 TYPE z2ui5_cl_cockpit_wire=>ty_t_shown.
+        DATA ls_shown LIKE LINE OF temp108.
+          DATA lv_type TYPE string.
+      DATA temp109 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+      DATA ls_input LIKE LINE OF temp109.
+          DATA temp110 TYPE string.
+        FIELD-SYMBOLS <input> TYPE z2ui5_cl_cockpit_wire=>ty_s_input.
+          DATA temp111 TYPE z2ui5_cl_cockpit_wire=>ty_s_input.
+        DATA lv_value LIKE ls_input-value.
+          DATA temp112 TYPE ty_s_sample.
+            DATA temp113 TYPE string.
+      DATA temp114 TYPE z2ui5_cl_cockpit_wire=>ty_s_input-state.
+    LOOP AT it_exchange INTO ls_exchange.
       " the error the same roundtrip answered with - a failure or an error box
       CLEAR lv_message.
       IF ls_exchange-http_status >= 500.
         lv_message = |failed (HTTP { ls_exchange-http_status })|.
       ELSE.
-        LOOP AT shown_of( ls_exchange-response ) INTO DATA(ls_shown) WHERE kind = cs_kind-box. "#EC CI_SORTSEQ
-          DATA(lv_type) = to_lower( ls_shown-type ).
+
+        temp108 = shown_of( ls_exchange-response ).
+
+        LOOP AT temp108 INTO ls_shown WHERE kind = cs_kind-box. "#EC CI_SORTSEQ
+
+          lv_type = to_lower( ls_shown-type ).
           IF lv_type = `error`.
             lv_message = ls_shown-text.
             EXIT.
@@ -2167,7 +2770,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         ENDLOOP.
       ENDIF.
 
-      LOOP AT input_of( ls_exchange-request ) INTO DATA(ls_input).
+
+      temp109 = input_of( ls_exchange-request ).
+
+      LOOP AT temp109 INTO ls_input.
         IF ls_input-path CP `event argument*`.
           CONTINUE.
         ENDIF.
@@ -2183,14 +2789,24 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           IF lv_part CO `0123456789`.
             lv_part = `*`.
           ENDIF.
-          lv_field = |{ lv_field }{ COND #( WHEN lv_field IS NOT INITIAL THEN `/` ) }{ lv_part }|.
+
+          IF lv_field IS NOT INITIAL.
+            temp110 = `/`.
+          ELSE.
+            CLEAR temp110.
+          ENDIF.
+          lv_field = |{ lv_field }{ temp110 }{ lv_part }|.
         ENDLOOP.
 
-        READ TABLE result ASSIGNING FIELD-SYMBOL(<input>)
+
+        READ TABLE result ASSIGNING <input>
              WITH KEY app = ls_exchange-app field = lv_field. "#EC CI_SORTSEQ
         IF sy-subrc <> 0.
-          APPEND VALUE #( app   = ls_exchange-app
-                          field = lv_field ) TO result ASSIGNING <input>.
+
+          CLEAR temp111.
+          temp111-app = ls_exchange-app.
+          temp111-field = lv_field.
+          APPEND temp111 TO result ASSIGNING <input>.
         ENDIF.
         <input>-typed = <input>-typed + 1.
         IF lv_message IS INITIAL.
@@ -2201,18 +2817,28 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         IF <input>-message IS INITIAL.
           <input>-message = lv_message.
         ENDIF.
-        DATA(lv_value) = ls_input-value.
+
+        lv_value = ls_input-value.
         IF strlen( lv_value ) > 30.
           lv_value = |{ substring( val = lv_value
                                    len = 30 ) }...|.
         ENDIF.
         IF lines( lt_sample ) < 10000.
-          INSERT VALUE #( app   = ls_exchange-app
-                          field = lv_field
-                          value = lv_value ) INTO TABLE lt_sample.
+
+          CLEAR temp112.
+          temp112-app = ls_exchange-app.
+          temp112-field = lv_field.
+          temp112-value = lv_value.
+          INSERT temp112 INTO TABLE lt_sample.
           IF sy-subrc = 0 AND count( val = <input>-samples
                                      sub = `"` ) < 6.
-            <input>-samples = |{ <input>-samples }{ COND #( WHEN <input>-samples IS NOT INITIAL THEN `, ` ) }| &&
+
+            IF <input>-samples IS NOT INITIAL.
+              temp113 = `, `.
+            ELSE.
+              CLEAR temp113.
+            ENDIF.
+            <input>-samples = |{ <input>-samples }{ temp113 }| &&
                               |"{ lv_value }"|.
           ENDIF.
         ENDIF.
@@ -2225,8 +2851,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       " and a float on the transpiled runtime
       lv_rate = <input>-errors * 100 DIV <input>-typed.
       <input>-rate = |{ lv_rate } %|.
-      <input>-state = COND #( WHEN lv_rate >= 30 THEN `Error`
-                              ELSE `Warning` ).
+
+      IF lv_rate >= 30.
+        temp114 = `Error`.
+      ELSE.
+        temp114 = `Warning`.
+      ENDIF.
+      <input>-state = temp114.
     ENDLOOP.
     SORT result BY errors DESCENDING typed ASCENDING field ASCENDING.
     IF lines( result ) > 50.
@@ -2244,29 +2875,41 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         req_body    TYPE string,
         res_body    TYPE string,
       END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES temp11 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp11.
     DATA lt_exchange TYPE ty_t_exchange.
     DATA lv_from TYPE c LENGTH 8.
+        DATA lx TYPE REF TO cx_root.
+    DATA temp8 TYPE xsdboolean.
+    DATA ls_row LIKE LINE OF lt_rows.
+      DATA temp115 TYPE z2ui5_cl_cockpit_wire=>ty_s_exchange.
 
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, http_status, req_body, res_body FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
+        SELECT app http_status req_body res_body FROM z2ui5_t_28 INTO CORRESPONDING FIELDS OF TABLE lt_rows
+          WHERE utc_day >= lv_from
           ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @c_max_read ROWS.
-      CATCH cx_root INTO DATA(lx).
+
+          UP TO c_max_read ROWS.
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
     result-records = lines( lt_rows ).
-    result-check_capped = xsdbool( result-records >= c_max_read ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
-      APPEND VALUE #( app         = ls_row-app
-                      request     = ls_row-req_body
-                      response    = ls_row-res_body
-                      http_status = ls_row-http_status ) TO lt_exchange.
+    temp8 = boolc( result-records >= c_max_read ).
+    result-check_capped = temp8.
+
+
+    LOOP AT lt_rows INTO ls_row.
+
+      CLEAR temp115.
+      temp115-app = ls_row-app.
+      temp115-request = ls_row-req_body.
+      temp115-response = ls_row-res_body.
+      temp115-http_status = ls_row-http_status.
+      APPEND temp115 TO lt_exchange.
     ENDLOOP.
     result-t_input = input_errors_of( lt_exchange ).
 
@@ -2275,31 +2918,51 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD popup_parts.
 
     DATA lt_name TYPE string_table.
+    DATA lv_open TYPE i.
+    DATA lv_close TYPE i.
+    DATA lv_rest TYPE string.
+    DATA temp116 TYPE string_table.
+    DATA lv_name LIKE LINE OF lt_name.
+      DATA lv_from TYPE i.
+      DATA lv_to TYPE i.
+      DATA lv_len TYPE i.
 
     CLEAR content.
     CLEAR buttons.
-    DATA(lv_open) = find( val = popup
+
+    lv_open = find( val = popup
                           sub = `>` ).
-    DATA(lv_close) = find( val = popup
+
+    lv_close = find( val = popup
                            sub = `</`
                            occ = -1 ).
     IF lv_open < 0 OR lv_close <= lv_open.
       RETURN.
     ENDIF.
-    DATA(lv_rest) = substring( val = popup
+
+    lv_rest = substring( val = popup
                                off = lv_open + 1
                                len = lv_close - lv_open - 1 ).
 
-    lt_name = VALUE #( ( `buttons` ) ( `beginButton` ) ( `endButton` ) ).
-    LOOP AT lt_name INTO DATA(lv_name).
-      DATA(lv_from) = find( val = lv_rest
+
+    CLEAR temp116.
+    INSERT `buttons` INTO TABLE temp116.
+    INSERT `beginButton` INTO TABLE temp116.
+    INSERT `endButton` INTO TABLE temp116.
+    lt_name = temp116.
+
+    LOOP AT lt_name INTO lv_name.
+
+      lv_from = find( val = lv_rest
                             sub = |<{ lv_name }>| ).
-      DATA(lv_to) = find( val = lv_rest
+
+      lv_to = find( val = lv_rest
                           sub = |</{ lv_name }>| ).
       IF lv_from < 0 OR lv_to < lv_from.
         CONTINUE.
       ENDIF.
-      DATA(lv_len) = strlen( lv_name ) + 2.
+
+      lv_len = strlen( lv_name ) + 2.
       buttons = buttons && substring( val = lv_rest
                                       off = lv_from + lv_len
                                       len = lv_to - lv_from - lv_len ).
@@ -2347,13 +3010,20 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         path TYPE string,
         user TYPE string,
       END OF ty_s_user.
-    DATA lt_by_draft TYPE HASHED TABLE OF ty_s_by_draft WITH UNIQUE KEY draft_id.
-    DATA lt_parent TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lt_succeeded TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lt_fail TYPE SORTED TABLE OF ty_s_fail WITH NON-UNIQUE KEY draft_id_prev timestampl.
-    DATA lt_users TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY path user.
-    DATA lt_run TYPE STANDARD TABLE OF i WITH EMPTY KEY.
-    DATA lt_token TYPE STANDARD TABLE OF ty_s_token WITH EMPTY KEY.
+    TYPES temp12 TYPE HASHED TABLE OF ty_s_by_draft WITH UNIQUE KEY draft_id.
+DATA lt_by_draft TYPE temp12.
+    TYPES temp13 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_parent TYPE temp13.
+    TYPES temp14 TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+DATA lt_succeeded TYPE temp14.
+    TYPES temp15 TYPE SORTED TABLE OF ty_s_fail WITH NON-UNIQUE KEY draft_id_prev timestampl.
+DATA lt_fail TYPE temp15.
+    TYPES temp18 TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY path user.
+DATA lt_users TYPE temp18.
+    TYPES temp19 TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
+DATA lt_run TYPE temp19.
+    TYPES temp20 TYPE STANDARD TABLE OF ty_s_token WITH DEFAULT KEY.
+DATA lt_token TYPE temp20.
     DATA ls_record TYPE ty_s_record.
     DATA ls_on TYPE ty_s_record.
     DATA ls_by TYPE ty_s_by_draft.
@@ -2371,21 +3041,45 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_check_leaf TYPE abap_bool.
     DATA lv_check_repeated TYPE abap_bool.
     DATA lv_share TYPE i.
+        DATA temp118 TYPE ty_s_by_draft.
+          DATA temp119 TYPE ty_s_fail.
+      DATA temp9 TYPE xsdboolean.
+          DATA ls_fail LIKE LINE OF lt_fail.
+              DATA temp120 TYPE ty_s_token.
+              DATA temp16 TYPE string.
+        DATA temp121 TYPE string.
+          FIELD-SYMBOLS <token> TYPE ty_s_token.
+          DATA temp122 TYPE ty_s_token.
+          DATA temp123 TYPE ty_s_token.
+      DATA ls_token LIKE LINE OF lt_token.
+          DATA temp124 TYPE string.
+          DATA temp17 TYPE string.
+      FIELD-SYMBOLS <variant> TYPE z2ui5_cl_cockpit_wire=>ty_s_variant.
+        DATA temp125 TYPE z2ui5_cl_cockpit_wire=>ty_s_variant.
+        DATA temp126 TYPE z2ui5_cl_cockpit_wire=>ty_s_variant-example.
+        DATA temp127 TYPE ty_s_user.
+      DATA temp128 TYPE z2ui5_cl_cockpit_wire=>ty_s_variant-state.
 
     LOOP AT it_record INTO ls_record.
       lv_index = sy-tabix.
       IF ls_record-draft_id IS NOT INITIAL.
-        INSERT VALUE #( draft_id = ls_record-draft_id
-                        index    = lv_index ) INTO TABLE lt_by_draft.
+
+        CLEAR temp118.
+        temp118-draft_id = ls_record-draft_id.
+        temp118-index = lv_index.
+        INSERT temp118 INTO TABLE lt_by_draft.
       ENDIF.
       IF ls_record-draft_id_prev IS NOT INITIAL.
         INSERT ls_record-draft_id_prev INTO TABLE lt_parent.
         IF ls_record-draft_id IS NOT INITIAL.
           INSERT ls_record-draft_id_prev INTO TABLE lt_succeeded.
         ELSE.
-          INSERT VALUE #( draft_id_prev = ls_record-draft_id_prev
-                          timestampl    = ls_record-timestampl
-                          event         = ls_record-event ) INTO TABLE lt_fail.
+
+          CLEAR temp119.
+          temp119-draft_id_prev = ls_record-draft_id_prev.
+          temp119-timestampl = ls_record-timestampl.
+          temp119-event = ls_record-event.
+          INSERT temp119 INTO TABLE lt_fail.
         ENDIF.
       ENDIF.
     ENDLOOP.
@@ -2399,7 +3093,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       ELSE.
         READ TABLE lt_succeeded TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_record-draft_id_prev.
       ENDIF.
-      lv_check_leaf = xsdbool( sy-subrc <> 0 ).
+
+      temp9 = boolc( sy-subrc <> 0 ).
+      lv_check_leaf = temp9.
       IF lv_check_leaf = abap_false.
         CONTINUE.
       ENDIF.
@@ -2434,15 +3130,30 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           lv_check_app = abap_true.
         ENDIF.
         IF ls_on-draft_id IS NOT INITIAL AND ls_on-draft_id_prev IS NOT INITIAL.
-          LOOP AT lt_fail INTO DATA(ls_fail) WHERE draft_id_prev = ls_on-draft_id_prev.
+
+          LOOP AT lt_fail INTO ls_fail WHERE draft_id_prev = ls_on-draft_id_prev.
             IF ls_fail-timestampl < ls_on-timestampl.
-              APPEND VALUE #( app  = lv_screen_app
-                              text = |{ COND #( WHEN ls_fail-event IS INITIAL THEN `(start)`
-                                                ELSE ls_fail-event ) } (failed)| ) TO lt_token.
+
+              CLEAR temp120.
+              temp120-app = lv_screen_app.
+
+              IF ls_fail-event IS INITIAL.
+                temp16 = `(start)`.
+              ELSE.
+                temp16 = ls_fail-event.
+              ENDIF.
+              temp120-text = |{ temp16 } (failed)|.
+              APPEND temp120 TO lt_token.
             ENDIF.
           ENDLOOP.
         ENDIF.
-        lv_text = COND #( WHEN ls_on-event IS INITIAL THEN `(start)` ELSE ls_on-event ).
+
+        IF ls_on-event IS INITIAL.
+          temp121 = `(start)`.
+        ELSE.
+          temp121 = ls_on-event.
+        ENDIF.
+        lv_text = temp121.
         IF ls_on-draft_id IS INITIAL.
           lv_text = |{ lv_text } (failed)|.
           lv_failed = abap_true.
@@ -2453,15 +3164,19 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         CLEAR lv_check_repeated.
         lv_last = lines( lt_token ).
         IF lv_last > 0.
-          READ TABLE lt_token ASSIGNING FIELD-SYMBOL(<token>) INDEX lv_last.
+
+          READ TABLE lt_token ASSIGNING <token> INDEX lv_last.
           IF <token>-app = lv_screen_app AND ( <token>-text = lv_text OR <token>-text = |{ lv_text } (repeated)| ).
             <token>-text = |{ lv_text } (repeated)|.
             lv_check_repeated = abap_true.
           ENDIF.
         ENDIF.
         IF lv_check_repeated = abap_false.
-          APPEND VALUE #( app  = lv_screen_app
-                          text = lv_text ) TO lt_token.
+
+          CLEAR temp122.
+          temp122-app = lv_screen_app.
+          temp122-text = lv_text.
+          APPEND temp122 TO lt_token.
         ENDIF.
         IF ls_on-draft_id IS NOT INITIAL AND ls_on-app IS NOT INITIAL.
           lv_screen_app = ls_on-app.
@@ -2472,7 +3187,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       IF lv_failed = abap_false AND lv_answered IS NOT INITIAL AND lv_last > 0.
         READ TABLE lt_token ASSIGNING <token> INDEX lv_last.
         IF <token>-app <> lv_answered.
-          APPEND VALUE #( app = lv_answered ) TO lt_token.
+
+          CLEAR temp123.
+          temp123-app = lv_answered.
+          APPEND temp123 TO lt_token.
         ENDIF.
       ENDIF.
       IF app IS NOT INITIAL AND lv_check_app = abap_false.
@@ -2481,14 +3199,27 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
       CLEAR lv_path.
       CLEAR lv_app.
-      LOOP AT lt_token INTO DATA(ls_token).
+
+      LOOP AT lt_token INTO ls_token.
         IF sy-tabix > 30.
           lv_path = |{ lv_path } -> ... ({ lines( lt_token ) - 30 } more)|.
           EXIT.
         ENDIF.
         IF ls_token-app <> lv_app.
-          lv_path = |{ lv_path }{ COND #( WHEN lv_path IS NOT INITIAL THEN ` => ` ) }{ ls_token-app }| &&
-                    |{ COND #( WHEN ls_token-text IS NOT INITIAL THEN |: { ls_token-text }| ) }|.
+
+          IF lv_path IS NOT INITIAL.
+            temp124 = ` => `.
+          ELSE.
+            CLEAR temp124.
+          ENDIF.
+
+          IF ls_token-text IS NOT INITIAL.
+            temp17 = |: { ls_token-text }|.
+          ELSE.
+            CLEAR temp17.
+          ENDIF.
+          lv_path = |{ lv_path }{ temp124 }{ ls_token-app }| &&
+                    |{ temp17 }|.
           lv_app = ls_token-app.
         ELSE.
           lv_path = |{ lv_path } -> { ls_token-text }|.
@@ -2496,10 +3227,14 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       ENDLOOP.
 
       lv_total = lv_total + 1.
-      READ TABLE result ASSIGNING FIELD-SYMBOL(<variant>) WITH KEY path = lv_path. "#EC CI_SORTSEQ
+
+      READ TABLE result ASSIGNING <variant> WITH KEY path = lv_path. "#EC CI_SORTSEQ
       IF sy-subrc <> 0.
-        APPEND VALUE #( path  = lv_path
-                        steps = lines( lt_run ) ) TO result ASSIGNING <variant>.
+
+        CLEAR temp125.
+        temp125-path = lv_path.
+        temp125-steps = lines( lt_run ).
+        APPEND temp125 TO result ASSIGNING <variant>.
       ENDIF.
       <variant>-runs = <variant>-runs + 1.
       IF lv_failed = abap_true.
@@ -2510,14 +3245,22 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       IF <variant>-example IS INITIAL OR <variant>-last_ts < ls_record-timestampl.
         <variant>-last_ts = ls_record-timestampl.
         <variant>-last = z2ui5_cl_cockpit_setup=>ts_text( ls_record-timestampl ).
-        <variant>-example = COND #( WHEN ls_record-draft_id IS NOT INITIAL THEN ls_record-draft_id
-                                    ELSE ls_record-draft_id_prev ).
+
+        IF ls_record-draft_id IS NOT INITIAL.
+          temp126 = ls_record-draft_id.
+        ELSE.
+          temp126 = ls_record-draft_id_prev.
+        ENDIF.
+        <variant>-example = temp126.
       ENDIF.
       READ TABLE lt_run INTO lv_at INDEX 1.
       READ TABLE it_record INTO ls_on INDEX lv_at.
       IF ls_on-user IS NOT INITIAL.
-        INSERT VALUE #( path = lv_path
-                        user = ls_on-user ) INTO TABLE lt_users.
+
+        CLEAR temp127.
+        temp127-path = lv_path.
+        temp127-user = ls_on-user.
+        INSERT temp127 INTO TABLE lt_users.
         IF sy-subrc = 0.
           <variant>-users = <variant>-users + 1.
         ENDIF.
@@ -2528,9 +3271,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       " DIV into an integer - see input_errors_of
       lv_share = <variant>-runs * 100 DIV lv_total.
       <variant>-share = |{ lv_share } %|.
-      <variant>-state = COND #( WHEN <variant>-failed > 0 THEN `Error`
-                                WHEN <variant>-path CS `(failed)` THEN `Warning`
-                                ELSE `None` ).
+
+      IF <variant>-failed > 0.
+        temp128 = `Error`.
+      ELSEIF <variant>-path CS `(failed)`.
+        temp128 = `Warning`.
+      ELSE.
+        temp128 = `None`.
+      ENDIF.
+      <variant>-state = temp128.
     ENDLOOP.
     SORT result BY runs DESCENDING path ASCENDING.
 
@@ -2550,40 +3299,60 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         draft_id_prev TYPE c LENGTH 32,
         http_status   TYPE i,
       END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    TYPES temp21 TYPE STANDARD TABLE OF ty_s_row WITH DEFAULT KEY.
+DATA lt_rows TYPE temp21.
     DATA lt_record TYPE ty_t_record.
     DATA lv_from TYPE c LENGTH 8.
+        DATA lx TYPE REF TO cx_root.
+    DATA temp10 TYPE xsdboolean.
+    DATA ls_row LIKE LINE OF lt_rows.
+      DATA temp129 TYPE z2ui5_cl_cockpit_wire=>ty_s_record.
+      DATA temp18 TYPE z2ui5_cl_cockpit_wire=>ty_s_record-user.
+    DATA ls_variant LIKE LINE OF result-t_variant.
 
     lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
         " no body - ids, app and event are columns of their own
-        SELECT id, timestampl, app, event, uname, user_key, draft_id, draft_id_prev, http_status
-          FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
+        SELECT id timestampl app event uname user_key draft_id draft_id_prev http_status
+          FROM z2ui5_t_28 INTO CORRESPONDING FIELDS OF TABLE lt_rows
+          WHERE utc_day >= lv_from
           ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
+
           UP TO 20000 ROWS.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-error = lx->get_text( ).
         RETURN.
     ENDTRY.
     result-records = lines( lt_rows ).
-    result-check_capped = xsdbool( result-records >= 20000 ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
-      APPEND VALUE #( id            = ls_row-id
-                      timestampl    = ls_row-timestampl
-                      app           = ls_row-app
-                      event         = ls_row-event
-                      draft_id      = ls_row-draft_id
-                      draft_id_prev = ls_row-draft_id_prev
-                      http_status   = ls_row-http_status
-                      user          = COND #( WHEN ls_row-uname IS NOT INITIAL THEN ls_row-uname
-                                              ELSE ls_row-user_key ) ) TO lt_record.
+    temp10 = boolc( result-records >= 20000 ).
+    result-check_capped = temp10.
+
+
+    LOOP AT lt_rows INTO ls_row.
+
+      CLEAR temp129.
+      temp129-id = ls_row-id.
+      temp129-timestampl = ls_row-timestampl.
+      temp129-app = ls_row-app.
+      temp129-event = ls_row-event.
+      temp129-draft_id = ls_row-draft_id.
+      temp129-draft_id_prev = ls_row-draft_id_prev.
+      temp129-http_status = ls_row-http_status.
+
+      IF ls_row-uname IS NOT INITIAL.
+        temp18 = ls_row-uname.
+      ELSE.
+        temp18 = ls_row-user_key.
+      ENDIF.
+      temp129-user = temp18.
+      APPEND temp129 TO lt_record.
     ENDLOOP.
     result-t_variant = variants_of( it_record = lt_record
                                     app       = app ).
-    LOOP AT result-t_variant INTO DATA(ls_variant).
+
+    LOOP AT result-t_variant INTO ls_variant.
       result-runs = result-runs + ls_variant-runs.
       result-failed_runs = result-failed_runs + ls_variant-failed.
     ENDLOOP.
@@ -2592,33 +3361,48 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD mark_pressed.
 
-    DATA(lv_wire) = |['{ event }'|.
-    DATA(lv_at) = find( val = xml
+    DATA lv_wire TYPE string.
+    DATA lv_at TYPE i.
+    DATA lv_open TYPE i.
+    DATA lv_close TYPE i.
+    DATA lv_name_end TYPE i.
+    DATA lv_tag TYPE string.
+    DATA lv_class TYPE i.
+      DATA lv_insert TYPE i.
+    lv_wire = |['{ event }'|.
+
+    lv_at = find( val = xml
                         sub = lv_wire ).
     IF lv_at < 0.
       RETURN.
     ENDIF.
     " the element around it: the last < before, the first > after
-    DATA(lv_open) = find( val = substring( val = xml
+
+    lv_open = find( val = substring( val = xml
                                            len = lv_at )
                           sub = `<`
                           occ = -1 ).
-    DATA(lv_close) = find( val = xml
+
+    lv_close = find( val = xml
                            sub = `>`
                            off = lv_at ).
-    DATA(lv_name_end) = find( val = xml
+
+    lv_name_end = find( val = xml
                               sub = ` `
                               off = lv_open ).
     IF lv_open < 0 OR lv_close < 0 OR lv_name_end < 0 OR lv_name_end > lv_close.
       RETURN.
     ENDIF.
-    DATA(lv_tag) = substring( val = xml
+
+    lv_tag = substring( val = xml
                               off = lv_open
                               len = lv_close - lv_open ).
-    DATA(lv_class) = find( val = lv_tag
+
+    lv_class = find( val = lv_tag
                            sub = ` class="` ).
     IF lv_class >= 0.
-      DATA(lv_insert) = lv_open + lv_class + 8.
+
+      lv_insert = lv_open + lv_class + 8.
       xml = |{ substring( val = xml
                           len = lv_insert ) }{ c_pressed } { substring( val = xml
                                                                         off = lv_insert ) }|.
@@ -2673,24 +3457,43 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD shown_text.
 
-    LOOP AT it_shown INTO DATA(ls_shown).
+    DATA ls_shown LIKE LINE OF it_shown.
+      DATA temp130 TYPE string.
+      DATA temp19 TYPE string.
+    LOOP AT it_shown INTO ls_shown.
       IF ls_shown-kind = cs_kind-view.
         CONTINUE.
       ENDIF.
-      result = |{ result }{ COND #( WHEN result IS NOT INITIAL THEN `; ` ) }| &&
-               |{ SWITCH string( ls_shown-kind
-                                 WHEN cs_kind-box     THEN |{ ls_shown-type } box|
-                                 WHEN cs_kind-toast   THEN `toast`
-                                 WHEN cs_kind-popup   THEN `popup`
-                                 ELSE `popover` ) }: { ls_shown-text }|.
+
+      CASE ls_shown-kind.
+        WHEN cs_kind-box.
+          temp130 = |{ ls_shown-type } box|.
+        WHEN cs_kind-toast.
+          temp130 = `toast`.
+        WHEN cs_kind-popup.
+          temp130 = `popup`.
+        WHEN OTHERS.
+          temp130 = `popover`.
+      ENDCASE.
+
+      IF result IS NOT INITIAL.
+        temp19 = `; `.
+      ELSE.
+        CLEAR temp19.
+      ENDIF.
+      result = |{ result }{ temp19 }| &&
+               |{ temp130 }: { ls_shown-text }|.
     ENDLOOP.
 
   ENDMETHOD.
 
   METHOD member_before.
 
-    DATA(lv_key) = |"{ name }":"|.
-    DATA(lv_off) = find( val = json
+    DATA lv_key TYPE string.
+    DATA lv_off TYPE i.
+    lv_key = |"{ name }":"|.
+
+    lv_off = find( val = json
                          sub = lv_key ).
     IF lv_off < 0 OR lv_off >= before.
       RETURN.
@@ -2706,8 +3509,11 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD xml_attribute.
 
-    DATA(lv_key) = | { name }="|.
-    DATA(lv_off) = find( val = xml
+    DATA lv_key TYPE string.
+    DATA lv_off TYPE i.
+    lv_key = | { name }="|.
+
+    lv_off = find( val = xml
                          sub = lv_key ).
     IF lv_off < 0.
       RETURN.

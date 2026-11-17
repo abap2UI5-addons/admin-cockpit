@@ -29,7 +29,7 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
       BEGIN OF ty_s_admin,
         uname TYPE string,
       END OF ty_s_admin.
-    TYPES ty_t_admin TYPE STANDARD TABLE OF ty_s_admin WITH EMPTY KEY.
+    TYPES ty_t_admin TYPE STANDARD TABLE OF ty_s_admin WITH DEFAULT KEY.
 
     DATA tab           TYPE string.
     DATA days          TYPE string.
@@ -246,12 +246,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF client->check_on_init( ).
+    IF client->check_on_init( ) IS NOT INITIAL.
       model_init( ).
       view_display( ).
-    ELSEIF client->check_on_navigated( ).
+    ELSEIF client->check_on_navigated( ) IS NOT INITIAL.
       view_display( ).
-    ELSEIF client->check_on_event( ).
+    ELSEIF client->check_on_event( ) IS NOT INITIAL.
       on_event( ).
     ENDIF.
     enum_defaults( ).
@@ -260,7 +260,21 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD view_display.
 
-    DATA(view) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA view TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA page TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA header TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA bar TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA overview TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA apps TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA errors TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA perf TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA drafts TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA security TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA live TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA agents TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA settings TYPE REF TO z2ui5_cl_ui5_view_builder.
+    view = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `View` ns = `mvc`
             )->a( n = `xmlns`        v = `sap.m`
             )->a( n = `xmlns:mvc`    v = `sap.ui.core.mvc`
@@ -269,11 +283,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `displayBlock` v = `true`
             )->a( n = `height`       v = `100%` ).
 
-    DATA(page) = view->ele( `Shell`
+
+    page = view->ele( `Shell`
         )->ele( `Page`
             )->a( n = `title` t = |abap2UI5 Admin Cockpit - abap2UI5 { s_head-version }, { s_head-platform }| ).
 
-    DATA(header) = page->ele( `headerContent` ).
+
+    header = page->ele( `headerContent` ).
 
     header->ele( `SegmentedButton`
         )->a( n = `selectedKey`     v = client->_bind( days )
@@ -297,9 +313,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `tooltip` v = `Refresh`
         )->a( n = `press`   v = client->_event( `REFRESH` ) ).
 
-    DATA(content) = page->ele( `content` ).
 
-    DATA(bar) = content->ele( `IconTabBar`
+    content = page->ele( `content` ).
+
+
+    bar = content->ele( `IconTabBar`
         )->a( n = `selectedKey`         v = client->_bind( tab )
         )->a( n = `select`              v = client->_event( `TAB` )
         )->a( n = `expandable`          v = `false`
@@ -308,7 +326,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->ele( `items` ).
 
     " --- Overview -------------------------------------------------------
-    DATA(overview) = bar->ele( `IconTabFilter`
+
+    overview = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `OVERVIEW`
         )->a( n = `text` v = `Overview`
         )->a( n = `icon` v = `sap-icon://home` ).
@@ -588,7 +607,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{NOTE}` ).
 
     " --- Apps -----------------------------------------------------------
-    DATA(apps) = bar->ele( `IconTabFilter`
+
+    apps = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `APPS`
         )->a( n = `text` v = `Apps`
         )->a( n = `icon` v = `sap-icon://product` ).
@@ -685,7 +705,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{LAST_USED}` ).
 
     " --- Errors ---------------------------------------------------------
-    DATA(errors) = bar->ele( `IconTabFilter`
+
+    errors = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `ERRORS`
         )->a( n = `text` v = `Errors`
         )->a( n = `icon` v = `sap-icon://error` ).
@@ -862,7 +883,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{SAMPLES}` ).
 
     " --- Performance ----------------------------------------------------
-    DATA(perf) = bar->ele( `IconTabFilter`
+
+    perf = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `PERF`
         )->a( n = `text` v = `Performance`
         )->a( n = `icon` v = `sap-icon://performance` ).
@@ -969,7 +991,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{PHASE}` ).
 
     " --- Drafts & Housekeeping ------------------------------------------
-    DATA(drafts) = bar->ele( `IconTabFilter`
+
+    drafts = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `DRAFTS`
         )->a( n = `text` v = `Drafts & Housekeeping`
         )->a( n = `icon` v = `sap-icon://database` ).
@@ -1304,7 +1327,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{KB_MAX}` ).
 
     " --- Installation & Security ----------------------------------------
-    DATA(security) = bar->ele( `IconTabFilter`
+
+    security = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `SECURITY`
         )->a( n = `text` v = `Installation & Security`
         )->a( n = `icon` v = `sap-icon://shield` ).
@@ -1434,7 +1458,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `width`    v = `100%` ).
 
     " --- Live -----------------------------------------------------------
-    DATA(live) = bar->ele( `IconTabFilter`
+
+    live = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `LIVE`
         )->a( n = `text` v = `Live`
         )->a( n = `icon` v = `sap-icon://activity-individual` ).
@@ -1577,7 +1602,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `press` v = client->_event( `LOCKS` ) ).
 
     " --- Agents ---------------------------------------------------------
-    DATA(agents) = bar->ele( `IconTabFilter`
+
+    agents = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `AGENTS`
         )->a( n = `text` v = `Agents`
         )->a( n = `icon` v = `sap-icon://chain-link` ).
@@ -1840,7 +1866,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                         )->a( n = `text` v = `{CLIENT}` ).
 
     " --- Settings -------------------------------------------------------
-    DATA(settings) = bar->ele( `IconTabFilter`
+
+    settings = bar->ele( `IconTabFilter`
         )->a( n = `key`  v = `SETTINGS`
         )->a( n = `text` v = `Settings`
         )->a( n = `icon` v = `sap-icon://action-settings` ).
@@ -2095,7 +2122,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD view_no_auth.
 
-    DATA(view) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA view TYPE REF TO z2ui5_cl_ui5_view_builder.
+    view = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `View` ns = `mvc`
             )->a( n = `xmlns`        v = `sap.m`
             )->a( n = `xmlns:mvc`    v = `sap.ui.core.mvc`
@@ -2115,7 +2143,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD on_claim.
 
-    IF client->check_on_event( `CLAIM_ROLE` ).
+    IF client->check_on_event( `CLAIM_ROLE` ) IS NOT INITIAL.
       IF z2ui5_cl_cockpit_auth=>claim( ) = abap_true.
         model_init( ).
         view_display( ).
@@ -2134,24 +2162,30 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD view_claim.
 
-    DATA(view) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA view TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA temp1 TYPE xsdboolean.
+    view = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `View` ns = `mvc`
             )->a( n = `xmlns`        v = `sap.m`
             )->a( n = `xmlns:mvc`    v = `sap.ui.core.mvc`
             )->a( n = `displayBlock` v = `true`
             )->a( n = `height`       v = `100%` ).
 
-    DATA(content) = view->ele( `Shell`
+
+    content = view->ele( `Shell`
         )->ele( `Page`
             )->a( n = `title` v = `abap2UI5 Admin Cockpit - claim the administrator role`
 
             )->ele( `content` ).
 
+
+    temp1 = boolc( message IS NOT INITIAL ).
     content->tag( `MessageStrip`
         )->a( n = `text`     t = message
         )->a( n = `type`     v = `Error`
         )->a( n = `showIcon` v = `true`
-        )->a( n = `visible`  b = xsdbool( message IS NOT INITIAL )
+        )->a( n = `visible`  b = temp1
         )->a( n = `class`    v = `sapUiSmallMargin` ).
 
     content->ele( `VBox`
@@ -2183,17 +2217,22 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_app.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA app_content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`        t = |Events of { detail_app }|
         )->a( n = `contentWidth` v = `80%`
         )->a( n = `resizable`    v = `true` ).
 
-    DATA(app_content) = dialog->ele( `content` ).
+
+    app_content = dialog->ele( `content` ).
 
     app_content->ele( `Table`
         )->a( n = `items` v = client->_bind( t_events )
@@ -2299,18 +2338,23 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_error.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core`
             )->a( n = `xmlns:form` v = `sap.ui.layout.form` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`        v = `Error details`
         )->a( n = `contentWidth` v = `85%`
         )->a( n = `resizable`    v = `true` ).
 
-    DATA(content) = dialog->ele( `content` ).
+
+    content = dialog->ele( `content` ).
 
     content->ele( n = `SimpleForm` ns = `form`
         )->a( n = `layout`   v = `ResponsiveGridLayout`
@@ -2487,12 +2531,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_confirm_delete.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`     v = `Delete expired drafts`
         )->a( n = `type`      v = `Message`
         )->a( n = `state`     v = `Warning`
@@ -2521,12 +2568,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_confirm_reproduce.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`        v = `Reproduce - this runs the app logic again`
         )->a( n = `type`         v = `Message`
         )->a( n = `state`        v = `Warning`
@@ -2560,17 +2610,22 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_reproduce.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`        v = `Reproduce - result of the replay`
         )->a( n = `contentWidth` v = `85%`
         )->a( n = `resizable`    v = `true` ).
 
-    DATA(content) = dialog->ele( `content` ).
+
+    content = dialog->ele( `content` ).
 
     content->tag( `MessageStrip`
         )->a( n = `text`     v = client->_bind( s_repro-summary )
@@ -2636,19 +2691,24 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_session.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`         t = |Session of { s_session-user } - { s_session-app }|
         )->a( n = `contentWidth`  v = `95%`
         )->a( n = `contentHeight` v = `90%`
         )->a( n = `resizable`     v = `true`
         )->a( n = `draggable`     v = `true` ).
 
-    DATA(content) = dialog->ele( `content` ).
+
+    content = dialog->ele( `content` ).
 
     content->ele( `OverflowToolbar`
 
@@ -2950,16 +3010,45 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     DATA lv_next TYPE string.
     DATA lv_popup TYPE string.
     DATA lv_buttons TYPE string.
+    DATA ls_step LIKE LINE OF t_steps.
+    FIELD-SYMBOLS <temp1> LIKE LINE OF t_steps.
+    DATA temp4 LIKE sy-tabix.
+    DATA lv_next_event LIKE ls_step-wire_fail_event.
+    DATA ls_after LIKE LINE OF t_steps.
+      DATA lv_at LIKE step_index.
+        DATA ls_on LIKE LINE OF t_steps.
+        FIELD-SYMBOLS <temp5> LIKE LINE OF t_steps.
+        DATA temp6 LIKE sy-tabix.
+        DATA temp1 TYPE i.
+    DATA lv_text TYPE string.
+    DATA temp2 TYPE string.
+    DATA lv_type LIKE temp2.
+    DATA lv_style LIKE z2ui5_cl_cockpit_wire=>c_pressed_style.
+    DATA lv_xml TYPE string.
+    DATA temp3 TYPE string.
+    DATA temp7 TYPE string.
+    DATA temp5 TYPE string.
 
     IF t_steps IS INITIAL.
       RETURN.
     ENDIF.
-    DATA(ls_step) = t_steps[ step_index ].
+
+
+
+    temp4 = sy-tabix.
+    READ TABLE t_steps INDEX step_index ASSIGNING <temp1>.
+    sy-tabix = temp4.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_step = <temp1>.
 
     " what the user did on this screen is what led to the step after it - or
     " the click that failed there
-    DATA(lv_next_event) = ls_step-wire_fail_event.
-    LOOP AT t_steps INTO DATA(ls_after) WHERE follows = step_index. "#EC CI_SORTSEQ
+
+    lv_next_event = ls_step-wire_fail_event.
+
+    LOOP AT t_steps INTO ls_after WHERE follows = step_index. "#EC CI_SORTSEQ
       lv_next = ls_after-did.
       lv_next_event = ls_after-event.
       EXIT.
@@ -2969,19 +3058,36 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     IF ls_step-wire_id IS INITIAL.
       ls_screen-error = `This step was not recorded - the recorder was off, or it began later.`.
     ELSE.
-      DATA(lv_at) = step_index.
+
+      lv_at = step_index.
       WHILE lv_at > 0.
-        DATA(ls_on) = t_steps[ lv_at ].
+
+
+
+        temp6 = sy-tabix.
+        READ TABLE t_steps INDEX lv_at ASSIGNING <temp5>.
+        sy-tabix = temp6.
+        IF sy-subrc <> 0.
+          ASSERT 1 = 0.
+        ENDIF.
+        ls_on = <temp5>.
         IF ls_on-wire_id IS NOT INITIAL.
           INSERT ls_on-wire_id INTO lt_id INDEX 1.
         ENDIF.
-        lv_at = COND #( WHEN ls_on-follows < lv_at THEN ls_on-follows ELSE 0 ).
+
+        IF ls_on-follows < lv_at.
+          temp1 = ls_on-follows.
+        ELSE.
+          temp1 = 0.
+        ENDIF.
+        lv_at = temp1.
       ENDWHILE.
       ls_screen = z2ui5_cl_cockpit_wire=>get_screen( it_id = lt_id
                                                      event = lv_next_event ).
     ENDIF.
 
-    DATA(lv_text) = |Step { step_index } of { lines( t_steps ) }, { ls_step-time } UTC.|.
+
+    lv_text = |Step { step_index } of { lines( t_steps ) }, { ls_step-time } UTC.|.
     IF ls_step-did IS NOT INITIAL.
       lv_text = |{ lv_text } To get here the user { ls_step-did }.|.
     ENDIF.
@@ -3001,17 +3107,25 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     IF ls_screen-marked = abap_true.
       lv_text = |{ lv_text } Outlined in orange: what the user pressed next.|.
     ENDIF.
-    DATA(lv_type) = COND string( WHEN ls_step-shown_state = `Error` OR ls_step-wire_fail_id IS NOT INITIAL
-                                 THEN `Error`
-                                 WHEN ls_step-shown_state = `Warning` THEN `Warning`
-                                 ELSE `Information` ).
+
+    IF ls_step-shown_state = `Error` OR ls_step-wire_fail_id IS NOT INITIAL.
+      temp2 = `Error`.
+    ELSEIF ls_step-shown_state = `Warning`.
+      temp2 = `Warning`.
+    ELSE.
+      temp2 = `Information`.
+    ENDIF.
+
+    lv_type = temp2.
 
     " the pressed control stands out - a class mark_pressed gave it
-    DATA(lv_style) = z2ui5_cl_cockpit_wire=>c_pressed_style.
+
+    lv_style = z2ui5_cl_cockpit_wire=>c_pressed_style.
 
     " written by hand: the recorded view comes with namespaces of its own,
     " the frame uses prefixes it cannot have taken
-    DATA(lv_xml) = |<ckc:FragmentDefinition xmlns:ckc="sap.ui.core" xmlns:ckm="sap.m"{ ls_screen-xmlns }>| &&
+
+    lv_xml = |<ckc:FragmentDefinition xmlns:ckc="sap.ui.core" xmlns:ckm="sap.m"{ ls_screen-xmlns }>| &&
                    |<ckm:Dialog title="{ z2ui5_cl_cockpit_wire=>xml_escape(
                                              |Screen of step { step_index } - { ls_step-app }| ) }"| &&
                    | contentWidth="95%" contentHeight="90%" resizable="true" draggable="true">| &&
@@ -3041,16 +3155,33 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                |{ ls_screen-content }</ckm:ScrollContainer>|.
     ENDIF.
 
+
+    IF step_index > 1.
+      temp3 = `true`.
+    ELSE.
+      temp3 = `false`.
+    ENDIF.
+
+    IF step_index < lines( t_steps ).
+      temp7 = `true`.
+    ELSE.
+      temp7 = `false`.
+    ENDIF.
+
+    IF ls_step-wire_id IS NOT INITIAL OR ls_step-wire_fail_id IS NOT INITIAL.
+      temp5 = `true`.
+    ELSE.
+      temp5 = `false`.
+    ENDIF.
     lv_xml = |{ lv_xml }</ckm:content><ckm:buttons>| &&
              |<ckm:Button text="Previous screen" icon="sap-icon://navigation-left-arrow"| &&
-             | enabled="{ COND #( WHEN step_index > 1 THEN `true` ELSE `false` ) }"| &&
+             | enabled="{ temp3 }"| &&
              | press="{ client->_event( `SCREEN_PREV` ) }"/>| &&
              |<ckm:Button text="Next screen" icon="sap-icon://navigation-right-arrow" iconFirst="false"| &&
-             | enabled="{ COND #( WHEN step_index < lines( t_steps ) THEN `true` ELSE `false` ) }"| &&
+             | enabled="{ temp7 }"| &&
              | press="{ client->_event( `SCREEN_NEXT` ) }"/>| &&
              |<ckm:Button text="Request / Response" icon="sap-icon://source-code"| &&
-             | enabled="{ COND #( WHEN ls_step-wire_id IS NOT INITIAL OR ls_step-wire_fail_id IS NOT INITIAL
-                                  THEN `true` ELSE `false` ) }"| &&
+             | enabled="{ temp5 }"| &&
              | press="{ client->_event( `STEP_WIRE` ) }"/>| &&
              |<ckm:Button text="Back to the steps" type="Emphasized"| &&
              | press="{ client->_event( `SCREEN_BACK` ) }"/>| &&
@@ -3065,12 +3196,27 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     DATA lv_capped TYPE string.
     DATA lv_runs   TYPE string.
 
-    DATA(lv_days) = get_days( ).
+    DATA lv_days TYPE i.
+    DATA temp2 TYPE xsdboolean.
+    DATA temp4 TYPE string.
+    DATA temp5 TYPE string.
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA temp6 TYPE string.
+    lv_days = get_days( ).
     s_variants = z2ui5_cl_cockpit_wire=>get_variants( app  = variants_app
                                                       days = lv_days ).
-    variants_has_app = xsdbool( variants_app IS NOT INITIAL ).
-    variants_title = |Process variants - { COND #( WHEN variants_app IS NOT INITIAL THEN variants_app
-                                                     ELSE `all apps` ) }, last { lv_days } day(s)|.
+
+    temp2 = boolc( variants_app IS NOT INITIAL ).
+    variants_has_app = temp2.
+
+    IF variants_app IS NOT INITIAL.
+      temp4 = variants_app.
+    ELSE.
+      temp4 = `all apps`.
+    ENDIF.
+    variants_title = |Process variants - { temp4 }, last { lv_days } day(s)|.
     " built ahead of the COND: inside it the 7.02 downport writes the whole
     " concatenation on one line, longer than the 255 characters a line has
     IF s_variants-check_capped = abap_true.
@@ -3081,33 +3227,44 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               |{ s_variants-failed_runs } runs ended in a failed click (red); orange: a click failed on the way, | &&
               |the user got through. A run goes from the start of a session to where nothing continued it - | &&
               |"(repeated)" is the same event several times in a row. Select one for its newest run.|.
-    variants_text = COND #(
-        WHEN s_variants-error IS NOT INITIAL
-        THEN |The recordings could not be read: { s_variants-error }|
-        WHEN s_variants-records = 0
-        THEN `Nothing recorded in the period. Call z2ui5_cl_cockpit_wire=>run( server ) instead of abap2UI5 in ` &&
-             `your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, says where exactly.`
-        WHEN s_variants-t_variant IS INITIAL
-        THEN |No run passed { variants_app } in { s_variants-records } recorded roundtrips.|
-        ELSE lv_runs ).
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+    IF s_variants-error IS NOT INITIAL.
+      temp5 = |The recordings could not be read: { s_variants-error }|.
+    ELSEIF s_variants-records = 0.
+      temp5 = `Nothing recorded in the period. Call z2ui5_cl_cockpit_wire=>run( server ) instead of abap2UI5 in ` && `your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, says where exactly.`.
+    ELSEIF s_variants-t_variant IS INITIAL.
+      temp5 = |No run passed { variants_app } in { s_variants-records } recorded roundtrips.|.
+    ELSE.
+      temp5 = lv_runs.
+    ENDIF.
+    variants_text = temp5.
+
+
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`         v = client->_bind( variants_title )
         )->a( n = `contentWidth`  v = `90%`
         )->a( n = `contentHeight` v = `80%`
         )->a( n = `resizable`     v = `true`
         )->a( n = `draggable`     v = `true` ).
 
-    DATA(content) = dialog->ele( `content` ).
 
+    content = dialog->ele( `content` ).
+
+
+    IF s_variants-error IS NOT INITIAL.
+      temp6 = `Error`.
+    ELSE.
+      temp6 = `Information`.
+    ENDIF.
     content->tag( `MessageStrip`
         )->a( n = `text`     v = client->_bind( variants_text )
-        )->a( n = `type`     v = COND string( WHEN s_variants-error IS NOT INITIAL THEN `Error` ELSE `Information` )
+        )->a( n = `type`     v = temp6
         )->a( n = `showIcon` v = `true`
         )->a( n = `class`    v = `sapUiSmallMargin` ).
 
@@ -3180,7 +3337,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD session_open_draft.
 
-    DATA(lv_session) = z2ui5_cl_cockpit_session=>get_session_of( draft ).
+    DATA lv_session TYPE string.
+    lv_session = z2ui5_cl_cockpit_session=>get_session_of( draft ).
     IF lv_session IS INITIAL.
       client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
       RETURN.
@@ -3192,6 +3350,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD popup_story.
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA temp7 TYPE string_table.
+    DATA temp8 LIKE LINE OF temp7.
 
     story_text = z2ui5_cl_cockpit_session=>story_of( t_steps ).
     IF trouble_shown = abap_true.
@@ -3200,12 +3362,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     story_text = |Session of { s_session-user } - { s_session-app }{ cl_abap_char_utilities=>newline }| &&
                  |{ cl_abap_char_utilities=>newline }{ story_text }|.
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
+
+    dialog = popup->ele( `Dialog`
         )->a( n = `title`         t = |The story of the session - { lines( t_steps ) } steps|
         )->a( n = `contentWidth`  v = `80%`
         )->a( n = `contentHeight` v = `75%`
@@ -3220,12 +3384,17 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `rows`     v = `25`
             )->a( n = `class`    v = `sapUiSmallMargin` ).
 
+
+    CLEAR temp7.
+
+    temp8 = |${ client->_bind( story_text ) }|.
+    INSERT temp8 INTO TABLE temp7.
     dialog->ele( `buttons`
         )->tag( `Button`
             )->a( n = `text`  v = `Copy`
             )->a( n = `icon`  v = `sap-icon://copy`
             )->a( n = `press` v = client->follow_up_action( val   = z2ui5_if_client=>cs_event-clipboard_copy
-                                                         t_arg = VALUE #( ( |${ client->_bind( story_text ) }| ) ) )
+                                                         t_arg = temp7 )
         )->tag( `Button`
             )->a( n = `text`  v = `Back to the steps`
             )->a( n = `type`  v = `Emphasized`
@@ -3236,30 +3405,65 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD popup_wire.
+    DATA ls_step LIKE LINE OF t_steps.
+    FIELD-SYMBOLS <temp9> LIKE LINE OF t_steps.
+    DATA temp12 LIKE sy-tabix.
+    DATA temp9 TYPE string.
+    DATA lv_id LIKE temp9.
+    DATA popup TYPE REF TO z2ui5_cl_ui5_view_builder.
+    DATA temp10 TYPE string.
+    DATA dialog TYPE REF TO z2ui5_cl_ui5_view_builder.
+        DATA content TYPE REF TO z2ui5_cl_ui5_view_builder.
+                DATA temp11 TYPE string.
+                DATA temp13 TYPE string.
+                    DATA temp3 TYPE xsdboolean.
+                    DATA temp1 TYPE xsdboolean.
 
     IF t_steps IS INITIAL.
       RETURN.
     ENDIF.
-    DATA(ls_step) = t_steps[ step_index ].
-    DATA(lv_id) = COND string( WHEN check_failed = abap_true OR ls_step-wire_id IS INITIAL
-                               THEN ls_step-wire_fail_id
-                               ELSE ls_step-wire_id ).
+
+
+
+    temp12 = sy-tabix.
+    READ TABLE t_steps INDEX step_index ASSIGNING <temp9>.
+    sy-tabix = temp12.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_step = <temp9>.
+
+    IF check_failed = abap_true OR ls_step-wire_id IS INITIAL.
+      temp9 = ls_step-wire_fail_id.
+    ELSE.
+      temp9 = ls_step-wire_id.
+    ENDIF.
+
+    lv_id = temp9.
     s_wire = z2ui5_cl_cockpit_wire=>get_detail( lv_id ).
 
-    DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
+
+    popup = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
             )->a( n = `xmlns:core` v = `sap.ui.core` ).
 
-    DATA(dialog) = popup->ele( `Dialog`
-        )->a( n = `title`         t = |{ COND #( WHEN lv_id = ls_step-wire_fail_id THEN `Failed click after step`
-                                                ELSE `Request and response of step` ) } { step_index }|
+
+    IF lv_id = ls_step-wire_fail_id.
+      temp10 = `Failed click after step`.
+    ELSE.
+      temp10 = `Request and response of step`.
+    ENDIF.
+
+    dialog = popup->ele( `Dialog`
+        )->a( n = `title`         t = |{ temp10 } { step_index }|
         )->a( n = `contentWidth`  v = `90%`
         )->a( n = `contentHeight` v = `85%`
         )->a( n = `resizable`     v = `true`
         )->a( n = `draggable`     v = `true` ).
 
-        DATA(content) = dialog->ele( `content`
+
+        content = dialog->ele( `content`
             )->ele( `VBox`
                 )->a( n = `class` v = `sapUiSmallMargin`
                 )->ele( `items` ).
@@ -3270,11 +3474,23 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               )->a( n = `type`     v = `Error`
               )->a( n = `showIcon` v = `true` ).
               ELSE.
+
+                IF s_wire-ms_total > 0.
+                  temp11 = | - { s_wire-ms_total } ms on the server|.
+                ELSE.
+                  CLEAR temp11.
+                ENDIF.
+
+                IF s_wire-http_status >= 500.
+                  temp13 = `Error`.
+                ELSE.
+                  temp13 = `Information`.
+                ENDIF.
                 content->tag( `MessageStrip`
                     )->a( n = `text`     t = |{ s_wire-time } UTC - { s_wire-app } - event { s_wire-event } - | &&
                                    |HTTP { s_wire-http_status }| &&
-                                   |{ COND #( WHEN s_wire-ms_total > 0 THEN | - { s_wire-ms_total } ms on the server| ) }|
-                    )->a( n = `type`     v = COND string( WHEN s_wire-http_status >= 500 THEN `Error` ELSE `Information` )
+                                   |{ temp11 }|
+                    )->a( n = `type`     v = temp13
                     )->a( n = `showIcon` v = `true` ).
               ENDIF.
 
@@ -3314,16 +3530,20 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                       )->a( n = `width`    v = `100%`
                       )->a( n = `rows`     v = `10` ).
 
+
+                    temp3 = boolc( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id ).
+
+                    temp1 = boolc( ls_step-wire_id IS NOT INITIAL ).
                     dialog->ele( `buttons`
                         )->tag( `Button`
                             )->a( n = `text`    v = `Failed click after this step`
                             )->a( n = `icon`    v = `sap-icon://error`
-                            )->a( n = `visible` b = xsdbool( ls_step-wire_fail_id IS NOT INITIAL AND lv_id <> ls_step-wire_fail_id )
+                            )->a( n = `visible` b = temp3
                             )->a( n = `press`   v = client->_event( `WIRE_FAILED` )
                         )->tag( `Button`
                             )->a( n = `text`    v = `Screen`
                             )->a( n = `icon`    v = `sap-icon://display`
-                            )->a( n = `enabled` b = xsdbool( ls_step-wire_id IS NOT INITIAL )
+                            )->a( n = `enabled` b = temp1
                             )->a( n = `press`   v = client->_event( `STEP_SCREEN` )
                         )->tag( `Button`
                             )->a( n = `text`  v = `Back to the steps`
@@ -3335,6 +3555,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ENDMETHOD.
 
               METHOD sessions_load.
+                DATA temp12 TYPE string.
+                DATA temp14 TYPE string.
+                DATA temp6 TYPE string.
 
                 s_sessions = z2ui5_cl_cockpit_session=>get_sessions( search       = session_search
                                                                      check_errors = session_errors ).
@@ -3343,12 +3566,28 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   sessions_text = |The draft table could not be read: { s_sessions-error }|.
                   RETURN.
                 ENDIF.
+
+                IF session_errors = abap_true.
+                  temp12 = ` with a failed roundtrip`.
+                ELSE.
+                  CLEAR temp12.
+                ENDIF.
+
+                IF session_search IS NOT INITIAL.
+                  temp14 = |, matching "{ session_search }"|.
+                ELSE.
+                  CLEAR temp14.
+                ENDIF.
+
+                IF s_sessions-check_capped = abap_true.
+                  temp6 = | - read from the newest { z2ui5_cl_cockpit_session=>c_max_nodes } drafts|.
+                ELSE.
+                  CLEAR temp6.
+                ENDIF.
                 sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }| &&
-                    |{ COND #( WHEN session_errors = abap_true THEN ` with a failed roundtrip` ) }, newest | &&
-                    |activity first{ COND #( WHEN session_search IS NOT INITIAL
-                                             THEN |, matching "{ session_search }"| ) }| &&
-                    |{ COND #( WHEN s_sessions-check_capped = abap_true
-                               THEN | - read from the newest { z2ui5_cl_cockpit_session=>c_max_nodes } drafts| ) }|.
+                    |{ temp12 }, newest | &&
+                    |activity first{ temp14 }| &&
+                    |{ temp6 }|.
 
               ENDMETHOD.
 
@@ -3356,7 +3595,19 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
                 DATA lv_index TYPE i.
 
-                DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( id ).
+                DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+                DATA temp13 TYPE z2ui5_cl_cockpit_session=>ty_s_session.
+                DATA temp14 TYPE z2ui5_cl_cockpit_session=>ty_s_session.
+                  DATA temp16 TYPE z2ui5_cl_cockpit_session=>ty_s_session-user.
+                  FIELD-SYMBOLS <temp17> LIKE LINE OF t_steps.
+                  DATA temp18 LIKE sy-tabix.
+                  DATA ls_step LIKE LINE OF t_steps.
+                DATA ls_signals TYPE z2ui5_cl_cockpit_session=>ty_s_signals.
+                DATA temp4 TYPE xsdboolean.
+                DATA ls_business LIKE LINE OF ls_steps-t_business.
+                  DATA temp15 TYPE string.
+                DATA temp5 TYPE xsdboolean.
+                ls_steps = z2ui5_cl_cockpit_session=>get_steps( id ).
                 IF ls_steps-error IS NOT INITIAL.
                   client->message_box_display( text = |The session could not be read: { ls_steps-error }|
                                                type = `error` ).
@@ -3368,12 +3619,34 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 ENDIF.
 
                 t_steps = ls_steps-t_step.
-                s_session = VALUE #( s_sessions-t_session[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
+
+                CLEAR temp13.
+
+                READ TABLE s_sessions-t_session INTO temp14 WITH KEY id = id.
+                IF sy-subrc = 0.
+                  temp13 = temp14.
+                ENDIF.
+                s_session = temp13. "#EC CI_SORTSEQ
                 IF s_session IS INITIAL.
-                  s_session = VALUE #( id    = id
-                                       user  = COND #( WHEN user IS NOT INITIAL THEN user ELSE `(unknown)` )
-                                       app   = t_steps[ lines( t_steps ) ]-app
-                                       steps = lines( t_steps ) ).
+                  CLEAR s_session.
+                  s_session-id = id.
+
+                  IF user IS NOT INITIAL.
+                    temp16 = user.
+                  ELSE.
+                    temp16 = `(unknown)`.
+                  ENDIF.
+                  s_session-user = temp16.
+
+
+                  temp18 = sy-tabix.
+                  READ TABLE t_steps INDEX lines( t_steps ) ASSIGNING <temp17>.
+                  sy-tabix = temp18.
+                  IF sy-subrc <> 0.
+                    ASSERT 1 = 0.
+                  ENDIF.
+                  s_session-app = <temp17>-app.
+                  s_session-steps = lines( t_steps ).
                 ENDIF.
 
                 " the change log first, committed - the session shows other users' data
@@ -3384,7 +3657,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
                 lv_index = lines( t_steps ).
                 IF draft IS NOT INITIAL.
-                  LOOP AT t_steps INTO DATA(ls_step) WHERE id = draft. "#EC CI_SORTSEQ
+
+                  LOOP AT t_steps INTO ls_step WHERE id = draft. "#EC CI_SORTSEQ
                     lv_index = ls_step-step.
                   ENDLOOP.
                 ENDIF.
@@ -3397,19 +3671,31 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 CLEAR history_shown.
                 growth_check( ).
                 stuck_check( ).
-                DATA(ls_signals) = z2ui5_cl_cockpit_session=>signals_of_steps( t_steps ).
+
+                ls_signals = z2ui5_cl_cockpit_session=>signals_of_steps( t_steps ).
                 trouble_text  = |Signs of trouble: { ls_signals-text }.|.
-                trouble_shown = xsdbool( ls_signals-text IS NOT INITIAL ).
+
+                temp4 = boolc( ls_signals-text IS NOT INITIAL ).
+                trouble_shown = temp4.
                 CLEAR business_text.
-                LOOP AT ls_steps-t_business INTO DATA(ls_business).
+
+                LOOP AT ls_steps-t_business INTO ls_business.
                   IF sy-tabix > 8.
                     business_text = |{ business_text } (+{ lines( ls_steps-t_business ) - 8 } more)|.
                     EXIT.
                   ENDIF.
-                  business_text = |{ business_text }{ COND #( WHEN business_text IS NOT INITIAL THEN `, ` ) }| &&
+
+                  IF business_text IS NOT INITIAL.
+                    temp15 = `, `.
+                  ELSE.
+                    CLEAR temp15.
+                  ENDIF.
+                  business_text = |{ business_text }{ temp15 }| &&
                       |{ ls_business-object } { ls_business-value } (step { ls_business-step })|.
                 ENDLOOP.
-                business_shown = xsdbool( business_text IS NOT INITIAL ).
+
+                temp5 = boolc( business_text IS NOT INITIAL ).
+                business_shown = temp5.
                 IF business_shown = abap_true.
                   business_text = |Business objects in this session: { business_text }|.
                 ENDIF.
@@ -3424,29 +3710,70 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   METHOD growth_check.
 
     DATA lv_tables TYPE string.
+    DATA ls_first LIKE LINE OF t_steps.
+    FIELD-SYMBOLS <temp19> LIKE LINE OF t_steps.
+    DATA temp20 LIKE sy-tabix.
+    DATA ls_last LIKE LINE OF t_steps.
+    FIELD-SYMBOLS <temp21> LIKE LINE OF t_steps.
+    DATA temp22 LIKE sy-tabix.
+    DATA lt_growth TYPE z2ui5_cl_cockpit_session=>ty_t_growth.
+    DATA ls_growth LIKE LINE OF lt_growth.
+      DATA temp16 TYPE string.
+    DATA temp17 TYPE string.
 
     CLEAR growth_text.
     CLEAR growth_shown.
     IF lines( t_steps ) < 2.
       RETURN.
     ENDIF.
-    DATA(ls_first) = t_steps[ 1 ].
-    DATA(ls_last) = t_steps[ lines( t_steps ) ].
+
+
+
+    temp20 = sy-tabix.
+    READ TABLE t_steps INDEX 1 ASSIGNING <temp19>.
+    sy-tabix = temp20.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_first = <temp19>.
+
+
+
+    temp22 = sy-tabix.
+    READ TABLE t_steps INDEX lines( t_steps ) ASSIGNING <temp21>.
+    sy-tabix = temp22.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_last = <temp21>.
     " a state that doubles and passes 20 KB - below that it is noise
     IF ls_last-kb < 20 OR ls_last-kb < 2 * ls_first-kb.
       RETURN.
     ENDIF.
 
-    DATA(lt_growth) = z2ui5_cl_cockpit_session=>get_growth( id_before = ls_first-id
+
+    lt_growth = z2ui5_cl_cockpit_session=>get_growth( id_before = ls_first-id
                                                            id_after  = ls_last-id ).
-    LOOP AT lt_growth INTO DATA(ls_growth) TO 3.
-      lv_tables = |{ lv_tables }{ COND #( WHEN lv_tables IS NOT INITIAL THEN `, ` ) }| &&
+
+    LOOP AT lt_growth INTO ls_growth TO 3.
+
+      IF lv_tables IS NOT INITIAL.
+        temp16 = `, `.
+      ELSE.
+        CLEAR temp16.
+      ENDIF.
+      lv_tables = |{ lv_tables }{ temp16 }| &&
                   |{ ls_growth-path } { ls_growth-rows_before } -> { ls_growth-rows_after } rows|.
     ENDLOOP.
+
+    IF lv_tables IS NOT INITIAL.
+      temp17 = | Grown most: { lv_tables }.|.
+    ELSE.
+      CLEAR temp17.
+    ENDIF.
     growth_text = |The app state grew from { ls_first-kb } KB (step 1) to { ls_last-kb } KB | &&
                   |(step { ls_last-step }). It is serialized into the draft and read back on every roundtrip, | &&
-                  |so each one gets slower.{ COND #( WHEN lv_tables IS NOT INITIAL
-                                                    THEN | Grown most: { lv_tables }.| ) }|.
+                  |so each one gets slower.{ temp17 }|.
     growth_shown = abap_true.
 
   ENDMETHOD.
@@ -3456,10 +3783,16 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     DATA lv_run TYPE i.
     DATA lv_best TYPE i.
     DATA lv_best_end TYPE i.
+    DATA ls_step LIKE LINE OF t_steps.
+    DATA ls_end LIKE LINE OF t_steps.
+    FIELD-SYMBOLS <temp23> LIKE LINE OF t_steps.
+    DATA temp24 LIKE sy-tabix.
+    DATA temp18 TYPE string.
 
     CLEAR stuck_text.
     CLEAR stuck_shown.
-    LOOP AT t_steps INTO DATA(ls_step).
+
+    LOOP AT t_steps INTO ls_step.
       IF ls_step-follows > 0 AND ls_step-changes = 0 AND ls_step-kb > 0.
         lv_run = lv_run + 1.
         IF lv_run > lv_best.
@@ -3474,9 +3807,24 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(ls_end) = t_steps[ lv_best_end ].
+
+
+
+    temp24 = sy-tabix.
+    READ TABLE t_steps INDEX lv_best_end ASSIGNING <temp23>.
+    sy-tabix = temp24.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_end = <temp23>.
+
+    IF ls_end-event IS NOT INITIAL.
+      temp18 = |, event { ls_end-event }|.
+    ELSE.
+      CLEAR temp18.
+    ENDIF.
     stuck_text = |{ lv_best } roundtrips in a row changed nothing the app keeps (steps { lv_best_end - lv_best + 1 }| &&
-                 | to { lv_best_end }{ COND #( WHEN ls_end-event IS NOT INITIAL THEN |, event { ls_end-event }| ) }). | &&
+                 | to { lv_best_end }{ temp18 }). | &&
                  |The user pressed something again and again - a button without effect, a check that refuses | &&
                  |without a message, or a message the user did not see.|.
     stuck_shown = abap_true.
@@ -3486,6 +3834,20 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   METHOD step_show.
 
     DATA lv_prev TYPE string.
+    FIELD-SYMBOLS <step> LIKE LINE OF t_steps.
+      DATA temp19 TYPE z2ui5_cl_cockpit_session=>ty_s_step-state.
+    DATA ls_step LIKE LINE OF t_steps.
+    FIELD-SYMBOLS <temp25> LIKE LINE OF t_steps.
+    DATA temp26 LIKE sy-tabix.
+    DATA lv_base LIKE ls_step-follows.
+      FIELD-SYMBOLS <temp20> LIKE LINE OF t_steps.
+      DATA temp21 LIKE sy-tabix.
+    DATA temp22 TYPE string.
+    DATA temp6 TYPE xsdboolean.
+    DATA temp7 TYPE xsdboolean.
+    DATA temp8 TYPE xsdboolean.
+    DATA temp9 TYPE xsdboolean.
+      DATA temp23 TYPE string.
 
     IF t_steps IS INITIAL.
       RETURN.
@@ -3497,33 +3859,71 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       step_index = lines( t_steps ).
     ENDIF.
 
-    LOOP AT t_steps ASSIGNING FIELD-SYMBOL(<step>).
-      <step>-state = COND #( WHEN <step>-step = step_index THEN `Information` ELSE `None` ).
+
+    LOOP AT t_steps ASSIGNING <step>.
+
+      IF <step>-step = step_index.
+        temp19 = `Information`.
+      ELSE.
+        temp19 = `None`.
+      ENDIF.
+      <step>-state = temp19.
     ENDLOOP.
-    DATA(ls_step) = t_steps[ step_index ].
-    DATA(lv_base) = ls_step-follows.
+
+
+
+    temp26 = sy-tabix.
+    READ TABLE t_steps INDEX step_index ASSIGNING <temp25>.
+    sy-tabix = temp26.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_step = <temp25>.
+
+    lv_base = ls_step-follows.
     IF step_base > 0 AND step_base <> step_index AND step_base <= lines( t_steps ).
       lv_base = step_base.
     ENDIF.
     IF lv_base > 0.
-      lv_prev = t_steps[ lv_base ]-id.
+
+
+      temp21 = sy-tabix.
+      READ TABLE t_steps INDEX lv_base ASSIGNING <temp20>.
+      sy-tabix = temp21.
+      IF sy-subrc <> 0.
+        ASSERT 1 = 0.
+      ENDIF.
+      lv_prev = <temp20>-id.
     ENDIF.
-    step_pin_text = COND #( WHEN step_base = 0 THEN `Compare with this step`
-                            WHEN step_base = step_index THEN |Unpin step { step_base }|
-                            ELSE |Compare with this step (now: step { step_base })| ).
+
+    IF step_base = 0.
+      temp22 = `Compare with this step`.
+    ELSEIF step_base = step_index.
+      temp22 = |Unpin step { step_base }|.
+    ELSE.
+      temp22 = |Compare with this step (now: step { step_base })|.
+    ENDIF.
+    step_pin_text = temp22.
 
     " the first step has nothing to compare with - all of it, whatever the filter
+
+    temp6 = boolc( step_changes = abap_true AND lv_prev IS NOT INITIAL ).
     s_step = z2ui5_cl_cockpit_session=>get_view( id            = ls_step-id
                                                 id_prev       = lv_prev
                                                 check_all     = step_all
-                                                check_changes = xsdbool( step_changes = abap_true
-                                                                         AND lv_prev IS NOT INITIAL )
+                                                check_changes = temp6
                                                 search        = step_search ).
 
     step_text = |Step { step_index } of { lines( t_steps ) } - { ls_step-time } UTC|.
-    step_can_back = xsdbool( step_index > 1 ).
-    step_can_next = xsdbool( step_index < lines( t_steps ) ).
-    step_has_wire = xsdbool( ls_step-wire_id IS NOT INITIAL OR ls_step-wire_fail_id IS NOT INITIAL ).
+
+    temp7 = boolc( step_index > 1 ).
+    step_can_back = temp7.
+
+    temp8 = boolc( step_index < lines( t_steps ) ).
+    step_can_next = temp8.
+
+    temp9 = boolc( ls_step-wire_id IS NOT INITIAL OR ls_step-wire_fail_id IS NOT INITIAL ).
+    step_has_wire = temp9.
 
     IF s_step-error IS NOT INITIAL.
       step_strip = `Error`.
@@ -3535,9 +3935,16 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       step_info = |{ s_step-app }: { s_step-fields } fields - the state after the first roundtrip of this session | &&
                   |that is still in the draft table.|.
     ELSE.
+
+      IF lv_base <> ls_step-follows.
+        temp23 = ` (pinned for comparison)`.
+      ELSEIF ls_step-delta IS NOT INITIAL.
+        temp23 = |, { ls_step-delta } earlier|.
+      ELSE.
+        CLEAR temp23.
+      ENDIF.
       step_info = |{ s_step-app }: { s_step-changes } of { s_step-fields } fields differ from step | &&
-                  |{ lv_base }{ COND #( WHEN lv_base <> ls_step-follows THEN ` (pinned for comparison)`
-                                        WHEN ls_step-delta IS NOT INITIAL THEN |, { ls_step-delta } earlier| ) }. | &&
+                  |{ lv_base }{ temp23 }. | &&
                   |The values the user typed and what the event did to them.|.
     ENDIF.
     IF ls_step-note IS NOT INITIAL.
@@ -3576,15 +3983,38 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     DATA lv_open TYPE i.
     DATA lv_unknown TYPE i.
 
-    LOOP AT t_occurrences INTO DATA(ls_occ).
+    DATA ls_occ LIKE LINE OF t_occurrences.
+    DATA lt_outcome TYPE z2ui5_cl_cockpit_session=>ty_t_outcome.
+    FIELD-SYMBOLS <occ> LIKE LINE OF t_occurrences.
+      DATA temp24 TYPE z2ui5_cl_cockpit_session=>ty_s_outcome.
+      DATA temp25 TYPE z2ui5_cl_cockpit_session=>ty_s_outcome.
+      DATA ls_outcome LIKE temp24.
+      DATA temp26 TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence-afterwards_state.
+    LOOP AT t_occurrences INTO ls_occ.
       APPEND ls_occ-draft_id_prev TO lt_id.
     ENDLOOP.
-    DATA(lt_outcome) = z2ui5_cl_cockpit_session=>get_outcomes( lt_id ).
 
-    LOOP AT t_occurrences ASSIGNING FIELD-SYMBOL(<occ>).
-      DATA(ls_outcome) = VALUE #( lt_outcome[ sy-tabix ] OPTIONAL ).
+    lt_outcome = z2ui5_cl_cockpit_session=>get_outcomes( lt_id ).
+
+
+    LOOP AT t_occurrences ASSIGNING <occ>.
+
+      CLEAR temp24.
+
+      READ TABLE lt_outcome INTO temp25 INDEX sy-tabix.
+      IF sy-subrc = 0.
+        temp24 = temp25.
+      ENDIF.
+
+      ls_outcome = temp24.
       <occ>-afterwards       = ls_outcome-outcome.
-      <occ>-afterwards_state = COND #( WHEN ls_outcome-state IS NOT INITIAL THEN ls_outcome-state ELSE `None` ).
+
+      IF ls_outcome-state IS NOT INITIAL.
+        temp26 = ls_outcome-state.
+      ELSE.
+        temp26 = `None`.
+      ENDIF.
+      <occ>-afterwards_state = temp26.
       CASE ls_outcome-outcome.
         WHEN z2ui5_cl_cockpit_session=>cs_outcome-continued.
           lv_continued = lv_continued + 1.
@@ -3607,7 +4037,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     DATA lt_id TYPE z2ui5_cl_cockpit_session=>ty_t_id.
 
-    LOOP AT t_occurrences INTO DATA(ls_occ).
+    DATA ls_occ LIKE LINE OF t_occurrences.
+    LOOP AT t_occurrences INTO ls_occ.
       APPEND ls_occ-draft_id_prev TO lt_id.
     ENDLOOP.
     s_failures = z2ui5_cl_cockpit_session=>analyze_failures( it_id = lt_id
@@ -3639,11 +4070,22 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     DATA lv_owner TYPE string.
 
-    s_occ = VALUE #( t_occurrences[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
+    DATA temp27 TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
+    DATA temp28 TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
+    DATA temp10 TYPE xsdboolean.
+      DATA temp29 TYPE string.
+    CLEAR temp27.
+
+    READ TABLE t_occurrences INTO temp28 WITH KEY id = id.
+    IF sy-subrc = 0.
+      temp27 = temp28.
+    ENDIF.
+    s_occ = temp27. "#EC CI_SORTSEQ
     error_text = z2ui5_cl_cockpit_stats=>get_error_text( s_occ-id ).
     CLEAR repro_enabled.
-    session_enabled = xsdbool( s_head-can_change = abap_true
-                               AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
+
+    temp10 = boolc( s_head-can_change = abap_true AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
+    session_enabled = temp10.
 
     IF z2ui5_cl_cockpit_repro=>check_available( ) = abap_false.
       repro_hint = `Reproduce needs the headless frontend (github.com/abap2UI5/headless-frontend).`.
@@ -3665,9 +4107,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                                         owner         = lv_owner ).
     IF repro_hint IS INITIAL.
       repro_enabled = abap_true.
+
+      IF lv_owner = z2ui5_cl_cockpit_repro=>cs_owner-unknown.
+        temp29 = ` - works only if the draft is yours and not expired`.
+      ELSE.
+        CLEAR temp29.
+      ENDIF.
       repro_hint = |Occurrence of { s_occ-time }: draft { s_occ-draft_id_prev }, event { s_occ-event }| &&
-                   |{ COND #( WHEN lv_owner = z2ui5_cl_cockpit_repro=>cs_owner-unknown
-                              THEN ` - works only if the draft is yours and not expired` ) }|.
+                   |{ temp29 }|.
     ENDIF.
 
   ENDMETHOD.
@@ -3675,6 +4122,35 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   METHOD on_event.
 
     DATA lv_flows TYPE string.
+            DATA lv_key TYPE string.
+            DATA temp30 TYPE z2ui5_cl_cockpit_stats=>ty_s_error.
+            DATA temp31 TYPE z2ui5_cl_cockpit_stats=>ty_s_error.
+            DATA temp32 TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence-id.
+            DATA temp33 TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
+              DATA lv_deleted TYPE i.
+            DATA temp34 TYPE string.
+              DATA ls_purge TYPE z2ui5_cl_cockpit_job=>ty_s_result.
+              DATA lv_sent TYPE string.
+              DATA lv_removed TYPE string.
+              DATA lv_draft LIKE s_occ-draft_id.
+              DATA lv_session TYPE string.
+              DATA lv_export TYPE string.
+              DATA temp35 TYPE string_table.
+              DATA temp27 LIKE LINE OF temp35.
+              DATA temp28 LIKE LINE OF temp35.
+                DATA temp37 TYPE string.
+              DATA temp38 TYPE i.
+              DATA lv_nr LIKE temp38.
+              DATA temp39 TYPE z2ui5_cl_cockpit_session=>ty_s_hit.
+              DATA temp40 TYPE z2ui5_cl_cockpit_session=>ty_s_hit.
+              DATA ls_hit LIKE temp39.
+            DATA temp41 TYPE string.
+            DATA temp42 TYPE string.
+                  DATA temp43 TYPE i.
+                  DATA lv_path TYPE string.
+                  DATA lv_changes TYPE i.
+                  DATA temp44 TYPE i.
+        DATA lx TYPE REF TO cx_root.
 
     TRY.
         CASE client->get_event( ).
@@ -3691,14 +4167,29 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             popup_app( ).
 
           WHEN `ERROR_DETAIL`.
-            DATA(lv_key) = client->get_event_arg( ).
-            s_error = VALUE #( t_errors[ key = lv_key ] OPTIONAL ). "#EC CI_SORTSEQ
+
+            lv_key = client->get_event_arg( ).
+
+            CLEAR temp30.
+
+            READ TABLE t_errors INTO temp31 WITH KEY key = lv_key.
+            IF sy-subrc = 0.
+              temp30 = temp31.
+            ENDIF.
+            s_error = temp30. "#EC CI_SORTSEQ
             t_occurrences = z2ui5_cl_cockpit_stats=>get_error_occurrences( is_error = s_error
                                                                           days     = get_days( ) ).
             outcomes_fill( ).
             CLEAR s_failures.
             CLEAR failures_shown.
-            occurrence_select( VALUE #( t_occurrences[ 1 ]-id OPTIONAL ) ).
+
+            CLEAR temp32.
+
+            READ TABLE t_occurrences INTO temp33 INDEX 1.
+            IF sy-subrc = 0.
+              temp32 = temp33-id.
+            ENDIF.
+            occurrence_select( temp32 ).
             popup_error( ).
 
           WHEN `ERROR_OCC`.
@@ -3735,7 +4226,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             IF check_change( ) = abap_true.
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-drafts
                                           text   = |expired drafts deleted, cutoff { s_drafts-cutoff } UTC| ).
-              DATA(lv_deleted) = z2ui5_cl_cockpit_draft=>delete_expired( ).
+
+              lv_deleted = z2ui5_cl_cockpit_draft=>delete_expired( ).
               client->message_toast_display( |{ lv_deleted } expired drafts deleted| ).
               load_tab( ).
             ENDIF.
@@ -3743,12 +4235,19 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `DRAFTS_ANALYZE`.
             s_analysis = z2ui5_cl_cockpit_draft=>analyze( ).
             analyzed = abap_true.
+
+            IF s_analysis-check_partial = abap_true.
+              temp34 = ` (first rows only)`.
+            ELSE.
+              CLEAR temp34.
+            ENDIF.
             analysis_text = |Draft size per app - { s_analysis-rows_analyzed } drafts, { s_analysis-kb_total } KB| &&
-                            |{ COND #( WHEN s_analysis-check_partial = abap_true THEN ` (first rows only)` ) }|.
+                            |{ temp34 }|.
 
           WHEN `LOG_PURGE`.
             IF check_change( ) = abap_true.
-              DATA(ls_purge) = z2ui5_cl_cockpit_job=>purge_own( ).
+
+              ls_purge = z2ui5_cl_cockpit_job=>purge_own( ).
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-purge
                                           text   = |{ ls_purge-log_deleted } log, { ls_purge-agg_deleted } aggregate, | &&
                                                    |{ ls_purge-usr_deleted } user, { ls_purge-act_deleted } activity rows| ).
@@ -3782,7 +4281,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
           WHEN `ALERT_TEST`.
             IF check_change( ) = abap_true.
-              DATA(lv_sent) = z2ui5_cl_cockpit_alert=>send_test( ).
+
+              lv_sent = z2ui5_cl_cockpit_alert=>send_test( ).
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-alert
                                           text   = |test notification: { lv_sent }| ).
               " the commit sends what the notification class queued
@@ -3814,7 +4314,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 load_tab( ).
                 RETURN.
               ENDIF.
-              DATA(lv_removed) = client->get_event_arg( ).
+
+              lv_removed = client->get_event_arg( ).
               z2ui5_cl_cockpit_setup=>remove_admin( lv_removed ).
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-remove
                                           text   = |{ lv_removed } removed| ).
@@ -3841,8 +4342,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             IF check_change( ) = abap_true.
               " the draft the failing roundtrip wrote, if it got that far,
               " else the one it started from - the screen the user was on
-              DATA(lv_draft) = s_occ-draft_id.
-              DATA(lv_session) = z2ui5_cl_cockpit_session=>get_session_of( lv_draft ).
+
+              lv_draft = s_occ-draft_id.
+
+              lv_session = z2ui5_cl_cockpit_session=>get_session_of( lv_draft ).
               IF lv_session IS INITIAL.
                 lv_draft = s_occ-draft_id_prev.
                 lv_session = z2ui5_cl_cockpit_session=>get_session_of( lv_draft ).
@@ -3867,13 +4370,20 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                           text   = |session { s_session-id } exported: { s_session-app }, | &&
                                                    |user { s_session-user }| ).
               COMMIT WORK.
-              DATA(lv_export) = z2ui5_cl_cockpit_session=>export( id   = s_session-id
+
+              lv_export = z2ui5_cl_cockpit_session=>export( id   = s_session-id
                                                                  user = s_session-user ).
+
+              CLEAR temp35.
+
+              temp27 = |data:text/plain;charset=utf-8;base64,| && z2ui5_cl_cockpit_session=>to_base64( lv_export ).
+              INSERT temp27 INTO TABLE temp35.
+
+              temp28 = |session_{ to_lower( s_session-app ) }_{ z2ui5_cl_cockpit_setup=>day_minus( 0 ) }.txt|.
+              INSERT temp28 INTO TABLE temp35.
               client->follow_up_action(
                   val   = z2ui5_if_client=>cs_event-download_b64_file
-                  t_arg = VALUE #( ( |data:text/plain;charset=utf-8;base64,| &&
-                                     z2ui5_cl_cockpit_session=>to_base64( lv_export ) )
-                                   ( |session_{ to_lower( s_session-app ) }_{ z2ui5_cl_cockpit_setup=>day_minus( 0 ) }.txt| ) ) ).
+                  t_arg = temp35 ).
             ENDIF.
 
           WHEN `DRAFTS_FIND`.
@@ -3887,17 +4397,33 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               IF s_find-error IS NOT INITIAL.
                 find_text = s_find-error.
               ELSE.
+
+                IF s_find-check_capped = abap_true.
+                  temp37 = ` - the first hits only`.
+                ELSE.
+                  CLEAR temp37.
+                ENDIF.
                 find_text = |"{ draft_search }" - { lines( s_find-t_hit ) } field(s) in { s_find-matched } of | &&
-                            |{ s_find-drafts } drafts{ COND #( WHEN s_find-check_capped = abap_true
-                                                              THEN ` - the first hits only` ) }. Select one to open | &&
+                            |{ s_find-drafts } drafts{ temp37 }. Select one to open | &&
                             |its session at that step.|.
               ENDIF.
             ENDIF.
 
           WHEN `FIND_OPEN`.
             IF check_change( ) = abap_true.
-              DATA(lv_nr) = CONV i( client->get_event_arg( ) ).
-              DATA(ls_hit) = VALUE #( s_find-t_hit[ nr = lv_nr ] OPTIONAL ). "#EC CI_SORTSEQ
+
+              temp38 = client->get_event_arg( ).
+
+              lv_nr = temp38.
+
+              CLEAR temp39.
+
+              READ TABLE s_find-t_hit INTO temp40 WITH KEY nr = lv_nr.
+              IF sy-subrc = 0.
+                temp39 = temp40.
+              ENDIF.
+
+              ls_hit = temp39. "#EC CI_SORTSEQ
               IF ls_hit IS NOT INITIAL.
                 session_from_error = abap_false.
                 session_open( id     = ls_hit-session
@@ -3915,9 +4441,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             lv_flows = |How users move between apps, from { s_flows-drafts } drafts - "(start)" is | &&
                        |where a session began, "(end)" where a session without a step for 30 minutes | &&
                        |stopped, "(end after an error)" where it stopped right after a failed roundtrip|.
-            flows_text = COND #( WHEN s_flows-error IS NOT INITIAL
-                                 THEN |The draft table could not be read: { s_flows-error }|
-                                 ELSE lv_flows ).
+
+            IF s_flows-error IS NOT INITIAL.
+              temp41 = |The draft table could not be read: { s_flows-error }|.
+            ELSE.
+              temp41 = lv_flows.
+            ENDIF.
+            flows_text = temp41.
 
           WHEN `OVERVIEW_FAILED`.
             IF check_change( ) = abap_true.
@@ -3931,13 +4461,15 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           WHEN `APP_OBJECTS`.
             s_app_objects = z2ui5_cl_cockpit_session=>get_app_objects( detail_app ).
             app_objects_shown = abap_true.
-            app_objects_text = COND #(
-                WHEN s_app_objects-error IS NOT INITIAL
-                THEN |The draft table could not be read: { s_app_objects-error }|
-                WHEN s_app_objects-drafts = 0
-                THEN |No draft of { detail_app } in the draft table - nothing to read the business objects from.|
-                ELSE |The business objects { detail_app } works with, recognized by field name in | &&
-                     |{ s_app_objects-drafts } of its drafts.| ).
+
+            IF s_app_objects-error IS NOT INITIAL.
+              temp42 = |The draft table could not be read: { s_app_objects-error }|.
+            ELSEIF s_app_objects-drafts = 0.
+              temp42 = |No draft of { detail_app } in the draft table - nothing to read the business objects from.|.
+            ELSE.
+              temp42 = |The business objects { detail_app } works with, recognized by field name in | && |{ s_app_objects-drafts } of its drafts.|.
+            ENDIF.
+            app_objects_text = temp42.
 
           WHEN `ERROR_ANALYZE`.
             IF check_change( ) = abap_true.
@@ -4007,14 +4539,22 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             IF check_change( ) = abap_true.
               CASE client->get_event( ).
                 WHEN `STEP_PIN`.
-                  step_base = COND #( WHEN step_base = step_index THEN 0 ELSE step_index ).
+
+                  IF step_base = step_index.
+                    temp43 = 0.
+                  ELSE.
+                    temp43 = step_index.
+                  ENDIF.
+                  step_base = temp43.
                   step_show( step_index ).
                 WHEN `FIELD_HISTORY`.
-                  DATA(lv_path) = client->get_event_arg( ).
+
+                  lv_path = client->get_event_arg( ).
                   t_history = z2ui5_cl_cockpit_session=>get_history( it_step   = t_steps
                                                                      path      = lv_path
                                                                      check_all = step_all ).
-                  DATA(lv_changes) = 0.
+
+                  lv_changes = 0.
                   LOOP AT t_history TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
                     lv_changes = lv_changes + 1.
                   ENDLOOP.
@@ -4032,7 +4572,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 WHEN `STEP_LAST`.
                   step_show( lines( t_steps ) ).
                 WHEN `STEP_GOTO`.
-                  step_show( CONV i( client->get_event_arg( ) ) ).
+
+                  temp44 = client->get_event_arg( ).
+                  step_show( temp44 ).
                 WHEN OTHERS.
                   step_show( step_index ).
               ENDCASE.
@@ -4040,17 +4582,24 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
         ENDCASE.
 
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         client->message_box_display( lx ).
     ENDTRY.
 
   ENDMETHOD.
 
   METHOD load_head.
+    DATA temp45 TYPE z2ui5_cl_cockpit_app=>ty_s_head-platform.
 
     s_head-version    = z2ui5_if_app=>version.
-    s_head-platform   = COND #( WHEN z2ui5_cl_cockpit_inst=>check_cloud( ) = abap_true
-                                THEN `ABAP Cloud` ELSE `Standard ABAP` ).
+
+    IF z2ui5_cl_cockpit_inst=>check_cloud( ) = abap_true.
+      temp45 = `ABAP Cloud`.
+    ELSE.
+      temp45 = `Standard ABAP`.
+    ENDIF.
+    s_head-platform   = temp45.
     s_head-user       = sy-uname.
     s_head-auth_text  = |Administrators - access: { z2ui5_cl_cockpit_auth=>get_mode_text( ) }|.
     s_head-can_change = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
@@ -4063,7 +4612,16 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     DATA lv_capped TYPE string.
     DATA lv_inputs TYPE string.
 
-    DATA(lv_days) = get_days( ).
+    DATA lv_days TYPE i.
+        DATA temp46 TYPE string.
+          DATA temp47 TYPE string.
+            DATA temp29 TYPE string.
+          DATA temp48 TYPE string.
+        DATA temp11 TYPE xsdboolean.
+        DATA temp49 TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
+        DATA lv_admin LIKE LINE OF temp49.
+          DATA temp50 TYPE z2ui5_cl_cockpit_app=>ty_s_admin.
+    lv_days = get_days( ).
 
     CASE tab.
       WHEN `OVERVIEW`.
@@ -4074,7 +4632,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         " a count only - no session is read for it, and no app either
         sessions_failed = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 0
                                                                   check_errors = abap_true )-sessions.
-        sessions_failed_state = COND #( WHEN sessions_failed > 0 THEN `Error` ELSE `Good` ).
+
+        IF sessions_failed > 0.
+          temp46 = `Error`.
+        ELSE.
+          temp46 = `Good`.
+        ENDIF.
+        sessions_failed_state = temp46.
         t_alert_log = z2ui5_cl_cockpit_alert=>get_history( ).
       WHEN `APPS`.
         t_apps   = z2ui5_cl_cockpit_stats=>get_apps( lv_days ).
@@ -4087,16 +4651,21 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         wire_messages_shown = s_head-can_change.
         IF wire_messages_shown = abap_true.
           s_wire_messages = z2ui5_cl_cockpit_wire=>get_messages( lv_days ).
-          wire_messages_text = COND #(
-              WHEN s_wire_messages-error IS NOT INITIAL
-              THEN |Messages users saw - the recordings could not be read: { s_wire_messages-error }|
-              WHEN s_wire_messages-records = 0
-              THEN `Messages users saw - nothing recorded. Call z2ui5_cl_cockpit_wire=>run( server ) instead of ` &&
-                   `abap2UI5 in your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, ` &&
-                   `says where exactly.`
-              ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&
-                   |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) } - | &&
-                   |select one for the session where it was shown last| ).
+
+          IF s_wire_messages-error IS NOT INITIAL.
+            temp47 = |Messages users saw - the recordings could not be read: { s_wire_messages-error }|.
+          ELSEIF s_wire_messages-records = 0.
+            temp47 = `Messages users saw - nothing recorded. Call z2ui5_cl_cockpit_wire=>run( server ) instead of ` && `abap2UI5 in your HTTP handler class (SICF, Handler List) - the Installation tab, row Recorder, ` && `says where exactly.`.
+          ELSE.
+
+            IF s_wire_messages-check_capped = abap_true.
+              temp29 = ` (the newest)`.
+            ELSE.
+              CLEAR temp29.
+            ENDIF.
+            temp47 = |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | && |roundtrips{ temp29 } - | && |select one for the session where it was shown last|.
+          ENDIF.
+          wire_messages_text = temp47.
           IF wire_message_search IS NOT INITIAL.
             DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
                                                          OR app CS wire_message_search ).
@@ -4110,17 +4679,22 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           lv_inputs = |Inputs right before an error - the fields users typed in a roundtrip that answered with an | &&
                       |error box or failed, and how often that happened when they typed them, of | &&
                       |{ s_wire_inputs-records } recorded roundtrips{ lv_capped }|.
-          wire_inputs_text = COND #(
-              WHEN s_wire_inputs-error IS NOT INITIAL
-              THEN |Inputs right before an error - the recordings could not be read: { s_wire_inputs-error }|
-              ELSE lv_inputs ).
+
+          IF s_wire_inputs-error IS NOT INITIAL.
+            temp48 = |Inputs right before an error - the recordings could not be read: { s_wire_inputs-error }|.
+          ELSE.
+            temp48 = lv_inputs.
+          ENDIF.
+          wire_inputs_text = temp48.
         ENDIF.
       WHEN `PERF`.
         t_hints = z2ui5_cl_cockpit_stats=>get_hints( lv_days ).
         t_slow  = z2ui5_cl_cockpit_stats=>get_slowest( lv_days ).
       WHEN `DRAFTS`.
         s_drafts = z2ui5_cl_cockpit_draft=>get_info( ).
-        drafts_failed = xsdbool( s_drafts-check_readable = abap_false ).
+
+        temp11 = boolc( s_drafts-check_readable = abap_false ).
+        drafts_failed = temp11.
         IF sessions_shown = abap_true AND s_head-can_change = abap_true.
           sessions_load( ).
         ENDIF.
@@ -4143,8 +4717,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
           s_alerts-notifier = `none - implement z2ui5_if_cockpit_notify to be told (README, Alerts)`.
         ENDIF.
         CLEAR t_admins.
-        LOOP AT z2ui5_cl_cockpit_setup=>get_admins( ) INTO DATA(lv_admin).
-          APPEND VALUE #( uname = lv_admin ) TO t_admins.
+
+        temp49 = z2ui5_cl_cockpit_setup=>get_admins( ).
+
+        LOOP AT temp49 INTO lv_admin.
+
+          CLEAR temp50.
+          temp50-uname = lv_admin.
+          APPEND temp50 TO t_admins.
         ENDLOOP.
         t_log = z2ui5_cl_cockpit_auth=>get_log( ).
     ENDCASE.
@@ -4179,7 +4759,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     " the lock-manager addon is optional: created by name, never referenced -
     " Z2UI5_CL_APP_SM12 is its name before lock-manager renamed it
     DATA lo_app TYPE REF TO z2ui5_if_app.
-    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( `CL_LOCK_APP_SM12` ).
+    DATA lv_class TYPE string.
+    lv_class = z2ui5_cl_cockpit_inst=>obj_name( `CL_LOCK_APP_SM12` ).
     TRY.
         IF z2ui5_cl_cockpit_inst=>check_class_exists( lv_class ) = abap_false.
           lv_class = z2ui5_cl_cockpit_inst=>obj_name( `CL_APP_SM12` ).
@@ -4235,12 +4816,19 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD model_init.
+    DATA temp51 TYPE string.
 
     days = `7`.
     step_changes = abap_true.
     load_head( ).
     " without the monitor the quick win is the security tab
-    tab = COND #( WHEN s_monitor-check_data = abap_true THEN `OVERVIEW` ELSE `SECURITY` ).
+
+    IF s_monitor-check_data = abap_true.
+      temp51 = `OVERVIEW`.
+    ELSE.
+      temp51 = `SECURITY`.
+    ENDIF.
+    tab = temp51.
     load_tab( ).
 
   ENDMETHOD.

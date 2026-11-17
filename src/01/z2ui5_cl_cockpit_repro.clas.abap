@@ -34,7 +34,7 @@ CLASS z2ui5_cl_cockpit_repro DEFINITION PUBLIC FINAL CREATE PUBLIC.
         type TYPE string,
         text TYPE string,
       END OF ty_s_message.
-    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
+    TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH DEFAULT KEY.
 
     TYPES:
       BEGIN OF ty_s_result,
@@ -136,10 +136,14 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
     DATA lo_sim TYPE REF TO object.
     DATA lv_id TYPE string.
     DATA lv_event TYPE string.
+    DATA lv_class TYPE string.
+        DATA lx_resume TYPE REF TO cx_root.
+        DATA lx_click TYPE REF TO cx_root.
 
     lv_id = draft_id_prev.
     lv_event = event.
-    DATA(lv_class) = z2ui5_cl_cockpit_inst=>obj_name( c_simulator ).
+
+    lv_class = z2ui5_cl_cockpit_inst=>obj_name( c_simulator ).
 
     TRY.
         CALL METHOD (lv_class)=>(`RESUME`)
@@ -147,7 +151,8 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
             id     = lv_id
           RECEIVING
             result = lo_sim.
-      CATCH cx_root INTO DATA(lx_resume).
+
+      CATCH cx_root INTO lx_resume.
         result-strip_type = `Warning`.
         result-summary    = `Not replayed - the draft could not be resumed. It expired, belongs to another user, ` &&
                             `or the headless frontend is not compatible with this cockpit.`.
@@ -165,7 +170,8 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
         result-strip_type = `Success`.
         result-summary    = |Replayed: event { lv_event } ran without an exception this time. The cause may depend | &&
                             |on values typed in that roundtrip, on the data at that time or on the original user.|.
-      CATCH cx_root INTO DATA(lx_click).
+
+      CATCH cx_root INTO lx_click.
         result-check_error = abap_true.
         result-strip_type  = `Error`.
         result-summary     = |Reproduced: event { lv_event } ends in an exception again.|.
@@ -188,6 +194,8 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
     FIELD-SYMBOLS <text> TYPE any.
     FIELD-SYMBOLS <xml> TYPE any.
     FIELD-SYMBOLS <layer> TYPE any.
+            DATA temp5 TYPE z2ui5_cl_cockpit_repro=>ty_s_message.
+            FIELD-SYMBOLS <message> TYPE z2ui5_cl_cockpit_repro=>ty_s_message.
 
     TRY.
         CALL METHOD io_sim->(`GET_APP`)
@@ -213,7 +221,11 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
           ASSIGN COMPONENT `TYPE` OF STRUCTURE <row> TO <type>.
           ASSIGN COMPONENT `TEXT` OF STRUCTURE <row> TO <text>.
           IF <text> IS ASSIGNED.
-            APPEND VALUE #( text = <text> ) TO cs_result-t_message ASSIGNING FIELD-SYMBOL(<message>).
+
+            CLEAR temp5.
+            temp5-text = <text>.
+
+            APPEND temp5 TO cs_result-t_message ASSIGNING <message>.
             IF <type> IS ASSIGNED.
               <message>-type = <type>.
             ENDIF.
@@ -248,11 +260,14 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
   METHOD create_type.
 
     " the relative name first, the absolute one where a runtime knows only that
-    DATA(lv_relative) = |{ z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) }=>{ name }|.
+    DATA lv_relative TYPE string.
+        DATA lv_absolute TYPE string.
+    lv_relative = |{ z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) }=>{ name }|.
     TRY.
         CREATE DATA result TYPE (lv_relative).
       CATCH cx_sy_create_data_error.
-        DATA(lv_absolute) = |\\CLASS={ z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) }\\TYPE={ name }|.
+
+        lv_absolute = |\\CLASS={ z2ui5_cl_cockpit_inst=>obj_name( c_simulator ) }\\TYPE={ name }|.
         CREATE DATA result TYPE (lv_absolute).
     ENDTRY.
 
@@ -261,13 +276,22 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
   METHOD chain_text.
 
     DATA lx TYPE REF TO cx_root.
+      DATA lv_class TYPE string.
+      DATA temp6 TYPE string.
     lx = ix.
     DO 20 TIMES.
       IF lx IS NOT BOUND.
         RETURN.
       ENDIF.
-      DATA(lv_class) = cl_abap_typedescr=>describe_by_object_ref( lx )->get_relative_name( ).
-      result = |{ result }{ COND #( WHEN result IS NOT INITIAL THEN cl_abap_char_utilities=>newline ) }| &&
+
+      lv_class = cl_abap_typedescr=>describe_by_object_ref( lx )->get_relative_name( ).
+
+      IF result IS NOT INITIAL.
+        temp6 = cl_abap_char_utilities=>newline.
+      ELSE.
+        CLEAR temp6.
+      ENDIF.
+      result = |{ result }{ temp6 }| &&
                |{ lv_class }: { lx->get_text( ) }|.
       lx = lx->previous.
     ENDDO.
