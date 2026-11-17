@@ -8,6 +8,7 @@
     "lint:cloud": "abaplint .github/abaplint/abap_cloud.jsonc",
     "lint:standalone": "abaplint .github/abaplint/abap_standalone.jsonc",
     "lint:702": "abaplint .github/abaplint/abap_702.jsonc",
+    "check:702": "bash .github/scripts/check-702.sh",
     "unit": "node .github/scripts/unit.mjs",
     "test": "npm run unit",
     "check:shorttext": "node .github/scripts/shorttext.mjs",

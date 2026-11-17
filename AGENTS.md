@@ -22,8 +22,9 @@ README.md is the user documentation; keep it in step with every change.
 | `src/01/` | Everything that activates on released abap2UI5: the app, the tables `Z2UI5_T_20` - `Z2UI5_T_28`, settings (`_setup`), authorization, claim and change log (`z2ui5_if_cockpit_auth`, `_auth`), installation & security (`_inst`), draft table (`_draft`), sessions - the draft chains step by step (`_session`), the request/response recorder and the screen playback (`_wire`, table `Z2UI5_T_28`, called from the customer's ICF handler, never from the monitor), statistics (`_stats`), the recorder (`_rec`), housekeeping (`_job`), the agent addon's figures (`_agent`), reproduce via the headless frontend (`_repro`), alerts and their notification (`_alert`, `z2ui5_if_cockpit_notify`, table `Z2UI5_T_23`); ABAP Unit tests in `*.clas.testclasses.abap` |
 | `src/02/` | `z2ui5_cl_cockpit_monitor` only - the one object that names `z2ui5_if_ui5_monitor` |
 | `.github/abaplint/` | `abap_cloud.jsonc`, `abap_702.jsonc`, `abap_standalone.jsonc` (src/01 against released abap2UI5) |
-| `.github/workflows/` | `ABAP_STANDARD`, `ABAP_CLOUD`, `ABAP_702`, `ABAP_UNIT`, `check-abap2UI5`, `check-rename`, `build-rename`, `publish-standalone`, `publish-702` (and `abap-702`, which lints the generated `702` branch), `bump-deps`, `deploy-pages` |
-| `.github/scripts/unit.mjs` | `npm run unit` - the ABAP Unit tests on abap2UI5's transpiled runtime, in `.unit/` (git-ignored); `ABAP_UNIT` runs it |
+| `.github/workflows/` | `ci`, `ci-702`, `build-rename`, `bump-deps`, `deploy-pages` (callers of the shared CI template - section CI below) and `publish-standalone` (this repository's own) |
+| `.github/scripts/unit.mjs` | `npm run unit` - the ABAP Unit tests on abap2UI5's transpiled runtime, in `.unit/` (git-ignored); the `unit` job of `ci` runs it |
+| `.github/scripts/check-702.sh` | `npm run check:702` - a scratch copy of `src/` in `build/702` downported and linted with `abap_702.jsonc`; `src/` is never rewritten |
 | `abaplint.jsonc` | Standard ABAP 7.50, the strict rule set |
 | `abap2ui5lint.jsonc` | the abap2UI5 linter (UI5 1.71 floor, `chain-house-layout`) |
 
@@ -173,7 +174,7 @@ the roll-area buffer with `z2ui5_cl_cockpit_setup=>set_buffer( )`, never into
 the table. Classes that touch the database are `RISK LEVEL DANGEROUS`, use the
 app `ZZ_COCKPIT_UNIT_TEST` and days in 2099, never commit (`write( )`, not
 `record( )`), and `teardown` deletes their rows and rolls back. They run on
-abap2UI5's transpiled runtime (`npm run unit`, CI `ABAP_UNIT`; README,
+abap2UI5's transpiled runtime (`npm run unit`, CI: the `unit` job of `ci`; README,
 "Development") - keep them runnable there: no `sy-sysid` skips, implement
 every interface method a double needs.
 
@@ -186,7 +187,7 @@ every interface method a double needs.
   share (`z2ui5_t_20` - `_28` here); every object name ≤ 25 characters
   (namespace rename budget).
 - ABAP Cloud and 7.50: released APIs only (`npm run lint:cloud`); the 7.02
-  downport must lint (`ABAP_702`). After the downport the `@` escapes are
+  downport must lint (`npm run check:702`). After the downport the `@` escapes are
   gone - **never name a host variable like a column** (`WHERE day = @day`
   becomes `day = day`). Write a `SELECT` with `INTO` as its last clause and
   `UP TO n ROWS` right after it (`... WHERE ... ORDER BY ... INTO TABLE @x UP
@@ -231,7 +232,7 @@ every interface method a double needs.
 ```
 npm ci
 npm run lint && npm run lint:cloud && npm run lint:standalone && npm run check:abap2ui5
-npm run downport && npm run lint:702     # rewrites src/ - run on a copy, never commit
+npm run check:702                        # downports a scratch copy in build/702 and lints it
 npm run unit                             # ABAP Unit on the transpiled runtime - README, "Development"
 ```
 
@@ -241,9 +242,39 @@ class (README, "Development").
 Local runs can pre-fill `.abaplint-deps/` (git-ignored) - abaplint uses a
 dependency folder that exists instead of cloning.
 
+## CI
+
+CI comes from the shared CI template of abap2UI5-addons (reusable workflows in
+[rap-ext](https://github.com/abap2UI5-addons/rap-ext/blob/main/.github/ci/README.md),
+pinned by commit in the `uses:` lines and moved by `bump-deps`):
+
+* `ci` - push to `main`, every pull request, weekly and by hand; one job per
+  check: abaplint with `abaplint.jsonc` (Standard, both packages),
+  `.github/abaplint/abap_cloud.jsonc` (ABAP Cloud) and
+  `.github/abaplint/abap_standalone.jsonc` (package 01 against the released
+  abap2UI5); `npm run check:shorttext` and `npm run check:702` (the 7.02 gate
+  of a pull request, on a scratch copy); `unit` (`npm run unit`); `rename`
+  (`npm run rename`); `abap2ui5lint` (render off - `abap2ui5lint.jsonc` has
+  `"render": false`)
+* `ci-702` - on every push to `main` `npm run auto_downport`, a force-push of
+  the result to the branch `702`, then abaplint on that branch
+  (`.github/abaplint/abap_702.jsonc`). Never commit to `702` by hand.
+* `build-rename` (manual), `deploy-pages`, `bump-deps` (monthly; the template
+  pin moves only with the `DEPS_TOKEN` secret)
+* `publish-standalone` - not from the template: lints package 01 against the
+  released abap2UI5 and force-pushes `main` without `src/02` to `standalone`
+
+This addon builds on no sibling addon, so there is no `.github/deps.json`.
+The required status checks of the branch protection are the job names of
+`ci`: `check / abaplint (./abaplint.jsonc)`, `check / abaplint
+(.github/abaplint/abap_cloud.jsonc)`, `check / abaplint
+(.github/abaplint/abap_standalone.jsonc)`, `check / npm run check:shorttext`,
+`check / npm run check:702`, `check / unit`, `check / rename`,
+`check / abap2ui5lint`.
+
 ## Namespace rename
 
-`npm run rename` (CI: `check-rename`) and the manual `build-rename` workflow
+`npm run rename` (CI: the `rename` job of `ci`) and the manual `build-rename` workflow
 are abap2UI5's namespace rename for this addon - `.github/scripts/rename.mjs`,
 the same file in every addon that has one. Every `z2ui5_` object becomes
 `<name>_...`, for a customer name such as `ZMYUI5` or a registered namespace

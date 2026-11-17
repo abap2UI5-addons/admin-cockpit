@@ -5,11 +5,8 @@
 [![abap2UI5](https://img.shields.io/badge/requires-abap2UI5-blue)](https://github.com/abap2UI5/abap2UI5)
 [![License](https://img.shields.io/github/license/abap2UI5-addons/admin-cockpit)](LICENSE)
 <br>
-[![ABAP Cloud](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_CLOUD.yaml?branch=main&label=ABAP%20Cloud)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_CLOUD.yaml)
-[![ABAP Standard](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_STANDARD.yaml?branch=main&label=ABAP%20Standard)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_STANDARD.yaml)
-[![ABAP 7.02](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_702.yaml?branch=main&label=ABAP%207.02)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_702.yaml)
-[![ABAP Unit](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ABAP_UNIT.yaml?branch=main&label=ABAP%20Unit)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ABAP_UNIT.yaml)
-[![check-abap2UI5](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/check-abap2UI5.yaml?branch=main&label=check-abap2UI5)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/check-abap2UI5.yaml)
+[![CI](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ci.yaml?branch=main&label=CI)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ci.yaml)
+[![ABAP 7.02](https://img.shields.io/github/actions/workflow/status/abap2UI5-addons/admin-cockpit/ci-702.yaml?branch=main&label=ABAP%207.02)](https://github.com/abap2UI5-addons/admin-cockpit/actions/workflows/ci-702.yaml)
 
 **See whether abap2UI5 is used, fast and safely configured - in one abap2UI5
 app.** The Admin Cockpit shows usage and errors per app, response times with
@@ -43,7 +40,7 @@ Good for:
 
 - ABAP Cloud or Standard ABAP 7.50 or higher, released APIs only; on
   NetWeaver 7.02 - 7.40 the branch `702`, downported automatically from `main`
-  on every push (`publish-702`) - pull abap2UI5 from its `702` branch as
+  on every push (`ci-702`) - pull abap2UI5 from its `702` branch as
   well. The UI runs on UI5 1.71 and later (OpenUI5 and SAPUI5): IconTabBar, GenericTile, sap.m tables - no
   SAPUI5-only micro charts.
 - [abap2UI5](https://github.com/abap2UI5/abap2UI5) 1.146.0 or later; for
@@ -783,10 +780,10 @@ npm ci
 npm run lint            # abaplint, Standard ABAP 7.50, both packages
 npm run lint:cloud      # ABAP Cloud
 npm run lint:standalone # package 01 against the released abap2UI5
-npm run lint:702        # after npm run downport (rewrites src/ - CI only)
+npm run check:702       # a scratch copy downported and linted (src/ untouched)
 npm run check:abap2ui5  # the abap2UI5 linter: views, bindings, chain layout
 npm run unit            # the ABAP Unit tests on abap2UI5's transpiled runtime
-npm run check           # what the pull request workflows run: the short-text
+npm run check           # most of what the ci workflow runs: the short-text
                         # check, the three lints, the abap2UI5 linter, the rename
 ```
 
@@ -804,8 +801,8 @@ they run on abap2UI5's transpiled runtime (SQLite behind the database
 statements, so the `DANGEROUS` classes run too): `npm run unit` runs every
 `Z2UI5_CL_COCKPIT*` test, `UNIT_FILTER=ltcl_rec npm run unit` only those whose
 `OBJECT: class->method` contains the text. `.github/scripts/unit.mjs` is the
-whole recipe, and the `ABAP_UNIT` workflow runs the same script on every push
-and pull request: a checkout of abap2UI5 (the branch with
+whole recipe, and the `unit` job of the `ci` workflow runs the same script on
+every push to main and every pull request: a checkout of abap2UI5 (the branch with
 `z2ui5_if_ui5_monitor`) in `.unit/abap2UI5` (git-ignored; cloned on the first
 run, refreshed on every later one), `npm ci` there, `src/01` and `src/02`
 copied in as one more package, `npm run downport && npm run auto_transpile`,
