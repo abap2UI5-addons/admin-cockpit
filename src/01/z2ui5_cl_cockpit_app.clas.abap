@@ -130,6 +130,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PROTECTED SECTION.
     DATA client     TYPE REF TO z2ui5_if_client.
+    " whether the user may change - the copy every decision reads. The public
+    " s_head-can_change only feeds the view: a bound attribute comes back from
+    " the browser, so a display-only user could set it to true there
+    DATA change_allowed TYPE abap_bool.
     " the app the process variants are of - empty for all apps
     DATA variants_app TYPE string.
     DATA detail_app TYPE string.
@@ -245,6 +249,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       view_no_auth( ).
       RETURN.
     ENDIF.
+
+    " undo whatever the browser wrote into the bound copy
+    s_head-can_change = change_allowed.
 
     IF client->check_on_init( ).
       model_init( ).
@@ -3643,14 +3650,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     s_occ = VALUE #( t_occurrences[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
     error_text = z2ui5_cl_cockpit_stats=>get_error_text( s_occ-id ).
     CLEAR repro_enabled.
-    session_enabled = xsdbool( s_head-can_change = abap_true
+    session_enabled = xsdbool( change_allowed = abap_true
                                AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
 
     IF z2ui5_cl_cockpit_repro=>check_available( ) = abap_false.
       repro_hint = `Reproduce needs the headless frontend (github.com/abap2UI5/headless-frontend).`.
       RETURN.
     ENDIF.
-    IF s_head-can_change = abap_false.
+    IF change_allowed = abap_false.
       repro_hint = `Reproduce re-runs app logic - administrators only.`.
       RETURN.
     ENDIF.
@@ -4074,7 +4081,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                 THEN `ABAP Cloud` ELSE `Standard ABAP` ).
     s_head-user       = sy-uname.
     s_head-auth_text  = |Administrators - access: { z2ui5_cl_cockpit_auth=>get_mode_text( ) }|.
-    s_head-can_change = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
+    change_allowed    = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
+    s_head-can_change = change_allowed.
     s_monitor         = z2ui5_cl_cockpit_stats=>get_monitor( ).
 
   ENDMETHOD.
@@ -4105,7 +4113,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       WHEN `ERRORS`.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
         " the texts users saw - administrators only, they hold business data
-        wire_messages_shown = s_head-can_change.
+        wire_messages_shown = change_allowed.
         IF wire_messages_shown = abap_true.
           s_wire_messages = z2ui5_cl_cockpit_wire=>get_messages( lv_days ).
           wire_messages_text = COND #(
@@ -4142,7 +4150,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       WHEN `DRAFTS`.
         s_drafts = z2ui5_cl_cockpit_draft=>get_info( ).
         drafts_failed = xsdbool( s_drafts-check_readable = abap_false ).
-        IF sessions_shown = abap_true AND s_head-can_change = abap_true.
+        IF sessions_shown = abap_true AND change_allowed = abap_true.
           sessions_load( ).
         ENDIF.
       WHEN `SECURITY`.
@@ -4151,7 +4159,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         t_addons  = z2ui5_cl_cockpit_inst=>get_addons( ).
       WHEN `LIVE`.
         s_live = z2ui5_cl_cockpit_stats=>get_live( ).
-        IF s_head-can_change = abap_true.
+        IF change_allowed = abap_true.
           s_live_sessions = z2ui5_cl_cockpit_session=>get_sessions( max_sessions   = 50
                                                                     active_minutes = 5 ).
         ENDIF.
