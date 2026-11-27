@@ -248,6 +248,7 @@ CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT
     METHODS teardown.
 
     METHODS salt_rotates_daily FOR TESTING.
+    METHODS no_salt_for_a_past_day FOR TESTING.
 
     METHODS salt_exists
       IMPORTING
@@ -302,6 +303,28 @@ CLASS ltcl_salt IMPLEMENTATION.
                                          act = lv_day2 ).
     cl_abap_unit_assert=>assert_true( salt_exists( `20990102` ) ).
     cl_abap_unit_assert=>assert_false( salt_exists( `20990101` ) ).
+
+  ENDMETHOD.
+
+  METHOD no_salt_for_a_past_day.
+
+    " a roundtrip of yesterday recorded today: its salt is gone on purpose -
+    " no pseudonym rather than a new salt that deletes today's
+    cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                                                           day   = `20000101` ) ).
+    cl_abap_unit_assert=>assert_false( salt_exists( `20000101` ) ).
+
+    " a later day's salt survives the creation of an earlier one
+    DATA(lv_later) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                                       day   = `20990102` ).
+    CLEAR z2ui5_cl_cockpit_setup=>gv_salt_day.
+    CLEAR z2ui5_cl_cockpit_setup=>gv_salt.
+    z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                      day   = `20990101` ).
+    cl_abap_unit_assert=>assert_true( salt_exists( `20990102` ) ).
+    cl_abap_unit_assert=>assert_true( salt_exists( `20990101` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 64
+                                        act = strlen( lv_later ) ).
 
   ENDMETHOD.
 

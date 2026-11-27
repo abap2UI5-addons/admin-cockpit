@@ -481,9 +481,10 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
     DATA lv_value TYPE ty_s_row-value.
     " One random salt per UTC day, stored as SALT_<day>. The salt of every
-    " earlier day is deleted when a new one is created: from that moment the
-    " pseudonyms of the earlier day can no longer be recomputed from a name,
-    " not even by an administrator with database access - which is the point.
+    " earlier day is deleted when a new one is created, and none is created
+    " again for a day before today: from that moment the pseudonyms of the
+    " earlier day can no longer be recomputed from a name, not even by an
+    " administrator with database access - which is the point.
     IF gv_salt_day = day AND gv_salt IS NOT INITIAL.
       result = gv_salt.
       RETURN.
@@ -495,6 +496,13 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
       WHERE name = @lv_name
       INTO @lv_value.
     IF sy-subrc <> 0.
+      " never for a day before today: its salt was deleted on purpose (a
+      " roundtrip that started before midnight UTC, a buffered entry) - a
+      " new one would make the day's pseudonyms differ, and its creation
+      " would delete the salt of today
+      IF day < day_of( now( ) ).
+        RETURN.
+      ENDIF.
       TRY.
           lv_value = cl_system_uuid=>create_uuid_c32_static( ).
         CATCH cx_uuid_error.
@@ -509,9 +517,11 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
           WHERE name = @lv_name
           INTO @lv_value.
       ELSE.
+        " the earlier days only - a later day's salt another work process
+        " created around midnight stays
         DELETE FROM z2ui5_t_26
           WHERE name LIKE 'SALT_%'
-            AND name <> @lv_name.
+            AND name < @lv_name.
       ENDIF.
     ENDIF.
 
