@@ -88,9 +88,23 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
         settings TYPE ty_s_settings.
 
     "! Remember the day of the last purge (monitor housekeeping).
+    "! Deprecated - the recorders claim the day with claim_purge( ), which
+    "! lets exactly one work process purge; kept for callers of its own.
     CLASS-METHODS set_last_purge
       IMPORTING
         day TYPE clike.
+
+    "! Claim the daily purge of the own tables for a UTC day: abap_true for
+    "! exactly one caller per day - a conditional UPDATE of LAST_PURGE that
+    "! moves it forward only (an INSERT for the very first purge). Not
+    "! committed: the caller commits the claim before it purges, so the row
+    "! is locked for no longer than this statement.
+    "! @parameter day | the UTC day YYYYMMDD
+    CLASS-METHODS claim_purge
+      IMPORTING
+        day           TYPE clike
+      RETURNING
+        VALUE(result) TYPE abap_bool.
 
     CLASS-METHODS get_admins
       RETURNING
@@ -399,6 +413,31 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     row_save( name  = `LAST_PURGE`
               value = day ).
     gs_settings-last_purge = day.
+
+  ENDMETHOD.
+
+  METHOD claim_purge.
+
+    DATA ls_row TYPE z2ui5_t_26.
+    " host variables named like no column (the 7.02 downport drops the @)
+    DATA(lv_key) = CONV ty_s_row-name( `LAST_PURGE` ).
+    DATA(lv_day) = CONV ty_s_row-value( day ).
+
+    " asked once per roll area and day, whoever wins
+    gs_settings-last_purge = day.
+
+    UPDATE z2ui5_t_26 SET value = @lv_day
+      WHERE name = @lv_key
+        AND value < @lv_day.
+    IF sy-dbcnt > 0.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    " no row yet, or the day is claimed already - the INSERT tells which
+    ls_row-name  = lv_key.
+    ls_row-value = lv_day.
+    INSERT z2ui5_t_26 FROM @ls_row.
+    result = xsdbool( sy-subrc = 0 ).
 
   ENDMETHOD.
 

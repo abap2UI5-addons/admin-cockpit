@@ -845,10 +845,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           RETURN.
         ENDIF.
 
-        IF ls_set-last_purge <> ls_row-utc_day.
-          z2ui5_cl_cockpit_setup=>set_last_purge( ls_row-utc_day ).
-          z2ui5_cl_cockpit_job=>purge_own( ).
-        ENDIF.
+        z2ui5_cl_cockpit_job=>purge_daily( ).
         DATA(lt_buffer) = gt_buffer.
         CLEAR gt_buffer.
         APPEND ls_row TO lt_buffer.

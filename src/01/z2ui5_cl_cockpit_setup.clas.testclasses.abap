@@ -237,9 +237,10 @@ CLASS ltcl_privacy IMPLEMENTATION.
 ENDCLASS.
 
 
-"! The daily salt rotation, against Z2UI5_T_26: test days in the year
-"! 2099, nothing committed - teardown deletes the test rows and rolls back,
-"! which also brings back the salt of today that the rotation deletes.
+"! The daily salt rotation and the claim of the daily purge, against
+"! Z2UI5_T_26: test days in the year 2099, nothing committed - teardown
+"! deletes the test rows and rolls back, which also brings back the salt of
+"! today that the rotation deletes and the day of the last purge.
 CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
 
   PRIVATE SECTION.
@@ -249,6 +250,7 @@ CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT
 
     METHODS salt_rotates_daily FOR TESTING.
     METHODS no_salt_for_a_past_day FOR TESTING.
+    METHODS purge_claimed_once FOR TESTING.
 
     METHODS salt_exists
       IMPORTING
@@ -325,6 +327,19 @@ CLASS ltcl_salt IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( salt_exists( `20990101` ) ).
     cl_abap_unit_assert=>assert_equals( exp = 64
                                         act = strlen( lv_later ) ).
+
+  ENDMETHOD.
+
+  METHOD purge_claimed_once.
+
+    " one work process per day purges: the claim moves LAST_PURGE forward
+    " only - an earlier day, or the same day again, is no claim
+    cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_setup=>claim_purge( `20990101` ) ).
+    cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_setup=>claim_purge( `20990101` ) ).
+    cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_setup=>claim_purge( `20981231` ) ).
+    cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_setup=>claim_purge( `20990102` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `20990102`
+                                        act = z2ui5_cl_cockpit_setup=>get( )-last_purge ).
 
   ENDMETHOD.
 

@@ -246,7 +246,9 @@ records errors fully and only a share of the rest - decided on the
 milliseconds of the start time - weighted so counts stay estimates of the
 totals; `ERRORS` records failed roundtrips only; `OFF` stops
 recording without uninstalling. The own tables purge themselves once per day
-on the first recorded roundtrip.
+on the first recorded roundtrip that is not sticky: that roundtrip claims the
+UTC day (`LAST_PURGE` moves forward in one conditional `UPDATE`, committed on
+its own), so exactly one work process purges and no other waits for it.
 
 **Only one monitor is called.** If your installation has a monitor of its own
 that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call

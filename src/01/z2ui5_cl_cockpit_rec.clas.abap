@@ -105,10 +105,6 @@ CLASS z2ui5_cl_cockpit_rec DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
-    CLASS-METHODS purge_daily
-      IMPORTING
-        day TYPE clike.
-
     "! The increment of a sum column: val times weight, saturated at the
     "! largest DEC 15 - never an overflow dump, whatever the core reports.
     CLASS-METHODS sum_inc
@@ -157,6 +153,12 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
             APPEND is_roundtrip TO gt_buffer.
           ENDIF.
           RETURN.
+        ENDIF.
+
+        " once per UTC day: the own tables follow their retention without a
+        " background job - the claim of the day is committed on its own
+        IF z2ui5_cl_cockpit_setup=>get( )-mode <> z2ui5_cl_cockpit_setup=>cs_mode-off.
+          z2ui5_cl_cockpit_job=>purge_daily( ).
         ENDIF.
 
         DATA(lt_buffer) = gt_buffer.
@@ -216,10 +218,6 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
 
     DATA(lv_day) = z2ui5_cl_cockpit_setup=>day_of( ls_rt-timestampl ).
     DATA(lv_hour) = z2ui5_cl_cockpit_setup=>hour_of( ls_rt-timestampl ).
-
-    IF ls_set-last_purge <> lv_day.
-      purge_daily( lv_day ).
-    ENDIF.
 
     write_agg( is_rt  = ls_rt
                day    = lv_day
@@ -440,16 +438,6 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ls_log-error_text     = is_rt-error_text.
 
     INSERT z2ui5_t_25 FROM @ls_log.
-
-  ENDMETHOD.
-
-  METHOD purge_daily.
-
-    " once per UTC day, on the first recorded roundtrip: the own tables
-    " follow their retention without a background job. The job class does
-    " the same on demand.
-    z2ui5_cl_cockpit_setup=>set_last_purge( day ).
-    z2ui5_cl_cockpit_job=>purge_own( ).
 
   ENDMETHOD.
 

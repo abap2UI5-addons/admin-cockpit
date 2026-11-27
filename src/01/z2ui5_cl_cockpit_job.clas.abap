@@ -42,6 +42,14 @@ CLASS z2ui5_cl_cockpit_job DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_s_result.
 
+    "! The recorders' daily purge (z2ui5_cl_cockpit_rec, _wire): the first
+    "! call of a UTC day claims the day (z2ui5_cl_cockpit_setup=&gt;claim_purge),
+    "! commits the claim alone and purges the own tables - every other call
+    "! of the day does nothing. Commits: only where the LUW holds nothing
+    "! else, in a roundtrip that is not sticky. The purge itself is the
+    "! caller's to commit.
+    CLASS-METHODS purge_daily.
+
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -74,6 +82,23 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
         ROLLBACK WORK.                                   "#EC CI_ROLLBACK
         result-message = |{ result-message }; alerts not evaluated: { lx_alert->get_text( ) }|.
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD purge_daily.
+
+    DATA(lv_day) = z2ui5_cl_cockpit_setup=>day_of( z2ui5_cl_cockpit_setup=>now( ) ).
+    " the buffered day first - one statement per roll area and day at most
+    IF z2ui5_cl_cockpit_setup=>get( )-last_purge >= lv_day.
+      RETURN.
+    ENDIF.
+    IF z2ui5_cl_cockpit_setup=>claim_purge( lv_day ) = abap_false.
+      RETURN.
+    ENDIF.
+    " the claim alone: the row of LAST_PURGE is not held while the purge
+    " runs, and a purge that fails is not tried again on every roundtrip
+    COMMIT WORK.
+    purge_own( ).
 
   ENDMETHOD.
 
