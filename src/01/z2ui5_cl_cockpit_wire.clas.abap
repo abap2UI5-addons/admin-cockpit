@@ -578,12 +578,6 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
-    CLASS-METHODS to_utf8
-      IMPORTING
-        val           TYPE string
-      RETURNING
-        VALUE(result) TYPE xstring.
-
 ENDCLASS.
 
 
@@ -1247,7 +1241,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     IF json IS INITIAL.
       RETURN.
     ENDIF.
-    DATA(lo_reader) = cl_sxml_string_reader=>create( to_utf8( json ) ).
+    DATA(lo_reader) = cl_sxml_string_reader=>create( z2ui5_cl_cockpit_session=>to_utf8( json ) ).
 
     DO.
       DATA(lo_node) = lo_reader->read_next_node( ).
@@ -2804,42 +2798,6 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                  sub = `"` ).
     ENDIF.
     result = z2ui5_cl_cockpit_session=>decode( result ).
-
-  ENDMETHOD.
-
-  METHOD to_utf8.
-
-    DATA lo_conv TYPE REF TO object.
-    DATA lv_class TYPE c LENGTH 30.
-
-    " by name, as in z2ui5_cl_cockpit_session=>to_base64
-    TRY.
-        lv_class = `CL_ABAP_CONV_CODEPAGE`.
-        CALL METHOD (lv_class)=>create_out
-          RECEIVING
-            instance = lo_conv.
-        CALL METHOD lo_conv->(`IF_ABAP_CONV_OUT~CONVERT`)
-          EXPORTING
-            source = val
-          RECEIVING
-            result = result.
-      CATCH cx_root.
-        TRY.
-            lv_class = `CL_ABAP_CONV_OUT_CE`.
-            CALL METHOD (lv_class)=>create
-              EXPORTING
-                encoding = `UTF-8`
-              RECEIVING
-                conv     = lo_conv.
-            CALL METHOD lo_conv->(`CONVERT`)
-              EXPORTING
-                data   = val
-              IMPORTING
-                buffer = result.
-          CATCH cx_root.
-            CLEAR result.
-        ENDTRY.
-    ENDTRY.
 
   ENDMETHOD.
 

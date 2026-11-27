@@ -599,6 +599,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! A text as UTF-8 - through whichever converter the release has, by
+    "! name: the modern one is missing on 7.02, the classic one is not
+    "! released in ABAP Cloud. Empty when neither is there.
+    CLASS-METHODS to_utf8
+      IMPORTING
+        val           TYPE string
+      RETURNING
+        VALUE(result) TYPE xstring.
+
     "! The session of every draft - the first draft of its chain. A chain
     "! ends at a draft without predecessor or whose predecessor is gone.
     CLASS-METHODS roots_of
@@ -2046,23 +2055,11 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD to_base64.
+  METHOD to_utf8.
 
-    CONSTANTS lc_alphabet TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`.
-    DATA lt_part TYPE string_table.
-    DATA lv_utf8 TYPE xstring.
-    DATA lv_byte TYPE x LENGTH 1.
-    DATA lv_off TYPE i.
-    DATA lv_rest TYPE i.
-    DATA lv_value TYPE i.
-    DATA lv_triple TYPE i.
-    DATA lv_part TYPE string.
     DATA lo_conv TYPE REF TO object.
     DATA lv_class TYPE c LENGTH 30.
 
-    " UTF-8 through whichever converter the release has - by name, as the
-    " modern one is missing on 7.02 and the classic one is not released in
-    " ABAP Cloud
     TRY.
         lv_class = `CL_ABAP_CONV_CODEPAGE`.
         CALL METHOD (lv_class)=>create_out
@@ -2072,7 +2069,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           EXPORTING
             source = val
           RECEIVING
-            result = lv_utf8.
+            result = result.
       CATCH cx_root.
         TRY.
             lv_class = `CL_ABAP_CONV_OUT_CE`.
@@ -2085,12 +2082,26 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
               EXPORTING
                 data   = val
               IMPORTING
-                buffer = lv_utf8.
+                buffer = result.
           CATCH cx_root.
-            RETURN.
+            CLEAR result.
         ENDTRY.
     ENDTRY.
 
+  ENDMETHOD.
+
+  METHOD to_base64.
+
+    CONSTANTS lc_alphabet TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`.
+    DATA lt_part TYPE string_table.
+    DATA lv_byte TYPE x LENGTH 1.
+    DATA lv_off TYPE i.
+    DATA lv_rest TYPE i.
+    DATA lv_value TYPE i.
+    DATA lv_triple TYPE i.
+    DATA lv_part TYPE string.
+
+    DATA(lv_utf8) = to_utf8( val ).
     DATA(lv_len) = xstrlen( lv_utf8 ).
     WHILE lv_off < lv_len.
       lv_rest = lv_len - lv_off.
