@@ -669,6 +669,13 @@ everything a screen shows. Recordings are read by administrators only and only
 inside a session that is already written to the change log; the user is
 stored under the pseudonym unless user tracking is `NAME`. Keep the retention
 short and agree it with your works council like the rest of the monitoring.
+What is typed into a password field is not stored: the value of every member
+bound to an `Input` of type `Password` in the view of a response, and of every
+member named like a password (`PASSW...`, `KENNWORT`, `PWD`, `SECRET`, case
+ignored), is replaced by `***` in both bodies before they are written. A field
+of another kind is masked only when its name says so - name secret fields
+accordingly. The cockpit's own roundtrips are not recorded: its screens show the
+recordings, sessions and figures of other users.
 
 ## Agents
 

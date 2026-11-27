@@ -473,7 +473,29 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         timestampl   TYPE timestampl,
       END OF ty_s_pending.
 
+    " member names whose values are never stored: a password, a secret
+    " (case ignored)
+    CONSTANTS c_secret_names TYPE string VALUE `[A-Z0-9_]*(PASSW|KENNWORT|PWD|SECRET)[A-Z0-9_]*`.
+
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_pending WITH EMPTY KEY.
+
+    "! The model members bound to a password input of a view the response
+    "! displays - Input type="Password" - by their last name.
+    CLASS-METHODS secret_names_of
+      IMPORTING
+        response      TYPE string
+      RETURNING
+        VALUE(result) TYPE string_table.
+
+    "! A body with the values of secret members replaced by "***": every
+    "! member named like a password (c_secret_names) and every member of
+    "! it_name. Strings and numbers - objects and arrays stay.
+    CLASS-METHODS masked
+      IMPORTING
+        body          TYPE string
+        it_name       TYPE string_table
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! The content of a copy without what runs in the browser by itself: a
     "! sap.ui.core.HTML renders its content with the scripts and on...
@@ -522,7 +544,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         cx_static_check.
 
     "! The table row of a recorded roundtrip - ids, app and event taken out
-    "! of the bodies (roundtrip_of), the user as the privacy setting allows.
+    "! of the bodies (roundtrip_of), the user as the privacy setting allows,
+    "! the values of password fields masked.
     "! @parameter timestampl | when it ran - now when initial
     CLASS-METHODS row_of
       IMPORTING
@@ -863,6 +886,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
         z2ui5_cl_cockpit_job=>purge_daily( ).
 
+        " the cockpit's own screens are not recorded: they show recordings,
+        " sessions and figures of other users - a copy of them per roundtrip
+        DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
         DATA(lt_buffer) = gt_buffer.
         CLEAR gt_buffer.
         APPEND ls_pending TO lt_buffer.
@@ -873,6 +899,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                            check_sticky = ls_buffered-check_sticky
                            ms_total     = ls_buffered-ms_total
                            timestampl   = ls_buffered-timestampl ).
+          IF ls_row-app = lv_own.
+            CONTINUE.
+          ENDIF.
           INSERT z2ui5_t_28 FROM @ls_row.
         ENDLOOP.
         COMMIT WORK.
@@ -888,6 +917,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD row_of.
+
+    DATA lt_secret TYPE string_table.
 
     result-id           = cl_system_uuid=>create_uuid_c32_static( ).
     result-timestampl   = timestampl.
@@ -919,8 +950,12 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-app = to_upper( z2ui5_cl_cockpit_session=>get_app_of_draft( result-draft_id_prev ) ).
     ENDIF.
 
-    result-req_body = request.
-    result-res_body = response.
+    " what was typed into a password field is never stored
+    lt_secret = secret_names_of( response ).
+    result-req_body = masked( body    = request
+                              it_name = lt_secret ).
+    result-res_body = masked( body    = response
+                              it_name = lt_secret ).
     IF strlen( result-req_body ) > c_max_body.
       result-req_body = substring( val = result-req_body
                                    len = c_max_body ).
@@ -929,6 +964,63 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-res_body = substring( val = result-res_body
                                    len = c_max_body ).
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD secret_names_of.
+
+    DATA lt_match TYPE match_result_tab.
+    DATA lv_kind TYPE string.
+    DATA lv_name TYPE string.
+
+    " a view in a response is a JSON string - its quotes are escaped
+    IF response NS `"Password\"`.
+      RETURN.
+    ENDIF.
+    FIND ALL OCCURRENCES OF REGEX `<[^<>]* type=\\"Password\\"[^<>]*>` IN response
+      IGNORING CASE RESULTS lt_match.
+    LOOP AT lt_match INTO DATA(ls_match).
+      DATA(lv_element) = substring( val = response
+                                    off = ls_match-offset
+                                    len = ls_match-length ).
+      " value="{/XX/NAME}" or value="{path:'/XX/NAME', ...}" - the last name
+      CLEAR lv_name.
+      FIND FIRST OCCURRENCE OF REGEX ` value=\\"\{(path:')?([^}'\\]*)` IN lv_element
+        SUBMATCHES lv_kind lv_name.
+      DATA(lv_slash) = find( val = lv_name
+                             sub = `/`
+                             occ = -1 ).
+      IF lv_slash >= 0.
+        lv_name = substring( val = lv_name
+                             off = lv_slash + 1 ).
+      ENDIF.
+      " a name only - it goes into a pattern
+      IF lv_name IS NOT INITIAL AND to_upper( lv_name ) CO `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_`.
+        APPEND lv_name TO result.
+      ENDIF.
+    ENDLOOP.
+    SORT result BY table_line.
+    DELETE ADJACENT DUPLICATES FROM result COMPARING table_line.
+
+  ENDMETHOD.
+
+  METHOD masked.
+
+    " "NAME":"value" or "NAME":123 - the value becomes "***"
+    CONSTANTS lc_value TYPE string VALUE `":\s*("([^"\\]|\\.)*"|-?[0-9][0-9.eE+-]*)`.
+
+    result = body.
+    IF result CS `PASSW` OR result CS `KENNWORT` OR result CS `PWD` OR result CS `SECRET`.
+      REPLACE ALL OCCURRENCES OF REGEX |"({ c_secret_names }){ lc_value }| IN result
+        WITH `"$1":"***"` IGNORING CASE.
+    ENDIF.
+    LOOP AT it_name INTO DATA(lv_name).
+      IF result NS |"{ lv_name }":|.
+        CONTINUE.
+      ENDIF.
+      REPLACE ALL OCCURRENCES OF REGEX |"({ lv_name }){ lc_value }| IN result
+        WITH `"$1":"***"`.
+    ENDLOOP.
 
   ENDMETHOD.
 
