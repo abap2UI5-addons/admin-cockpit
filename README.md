@@ -286,10 +286,22 @@ to the default (except where `0` switches something off).
 **Privacy mode is on by default: no user names are stored.**
 
 - `HASH` (default) - users are counted under a SHA-256 pseudonym of a random
-  salt and the user name. The salt is created per UTC day and the previous
-  day's salt is deleted, so a pseudonym can neither be traced back to a name
-  nor linked to the same user on another day - not even by an administrator
-  with database access. Hence "users per day", never "users per month".
+  salt and the user name. The salt is created per UTC day and deleted once
+  the day is over - by the next day's first recorded roundtrip, by the daily
+  purge and by the housekeeping job, whichever comes first (with recording
+  `OFF` and no job scheduled, it stays until one of them runs). From then
+  on a pseudonym can neither be traced back to a name nor linked to the
+  same user on another day - not even by an administrator with database
+  access. Hence "users per day", never "users per month". **While the day
+  runs**, whoever can read table `Z2UI5_T_26` can recompute that day's
+  pseudonyms from a list of user names.
+- **Draft ids link back to users** while the draft exists: the raw log
+  (`Z2UI5_T_25`, errors and slow roundtrips) and the recorder
+  (`Z2UI5_T_28`) keep the draft ids of a roundtrip, and abap2UI5's draft
+  table carries the user name of every draft until the draft expires and is
+  deleted (4 hours by default). For that long an administrator with
+  database access can link those rows - and the pseudonym in them - to a
+  user.
 - `NONE` - users are not counted at all; Live shows apps, not users.
 - `NAME` - user names are stored (raw log, user and activity tables) and shown
   in the error details.

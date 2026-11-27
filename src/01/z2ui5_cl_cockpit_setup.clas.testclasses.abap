@@ -272,6 +272,7 @@ CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT
     METHODS salt_rotates_daily FOR TESTING.
     METHODS no_salt_for_a_past_day FOR TESTING.
     METHODS purge_claimed_once FOR TESTING.
+    METHODS old_salts_deleted FOR TESTING.
 
     METHODS salt_exists
       IMPORTING
@@ -361,6 +362,24 @@ CLASS ltcl_salt IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_setup=>claim_purge( `20990102` ) ).
     cl_abap_unit_assert=>assert_equals( exp = `20990102`
                                         act = z2ui5_cl_cockpit_setup=>get( )-last_purge ).
+
+  ENDMETHOD.
+
+  METHOD old_salts_deleted.
+
+    " the daily purge deletes an earlier day's salt also when no later day
+    " creates one (NONE or NAME since, mode OFF, no traffic) - today's and
+    " later ones stay
+    z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                      day   = `20990101` ).
+    DATA(ls_row) = VALUE z2ui5_t_26( name  = `SALT_20000101`
+                                     value = `unit test` ).
+    INSERT z2ui5_t_26 FROM @ls_row.
+    cl_abap_unit_assert=>assert_true( salt_exists( `20000101` ) ).
+
+    z2ui5_cl_cockpit_setup=>delete_old_salts( ).
+    cl_abap_unit_assert=>assert_false( salt_exists( `20000101` ) ).
+    cl_abap_unit_assert=>assert_true( salt_exists( `20990101` ) ).
 
   ENDMETHOD.
 

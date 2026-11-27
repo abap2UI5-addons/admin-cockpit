@@ -135,6 +135,10 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days ).
     DELETE FROM z2ui5_t_28 WHERE timestampl < @lv_wir_ts.
     result-wir_deleted = sy-dbcnt.
+    " the pseudonym salts of earlier days: salt_of_day deletes them only
+    " when a later day's first recorded roundtrip creates its salt - after a
+    " switch to NONE or NAME, mode OFF or a day without traffic they stayed
+    z2ui5_cl_cockpit_setup=>delete_old_salts( ).
 
   ENDMETHOD.
 
