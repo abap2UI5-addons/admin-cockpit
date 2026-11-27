@@ -3364,10 +3364,19 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   sessions_text = |The draft table could not be read: { s_sessions-error }|.
                   RETURN.
                 ENDIF.
-                sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }| &&
+                IF session_search IS INITIAL.
+                  sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }|.
+                ELSE.
+                  " a search reads the app of each session from its draft - so
+                  " it looks at the newest sessions only, and says so
+                  sessions_text = |Sessions - { lines( s_sessions-t_session ) } matching "{ session_search }" | &&
+                                  |in the newest { s_sessions-searched } of { s_sessions-sessions }|.
+                ENDIF.
+                sessions_text = sessions_text &&
                     |{ COND #( WHEN session_errors = abap_true THEN ` with a failed roundtrip` ) }, newest | &&
-                    |activity first{ COND #( WHEN session_search IS NOT INITIAL
-                                             THEN |, matching "{ session_search }"| ) }| &&
+                    |activity first| &&
+                    |{ COND #( WHEN session_search IS NOT INITIAL AND s_sessions-check_more = abap_true
+                               THEN ` - older sessions were not searched` ) }| &&
                     |{ COND #( WHEN s_sessions-check_capped = abap_true
                                THEN | - read from the newest { z2ui5_cl_cockpit_session=>c_max_nodes } drafts| ) }|.
 

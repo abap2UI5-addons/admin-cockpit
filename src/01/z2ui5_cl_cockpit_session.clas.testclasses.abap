@@ -765,6 +765,7 @@ CLASS ltcl_session_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION
     METHODS search_in_drafts FOR TESTING.
     METHODS failures_and_app_objects FOR TESTING.
     METHODS playback_from_recordings FOR TESTING.
+    METHODS search_reads_newest_only FOR TESTING.
 
     METHODS order
       IMPORTING
@@ -844,6 +845,50 @@ CLASS ltcl_session_db IMPLEMENTATION.
              `<cls:ZCL_ORDER id="o1"><local.ZCL_ORDER>` &&
              |<MV_CUSTOMER>{ customer }</MV_CUSTOMER><MV_MODE>edit</MV_MODE>| &&
              `</local.ZCL_ORDER></cls:ZCL_ORDER></asx:heap></asx:abap>`.
+
+  ENDMETHOD.
+
+  METHOD search_reads_newest_only.
+
+    DATA lt_draft TYPE STANDARD TABLE OF ty_s_draft WITH EMPTY KEY.
+    DATA lv_tab TYPE string.
+    DATA lv_ts TYPE timestampl.
+    DATA lv_end TYPE timestampl.
+
+    " 300 sessions of one user, all newer than the one session of another
+    lv_end = '20991231120000'.
+    DO 300 TIMES.
+      lv_ts = z2ui5_cl_cockpit_setup=>ts_minus_seconds( ts      = lv_end
+                                                        seconds = sy-index ).
+      APPEND VALUE #( mandt      = sy-mandt
+                      id         = |ZZCKUTS{ sy-index }|
+                      uname      = `ZZ_COCKPIT_UT`
+                      timestampl = lv_ts
+                      data       = order( `` ) ) TO lt_draft.
+    ENDDO.
+    APPEND VALUE #( mandt      = sy-mandt
+                    id         = `ZZCKUTOLD`
+                    uname      = `ZZ_COCKPIT_OLD`
+                    timestampl = '20991231090000'
+                    data       = order( `` ) ) TO lt_draft.
+    lv_tab = c_table.
+    INSERT (lv_tab) FROM TABLE @lt_draft.
+
+    " the default reads 300 sessions at most - the match is older
+    DATA(ls_list) = z2ui5_cl_cockpit_session=>get_sessions( search = `ZZ_COCKPIT_OLD` ).
+    cl_abap_unit_assert=>assert_initial( ls_list-t_session ).
+    cl_abap_unit_assert=>assert_equals( exp = 300
+                                        act = ls_list-searched ).
+    cl_abap_unit_assert=>assert_true( ls_list-check_more ).
+    cl_abap_unit_assert=>assert_true( xsdbool( ls_list-sessions >= 302 ) ).
+
+    " a larger budget reaches it
+    ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 200
+                                                      search       = `ZZ_COCKPIT_OLD` ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( ls_list-t_session ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `ZZCKUTOLD`
+                                        act = ls_list-t_session[ 1 ]-id ).
 
   ENDMETHOD.
 

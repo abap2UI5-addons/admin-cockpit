@@ -524,7 +524,10 @@ What it is and is not:
   the cockpit. Generic data references of an app are kept in the framework's
   own objects; *Framework objects* shows them.
 - **Limits:** the newest 50,000 drafts, 100 sessions per list, the newest 500
-  steps of a session, 1,000 fields per step (narrow them with the search).
+  steps of a session, 1,000 fields per step (narrow them with the search). A
+  search of the list reads the app of each session from its newest draft, so
+  it looks at the newest 300 sessions only - the list says how many it
+  searched and when older ones were left out.
 
 **Drafts hold business data of other users.** The sessions are offered to
 administrators only (`CHANGE`), and every opened or exported session is
