@@ -461,7 +461,19 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
-    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
+    TYPES:
+      "! A roundtrip of a sticky session, as it came - the row is built once
+      "! the LUW may be written (the pseudonym's salt is a write of its own).
+      BEGIN OF ty_s_pending,
+        request      TYPE string,
+        response     TYPE string,
+        http_status  TYPE i,
+        check_sticky TYPE abap_bool,
+        ms_total     TYPE i,
+        timestampl   TYPE timestampl,
+      END OF ty_s_pending.
+
+    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_pending WITH EMPTY KEY.
 
     "! The content of a copy without what runs in the browser by itself: a
     "! sap.ui.core.HTML renders its content with the scripts and on...
@@ -511,6 +523,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The table row of a recorded roundtrip - ids, app and event taken out
     "! of the bodies, the user as the privacy setting allows.
+    "! @parameter timestampl | when it ran - now when initial
     CLASS-METHODS row_of
       IMPORTING
         request       TYPE string
@@ -518,6 +531,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         http_status   TYPE i
         check_sticky  TYPE abap_bool
         ms_total      TYPE i DEFAULT 0
+        timestampl    TYPE timestampl OPTIONAL
       RETURNING
         VALUE(result) TYPE z2ui5_t_28
       RAISING
@@ -829,28 +843,37 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           RETURN.
         ENDIF.
 
-        ls_row = row_of( request      = request
-                         response     = response
-                         http_status  = http_status
-                         check_sticky = check_sticky
-                         ms_total     = ms_total ).
+        DATA(ls_pending) = VALUE ty_s_pending( request      = request
+                                               response     = response
+                                               http_status  = http_status
+                                               check_sticky = check_sticky
+                                               ms_total     = ms_total
+                                               timestampl   = z2ui5_cl_cockpit_setup=>now( ) ).
 
         " a sticky app owns the LUW - its uncommitted work and locks must not
-        " be committed by the recorder: the recording waits for a roundtrip
-        " that is not sticky
+        " be committed by the recorder, and nothing is written into it, not
+        " even the salt of a pseudonym: the bodies wait as they came for a
+        " roundtrip that is not sticky
         IF check_sticky = abap_true.
           IF lines( gt_buffer ) < c_buffer_max.
-            APPEND ls_row TO gt_buffer.
+            APPEND ls_pending TO gt_buffer.
           ENDIF.
           RETURN.
         ENDIF.
 
         z2ui5_cl_cockpit_job=>purge_daily( ).
+
         DATA(lt_buffer) = gt_buffer.
         CLEAR gt_buffer.
-        APPEND ls_row TO lt_buffer.
+        APPEND ls_pending TO lt_buffer.
         LOOP AT lt_buffer INTO DATA(ls_buffered).
-          INSERT z2ui5_t_28 FROM @ls_buffered.
+          ls_row = row_of( request      = ls_buffered-request
+                           response     = ls_buffered-response
+                           http_status  = ls_buffered-http_status
+                           check_sticky = ls_buffered-check_sticky
+                           ms_total     = ls_buffered-ms_total
+                           timestampl   = ls_buffered-timestampl ).
+          INSERT z2ui5_t_28 FROM @ls_row.
         ENDLOOP.
         COMMIT WORK.
       CATCH cx_root.
@@ -869,7 +892,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lv_root TYPE string.
 
     result-id           = cl_system_uuid=>create_uuid_c32_static( ).
-    result-timestampl   = z2ui5_cl_cockpit_setup=>now( ).
+    result-timestampl   = timestampl.
+    IF result-timestampl IS INITIAL.
+      result-timestampl = z2ui5_cl_cockpit_setup=>now( ).
+    ENDIF.
     result-utc_day      = z2ui5_cl_cockpit_setup=>day_of( result-timestampl ).
     result-http_status  = http_status.
     result-ms_total     = ms_total.
