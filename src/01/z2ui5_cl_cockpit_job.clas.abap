@@ -104,6 +104,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
   METHOD purge_own.
 
+    " the open alerts are kept - cleared is initial
+    DATA lv_open TYPE timestampl.
     DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
 
     DATA(lv_log_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-retention_days ).
@@ -124,8 +126,9 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-agg_retention_days ).
     DELETE FROM z2ui5_t_24 WHERE timestampl < @lv_aud_ts.
     result-aud_deleted = sy-dbcnt.
-    " and so does the alert history
-    DELETE FROM z2ui5_t_23 WHERE raised < @lv_aud_ts.
+    " and so does the alert history - of the cleared alerts: an open one
+    " stays until a run clears or closes it (z2ui5_cl_cockpit_alert)
+    DELETE FROM z2ui5_t_23 WHERE raised < @lv_aud_ts AND cleared <> @lv_open.
     result-alr_deleted = sy-dbcnt.
     " the recorder's raw requests and responses are the biggest and the most
     " sensitive rows - their own, short retention; 0 days deletes them all

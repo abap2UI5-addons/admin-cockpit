@@ -208,7 +208,7 @@ which decides by the settings what is persisted:
 | `Z2UI5_T_26` | settings | name/value |
 | `Z2UI5_T_21` | administrators | user names |
 | `Z2UI5_T_24` | every change made in the cockpit | change log: time, user, action, details - kept as long as the aggregates |
-| `Z2UI5_T_23` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - kept as long as the aggregates |
+| `Z2UI5_T_23` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - a cleared alert kept as long as the aggregates, an open one until it is cleared |
 
 **Lock-free and overflow-safe.** A roundtrip is added to the row of its hour
 with one `UPDATE ... SET cnt = cnt + 1, ms_sum = ms_sum + n, ...` - atomic on
@@ -732,8 +732,9 @@ before it (default: 1, so 60 to 120 minutes), per app and over all apps:
 - the line over all apps raises a rule only when no single app raises it
   already - it is there for the many small apps that stay below the minimum
   one by one, and one broken app is not reported twice;
-- in mode `ERRORS` the error rate is no rule - only failed roundtrips are
-  recorded, so every rate would be 100 %.
+- in mode `ERRORS` neither rule is evaluated - only failed roundtrips are
+  recorded, so every rate would be 100 % and the p95 would be that of the
+  failures.
 
 The Overview tab evaluates the rules live: what is exceeded right now, and the
 history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
@@ -743,7 +744,11 @@ so a broken app costs one notification when it breaks and one when it is fine
 again, not one per run. An app with fewer roundtrips in the window than the
 minimum cannot be judged: its alert stays open until there are enough again
 (a quiet night is no recovery), and a run whose evaluation fails changes
-nothing. Schedule the job every 15 minutes (see
+nothing. Two cases close an alert *without a verdict*, with a notification
+that says so (never "below the threshold again"): its rule is switched off
+(or not evaluated in the recording mode), or its app has had no roundtrip
+at all for 7 days (removed, renamed, no longer used). An open alert is never
+purged; a cleared one is kept as long as the aggregates. Schedule the job every 15 minutes (see
 [Housekeeping and background jobs](#housekeeping-and-background-jobs)); without
 it the Overview still shows what is exceeded, but nothing is kept or sent.
 
