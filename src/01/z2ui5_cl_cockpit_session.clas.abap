@@ -63,6 +63,16 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_t_node TYPE STANDARD TABLE OF ty_s_node WITH EMPTY KEY.
 
     TYPES:
+      "! A draft with its serialized state - a line of read_page( ).
+      BEGIN OF ty_s_page_row,
+        id         TYPE c LENGTH 32,
+        id_prev    TYPE c LENGTH 32,
+        timestampl TYPE timestampl,
+        data       TYPE string,
+      END OF ty_s_page_row.
+    TYPES ty_t_page TYPE STANDARD TABLE OF ty_s_page_row WITH EMPTY KEY.
+
+    TYPES:
       "! The session a draft belongs to: the first draft of its chain.
       BEGIN OF ty_s_root,
         id   TYPE c LENGTH 32,
@@ -626,6 +636,19 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_first   TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE ty_t_field.
+
+    "! The next drafts of the draft table after a key, in key order, 200 at
+    "! a time - the page of a scan that reads every draft with its state.
+    "! Empty after the last one; raises when the table cannot be read.
+    "! @parameter after | the id of the last draft of the page before, empty
+    "!                   for the first page
+    CLASS-METHODS read_page
+      IMPORTING
+        after         TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_t_page
+      RAISING
+        cx_static_check.
 
     "! The app of a serialized draft: the first object of the heap that is
     "! not the framework's. Reads only the heap entries - an object is the
@@ -1229,21 +1252,15 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD search_drafts.
 
     TYPES:
-      BEGIN OF ty_s_row,
-        id   TYPE c LENGTH 32,
-        data TYPE string,
-      END OF ty_s_row.
-    TYPES:
       BEGIN OF ty_s_meta,
         id         TYPE c LENGTH 32,
         uname      TYPE c LENGTH 32,
         timestampl TYPE timestampl,
       END OF ty_s_meta.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE ty_t_page.
     DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
     DATA lt_node TYPE ty_t_node.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
     DATA lv_search TYPE string.
 
     lv_search = condense( search ).
@@ -1268,15 +1285,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the serialized text escapes <, > and &, so a term with one of them
     " is only found in the decoded fields - every draft is taken apart then
     DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
-      CLEAR lt_rows.
       TRY.
-          SELECT id, data FROM (lv_tab)
-            WHERE id > @lv_last
-            ORDER BY id
-            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-            UP TO 200 ROWS.
+          lt_rows = read_page( lv_last ).
         CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
@@ -1329,31 +1340,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD get_flows.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        id         TYPE c LENGTH 32,
-        id_prev    TYPE c LENGTH 32,
-        timestampl TYPE timestampl,
-        data       TYPE string,
-      END OF ty_s_row.
     TYPES ty_id TYPE c LENGTH 32.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE ty_t_page.
     DATA lt_link TYPE ty_t_link.
     DATA lt_ids TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
     DATA lt_failed TYPE ty_t_id.
     DATA lv_oldest TYPE timestampl.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
 
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
-      CLEAR lt_rows.
       TRY.
-          SELECT id, id_prev, timestampl, data FROM (lv_tab)
-            WHERE id > @lv_last
-            ORDER BY id
-            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-            UP TO 200 ROWS.
+          lt_rows = read_page( lv_last ).
         CATCH cx_root INTO DATA(lx).
           result-error = lx->get_text( ).
           RETURN.
@@ -2000,29 +1997,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD scan_app.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        id   TYPE c LENGTH 32,
-        data TYPE string,
-      END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE ty_t_page.
     DATA lt_skip TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
     DATA lv_scanned TYPE i.
 
     DATA(lv_app) = to_upper( condense( app ) ).
     LOOP AT it_skip INTO DATA(lv_skip).
       INSERT lv_skip INTO TABLE lt_skip.
     ENDLOOP.
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
-      CLEAR lt_rows.
-      SELECT id, data FROM (lv_tab)
-        WHERE id > @lv_last
-        ORDER BY id
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-        UP TO 200 ROWS.
+      lt_rows = read_page( lv_last ).
       IF lt_rows IS INITIAL.
         RETURN.
       ENDIF.
@@ -3143,6 +3128,21 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ORDER BY timestampl DESCENDING
       INTO CORRESPONDING FIELDS OF TABLE @result
       UP TO @c_max_nodes ROWS.                        "#EC CI_NOWHERE
+
+  ENDMETHOD.
+
+  METHOD read_page.
+
+    DATA lv_tab TYPE string.
+    " named like no column - the 7.02 downport drops the @
+    DATA lv_after TYPE c LENGTH 32.
+    lv_after = after.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
+    SELECT id, id_prev, timestampl, data FROM (lv_tab)
+      WHERE id > @lv_after
+      ORDER BY id
+      INTO CORRESPONDING FIELDS OF TABLE @result
+      UP TO 200 ROWS.
 
   ENDMETHOD.
 

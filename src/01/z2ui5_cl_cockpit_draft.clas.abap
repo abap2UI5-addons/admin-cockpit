@@ -199,26 +199,13 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
 
   METHOD analyze.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        id   TYPE c LENGTH 32,
-        data TYPE string,
-      END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE z2ui5_cl_cockpit_session=>ty_t_page.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
     DATA lt_app TYPE SORTED TABLE OF ty_s_app WITH UNIQUE KEY app.
     DATA lv_bytes_total TYPE p LENGTH 16 DECIMALS 0.
 
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
-
     DO.
-      CLEAR lt_rows.
-      SELECT id, data FROM (lv_tab)
-        WHERE id > @lv_last
-        ORDER BY id
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-        UP TO 200 ROWS.
+      lt_rows = z2ui5_cl_cockpit_session=>read_page( lv_last ).
       IF lt_rows IS INITIAL.
         EXIT.
       ENDIF.
