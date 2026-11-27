@@ -169,7 +169,7 @@ of the installation with the same name.
 | **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default), and **what the user did afterwards** - continued from the same screen, stopped there, still open (from the drafts) - **Analyze failures**: the values the failing cases share and other states of the app rarely have, and the business objects they concern - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
 | **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); **find a value** (an order number, a customer) in all drafts; the **navigation** between apps; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
-| **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
+| **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access, how many drafts of a session the framework keeps. Every check with status, why it matters and how to fix it | - |
 | **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, the **sessions active right now** - open one to see what the user is doing - and a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
 | **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
 | **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, draft searches, failure analyses, test notifications) | - |
@@ -398,8 +398,13 @@ activates without it and simply does not offer the button.
 Every POST roundtrip of abap2UI5 saves the app as it is afterwards into a new
 draft and names the draft it started from (`ID_PREV`), across app navigations
 too. Followed backwards, the drafts of one browser session form a chain - the
-**session**. The Drafts & Housekeeping tab lists the sessions in the draft
-table (**Show sessions**, newest activity first, searchable by app or user):
+**session**. abap2UI5 prunes these chains by default: it keeps only the
+newest drafts of a session (`draft_keep_per_chain`, 2 out of the box), so the
+viewer, the steps before an error and *what the user did afterwards* see only
+those - an outcome of an older step is *unknown*. For the whole history set `cs_config-draft_keep_per_chain = 0` in
+`set_config_http_post` of your user exit (the draft table then grows until the
+drafts expire); the traffic light shows the setting. The Drafts & Housekeeping
+tab lists the sessions in the draft table (**Show sessions**, newest activity first, searchable by app or user):
 user, app, number of steps, **failed roundtrips** the monitor logged in the
 session (*With errors only* keeps just those), first and last step, duration.
 The same list, limited to the last 5 minutes, is on the **Live** tab - who is
@@ -411,7 +416,7 @@ Open one and the viewer shows it **step by step**:
 - **First / Back / Next / Last**, or select any step in the list - time,
   seconds since the step before, app, size, and notes such as *navigated to
   ZCL_...*, *continues step 3* (browser back or a second window) or *the steps
-  before it expired*;
+  before it expired* (*are gone (pruned or expired)* while the framework prunes);
 - how many **fields changed** in the step - a step that changed nothing is
   marked *no field changed*, and when that happens twice or more in a row the
   viewer warns: the user pressed something again and again without effect (a

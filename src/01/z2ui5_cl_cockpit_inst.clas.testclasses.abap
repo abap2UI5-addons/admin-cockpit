@@ -19,6 +19,7 @@ CLASS ltcl_checks DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHOR
     METHODS csp_wildcard_host FOR TESTING.
     METHODS headers_missing FOR TESTING.
     METHODS long_expiry FOR TESTING.
+    METHODS drafts_pruned FOR TESTING.
     METHODS agent_not_installed FOR TESTING.
     METHODS agent_disabled FOR TESTING.
     METHODS agent_without_admin FOR TESTING.
@@ -78,7 +79,7 @@ CLASS ltcl_checks IMPLEMENTATION.
       cl_abap_unit_assert=>assert_equals( exp = `sap-icon://status-positive`
                                           act = ls_check-icon ).
     ENDLOOP.
-    cl_abap_unit_assert=>assert_equals( exp = 10
+    cl_abap_unit_assert=>assert_equals( exp = 11
                                         act = lines( lt_check ) ).
 
   ENDMETHOD.
@@ -175,6 +176,23 @@ CLASS ltcl_checks IMPLEMENTATION.
     ms_post-draft_exp_time_in_hours = 48.
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-warn
                                         act = check( `EXPIRY` )-status ).
+
+  ENDMETHOD.
+
+  METHOD drafts_pruned.
+
+    " by name - the released abap2UI5 the cockpit builds on has no such setting
+    FIELD-SYMBOLS <keep> TYPE any.
+    ASSIGN COMPONENT `DRAFT_KEEP_PER_CHAIN` OF STRUCTURE ms_post TO <keep>.
+    IF <keep> IS NOT ASSIGNED.
+      RETURN.
+    ENDIF.
+    <keep> = 2.
+    DATA(ls_check) = check( `SESSIONS` ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-info
+                                        act = ls_check-status ).
+    cl_abap_unit_assert=>assert_equals( exp = `newest 2 drafts per session`
+                                        act = ls_check-value ).
 
   ENDMETHOD.
 

@@ -121,6 +121,14 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post.
 
+    "! How many drafts of a session the framework keeps (draft_keep_per_chain
+    "! of the roundtrip configuration): 0 keeps every draft until it expires
+    "! - and is the answer of a release without the setting or of a
+    "! configuration that cannot be read.
+    CLASS-METHODS get_draft_keep
+      RETURNING
+        VALUE(result) TYPE i.
+
     "! The user exit class the framework found, empty when none.
     CLASS-METHODS get_user_exit_class
       RETURNING
@@ -166,6 +174,14 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
 
     CLASS-DATA gv_prefix TYPE string.
+
+    "! draft_keep_per_chain of a roundtrip configuration, read by name: the
+    "! released abap2UI5 the cockpit builds on has no such component.
+    CLASS-METHODS draft_keep_of
+      IMPORTING
+        is_post       TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post
+      RETURNING
+        VALUE(result) TYPE i.
 
     "! The roundtrip configuration the framework computes - raises when
     "! the framework's exit cannot be reached, like get_config_get( ).
@@ -508,6 +524,22 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          fix    = `Set cs_config-draft_exp_time_in_hours in set_config_http_post (default 4).`
                CHANGING  checks = result ).
 
+    " the drafts are the sessions' history - abap2UI5 prunes them by default
+    DATA(lv_keep) = draft_keep_of( ls_post ).
+    add_check( EXPORTING id     = `SESSIONS`
+                         status = COND #( WHEN lv_keep > 0 THEN cs_status-info ELSE cs_status-ok )
+                         title  = `Session history in the drafts`
+                         value  = COND #( WHEN lv_keep > 0 THEN |newest { lv_keep } drafts per session|
+                                          ELSE `every draft until it expires` )
+                         text   = `The session viewer, the steps before an error and what users did afterwards ` &&
+                                  `read the drafts. abap2UI5 keeps only the newest drafts of a session by default ` &&
+                                  `(draft_keep_per_chain) - the steps before them are gone.`
+                         fix    = COND #( WHEN lv_keep > 0
+                                          THEN `For the whole history: cs_config-draft_keep_per_chain = 0 in ` &&
+                                               `set_config_http_post of your user exit - the draft table then grows ` &&
+                                               `until the drafts expire.` )
+               CHANGING  checks = result ).
+
     LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
       <check>-icon = check_icon( <check>-status ).
     ENDLOOP.
@@ -677,6 +709,26 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
       CATCH cx_root.
         CLEAR result.
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD get_draft_keep.
+
+    TRY.
+        result = draft_keep_of( config_post( ) ).
+      CATCH cx_root.
+        result = 0.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD draft_keep_of.
+
+    FIELD-SYMBOLS <keep> TYPE any.
+    ASSIGN COMPONENT `DRAFT_KEEP_PER_CHAIN` OF STRUCTURE is_post TO <keep>.
+    IF <keep> IS ASSIGNED AND <keep> > 0.
+      result = <keep>.
+    ENDIF.
 
   ENDMETHOD.
 

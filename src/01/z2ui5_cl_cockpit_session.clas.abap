@@ -42,7 +42,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         continued TYPE string VALUE `continued`,
         stopped   TYPE string VALUE `stopped here`,
         open      TYPE string VALUE `still open`,
-        unknown   TYPE string VALUE `unknown - draft expired`,
+        unknown   TYPE string VALUE `unknown - draft gone`,
       END OF cs_outcome.
 
     CONSTANTS:
@@ -594,11 +594,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         VALUE(result) TYPE ty_t_root.
 
     "! The steps of one session, oldest first, without app and size.
+    "! @parameter pruned | the framework prunes the drafts of a session
+    "!                    (z2ui5_cl_cockpit_inst=&gt;get_draft_keep) - a gap is
+    "!                    not only an expiry then
     CLASS-METHODS steps_of
       IMPORTING
         it_node       TYPE ty_t_node
         it_root       TYPE ty_t_root
         id            TYPE clike
+        pruned        TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE ty_t_step.
 
@@ -946,6 +950,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     SORT lt_sorted BY last DESCENDING root ASCENDING.
     result-sessions = lines( lt_sorted ).
 
+    " the framework keeps only the newest drafts of a session by default
+    DATA(lv_pruned) = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ).
     " the app of a session is in its newest draft - read for as many
     " sessions as are listed, and a few more when a filter skips some
     DATA(lv_reads) = 0.
@@ -974,7 +980,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ls_session-app = `(unknown)`.
       ENDIF.
       IF ls_agg-id_prev IS NOT INITIAL.
-        ls_session-note = `earlier steps expired`.
+        ls_session-note = COND #( WHEN lv_pruned = abap_true THEN `earlier steps pruned or expired`
+                                  ELSE `earlier steps expired` ).
       ENDIF.
       CLEAR lt_signal.
       LOOP AT lt_wire INTO DATA(ls_wire) WHERE root = ls_agg-root.
@@ -1003,7 +1010,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         lt_node = read_nodes( ).
         result-t_step = steps_of( it_node = lt_node
                                   it_root = roots_of( lt_node )
-                                  id      = id ).
+                                  id      = id
+                                  pruned  = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ) ).
         trim_steps( CHANGING cs_steps = result ).
         fill_steps( CHANGING cs_steps = result ).
       CATCH cx_root INTO DATA(lx).
@@ -1057,7 +1065,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         RETURN.
     ENDTRY.
     IF lv_new IS INITIAL.
-      result-error = `The draft of this step is gone - expired and deleted since the session was opened.`.
+      result-error = `The draft of this step is gone - expired or pruned since the session was opened.`.
       RETURN.
     ENDIF.
 
@@ -2232,7 +2240,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           ls_step-note = |continues step { ls_step-follows } (browser back or a second window)|.
         ENDIF.
       ELSEIF ls_node-id_prev IS NOT INITIAL.
-        ls_step-note = `the steps before it expired`.
+        ls_step-note = COND #( WHEN pruned = abap_true THEN `the steps before it are gone (pruned or expired)`
+                               ELSE `the steps before it expired` ).
       ELSE.
         ls_step-note = `app start`.
       ENDIF.

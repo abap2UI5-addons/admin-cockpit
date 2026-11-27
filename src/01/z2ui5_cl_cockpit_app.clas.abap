@@ -3182,7 +3182,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     DATA(lv_session) = z2ui5_cl_cockpit_session=>get_session_of( draft ).
     IF lv_session IS INITIAL.
-      client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
+      client->message_toast_display( `The drafts of this session are gone - expired or pruned.` ).
       RETURN.
     ENDIF.
     session_from_error = abap_false.
@@ -3363,7 +3363,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   RETURN.
                 ENDIF.
                 IF ls_steps-t_step IS INITIAL.
-                  client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
+                  client->message_toast_display( `The drafts of this session are gone - expired or pruned.` ).
                   RETURN.
                 ENDIF.
 
@@ -3599,7 +3599,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     error_outcome = |After this error: { lv_continued } continued from the same screen, { lv_stopped } stopped | &&
                     |there (gave up, or started over in a new session), { lv_open } still open, { lv_unknown } | &&
-                    |unknown (the draft has expired - the drafts tell only for the last hours).|.
+                    |unknown (the draft is gone - drafts expire after hours, and abap2UI5 keeps only the newest | &&
+                    |drafts of a session unless draft_keep_per_chain is 0).|.
 
   ENDMETHOD.
 
@@ -3848,7 +3849,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 lv_session = z2ui5_cl_cockpit_session=>get_session_of( lv_draft ).
               ENDIF.
               IF lv_session IS INITIAL.
-                client->message_toast_display( `The drafts of this occurrence are gone - expired and deleted.` ).
+                client->message_toast_display( `The drafts of this occurrence are gone - expired or pruned.` ).
               ELSE.
                 session_from_error = abap_true.
                 session_open( id    = lv_session
