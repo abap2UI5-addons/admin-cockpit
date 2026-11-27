@@ -120,19 +120,49 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " A -> B -> C, and D continues B after C (the browser's back button);
     " F starts a second session after a draft that is gone
-    result = VALUE #( ( id = `A` timestampl = `20261008100000.0` )
-                      ( id = `B` id_prev = `A` timestampl = `20261008100010.0` )
-                      ( id = `C` id_prev = `B` timestampl = `20261008100020.0` )
-                      ( id = `D` id_prev = `B` timestampl = `20261008100130.0` )
-                      ( id = `F` id_prev = `GONE` timestampl = `20261008110000.0` )
-                      ( id = `G` id_prev = `F` timestampl = `20261008110005.0` ) ).
+    DATA temp1 TYPE z2ui5_cl_cockpit_session=>ty_t_node.
+    DATA temp2 LIKE LINE OF temp1.
+    CLEAR temp1.
+
+    CLEAR temp2.
+    temp2-id = `A`.
+    temp2-timestampl = `20261008100000.0`.
+    INSERT temp2 INTO TABLE temp1.
+    CLEAR temp2.
+    temp2-id = `B`.
+    temp2-id_prev = `A`.
+    temp2-timestampl = `20261008100010.0`.
+    INSERT temp2 INTO TABLE temp1.
+    CLEAR temp2.
+    temp2-id = `C`.
+    temp2-id_prev = `B`.
+    temp2-timestampl = `20261008100020.0`.
+    INSERT temp2 INTO TABLE temp1.
+    CLEAR temp2.
+    temp2-id = `D`.
+    temp2-id_prev = `B`.
+    temp2-timestampl = `20261008100130.0`.
+    INSERT temp2 INTO TABLE temp1.
+    CLEAR temp2.
+    temp2-id = `F`.
+    temp2-id_prev = `GONE`.
+    temp2-timestampl = `20261008110000.0`.
+    INSERT temp2 INTO TABLE temp1.
+    CLEAR temp2.
+    temp2-id = `G`.
+    temp2-id_prev = `F`.
+    temp2-timestampl = `20261008110005.0`.
+    INSERT temp2 INTO TABLE temp1.
+    result = temp1.
 
   ENDMETHOD.
 
   METHOD value_of.
+    DATA ls_value LIKE LINE OF it_value.
 
     result = `(missing)`.
-    LOOP AT it_value INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
+
+    LOOP AT it_value INTO ls_value WHERE path = path. "#EC CI_SORTSEQ
       result = ls_value-value.
       RETURN.
     ENDLOOP.
@@ -143,13 +173,51 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " every component written out - the downport the unit build runs carries
     " an omitted one over from the row before (see the wire tests)
-    DATA(ls_signals) = z2ui5_cl_cockpit_session=>signals_of( VALUE #(
-        ( timestampl = '20261008100000' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `Date invalid` )
-        ( timestampl = '20261008100003' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `Date invalid` )
-        ( timestampl = '20261008100006' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `` )
-        ( timestampl = '20261008100100' event = `NEXT` http_status = 0 ms_browser = 6000 error_text = `` )
-        ( timestampl = '20261008100110' event = `NEXT` http_status = 0 ms_browser = 0 error_text = `` )
-        ( timestampl = '20261008100200' event = `POST` http_status = 500 ms_browser = 0 error_text = `` ) ) ).
+    DATA temp3 TYPE z2ui5_cl_cockpit_session=>ty_t_signal.
+    DATA temp4 LIKE LINE OF temp3.
+    DATA ls_signals TYPE z2ui5_cl_cockpit_session=>ty_s_signals.
+    DATA temp5 TYPE z2ui5_cl_cockpit_session=>ty_t_signal.
+    DATA temp6 LIKE LINE OF temp5.
+    CLEAR temp3.
+
+    temp4-timestampl = '20261008100000'.
+    temp4-event = `SAVE`.
+    temp4-http_status = 0.
+    temp4-ms_browser = 0.
+    temp4-error_text = `Date invalid`.
+    INSERT temp4 INTO TABLE temp3.
+    temp4-timestampl = '20261008100003'.
+    temp4-event = `SAVE`.
+    temp4-http_status = 0.
+    temp4-ms_browser = 0.
+    temp4-error_text = `Date invalid`.
+    INSERT temp4 INTO TABLE temp3.
+    temp4-timestampl = '20261008100006'.
+    temp4-event = `SAVE`.
+    temp4-http_status = 0.
+    temp4-ms_browser = 0.
+    temp4-error_text = ``.
+    INSERT temp4 INTO TABLE temp3.
+    temp4-timestampl = '20261008100100'.
+    temp4-event = `NEXT`.
+    temp4-http_status = 0.
+    temp4-ms_browser = 6000.
+    temp4-error_text = ``.
+    INSERT temp4 INTO TABLE temp3.
+    temp4-timestampl = '20261008100110'.
+    temp4-event = `NEXT`.
+    temp4-http_status = 0.
+    temp4-ms_browser = 0.
+    temp4-error_text = ``.
+    INSERT temp4 INTO TABLE temp3.
+    temp4-timestampl = '20261008100200'.
+    temp4-event = `POST`.
+    temp4-http_status = 500.
+    temp4-ms_browser = 0.
+    temp4-error_text = ``.
+    INSERT temp4 INTO TABLE temp3.
+
+    ls_signals = z2ui5_cl_cockpit_session=>signals_of( temp3 ).
 
     cl_abap_unit_assert=>assert_equals(
         exp = `pressed SAVE 3 times in 6 s; error "Date invalid" 2 times; 1 failed click; ` &&
@@ -161,9 +229,22 @@ CLASS ltcl_session IMPLEMENTATION.
                                         act = ls_signals-state ).
 
     " a quiet session: different buttons, no error
-    ls_signals = z2ui5_cl_cockpit_session=>signals_of( VALUE #(
-        ( timestampl = '20261008100000' event = `SEARCH` http_status = 0 ms_browser = 0 error_text = `` )
-        ( timestampl = '20261008100002' event = `SAVE` http_status = 0 ms_browser = 0 error_text = `` ) ) ).
+
+    CLEAR temp5.
+
+    temp6-timestampl = '20261008100000'.
+    temp6-event = `SEARCH`.
+    temp6-http_status = 0.
+    temp6-ms_browser = 0.
+    temp6-error_text = ``.
+    INSERT temp6 INTO TABLE temp5.
+    temp6-timestampl = '20261008100002'.
+    temp6-event = `SAVE`.
+    temp6-http_status = 0.
+    temp6-ms_browser = 0.
+    temp6-error_text = ``.
+    INSERT temp6 INTO TABLE temp5.
+    ls_signals = z2ui5_cl_cockpit_session=>signals_of( temp5 ).
     cl_abap_unit_assert=>assert_initial( ls_signals-text ).
     cl_abap_unit_assert=>assert_equals( exp = `None`
                                         act = ls_signals-state ).
@@ -172,14 +253,43 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD story_told.
 
-    DATA(lv_nl) = cl_abap_char_utilities=>newline.
-    DATA(lv_story) = z2ui5_cl_cockpit_session=>story_of( VALUE #(
-        ( step = 1 time = `2026-10-08 10:02:11` app = `ZORDER` did = `` event = `` shown = ``
-          ms_text = `` note = `` )
-        ( step = 2 time = `2026-10-08 10:02:40` app = `ZORDER` did = `pressed Button "Save" (SAVE)`
-          event = `SAVE` shown = `error box: Date invalid` ms_text = `1.2 s server, 6.2 s waited` note = `` )
-        ( step = 3 time = `2026-10-08 10:03:20` app = `ZDELIVERY` did = `` event = `GO` shown = ``
-          ms_text = `` note = `next click failed: event SHIP` ) ) ).
+    DATA lv_nl LIKE cl_abap_char_utilities=>newline.
+    DATA temp7 TYPE z2ui5_cl_cockpit_session=>ty_t_step.
+    DATA temp8 LIKE LINE OF temp7.
+    DATA lv_story TYPE string.
+    lv_nl = cl_abap_char_utilities=>newline.
+
+    CLEAR temp7.
+
+    temp8-step = 1.
+    temp8-time = `2026-10-08 10:02:11`.
+    temp8-app = `ZORDER`.
+    temp8-did = ``.
+    temp8-event = ``.
+    temp8-shown = ``.
+    temp8-ms_text = ``.
+    temp8-note = ``.
+    INSERT temp8 INTO TABLE temp7.
+    temp8-step = 2.
+    temp8-time = `2026-10-08 10:02:40`.
+    temp8-app = `ZORDER`.
+    temp8-did = `pressed Button "Save" (SAVE)`.
+    temp8-event = `SAVE`.
+    temp8-shown = `error box: Date invalid`.
+    temp8-ms_text = `1.2 s server, 6.2 s waited`.
+    temp8-note = ``.
+    INSERT temp8 INTO TABLE temp7.
+    temp8-step = 3.
+    temp8-time = `2026-10-08 10:03:20`.
+    temp8-app = `ZDELIVERY`.
+    temp8-did = ``.
+    temp8-event = `GO`.
+    temp8-shown = ``.
+    temp8-ms_text = ``.
+    temp8-note = `next click failed: event SHIP`.
+    INSERT temp8 INTO TABLE temp7.
+
+    lv_story = z2ui5_cl_cockpit_session=>story_of( temp7 ).
 
     cl_abap_unit_assert=>assert_equals(
         exp = |10:02:11  [ZORDER] started{ lv_nl }| &&
@@ -203,7 +313,8 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD flatten_app_only.
 
-    DATA(lt_value) = z2ui5_cl_cockpit_session=>flatten( draft( ) ).
+    DATA lt_value TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    lt_value = z2ui5_cl_cockpit_session=>flatten( draft( ) ).
 
     cl_abap_unit_assert=>assert_equals( exp = 9
                                         act = lines( lt_value ) ).
@@ -240,7 +351,10 @@ CLASS ltcl_session IMPLEMENTATION.
   METHOD flatten_masks_secrets.
 
     " named like a password, bound to a password input (MV_PIN), and empty
-    DATA(lv_xml) = `<?xml version="1.0" encoding="utf-16"?>` &&
+    DATA lv_xml TYPE string.
+    DATA temp9 TYPE string_table.
+    DATA lt_value TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    lv_xml = `<?xml version="1.0" encoding="utf-16"?>` &&
                    `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">` &&
                    `<asx:values><DATA href="#o1"/></asx:values>` &&
                    `<asx:heap xmlns:cls="http://www.sap.com/abapxml/classes/global">` &&
@@ -250,8 +364,12 @@ CLASS ltcl_session IMPLEMENTATION.
                    `</local.ZCL_LOGIN></cls:ZCL_LOGIN>` &&
                    `</asx:heap></asx:abap>`.
 
-    DATA(lt_value) = z2ui5_cl_cockpit_session=>flatten( xml       = lv_xml
-                                                        it_secret = VALUE #( ( `MV_PIN` ) ) ).
+
+    CLEAR temp9.
+    INSERT `MV_PIN` INTO TABLE temp9.
+
+    lt_value = z2ui5_cl_cockpit_session=>flatten( xml       = lv_xml
+                                                        it_secret = temp9 ).
 
     cl_abap_unit_assert=>assert_equals( exp = `ALICE`
                                         act = value_of( it_value = lt_value
@@ -279,7 +397,8 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD flatten_all.
 
-    DATA(lt_value) = z2ui5_cl_cockpit_session=>flatten( xml       = draft( )
+    DATA lt_value TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    lt_value = z2ui5_cl_cockpit_session=>flatten( xml       = draft( )
                                                        check_all = abap_true ).
 
     cl_abap_unit_assert=>assert_equals( exp = 13
@@ -298,14 +417,17 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD flatten_same_class_twice.
 
-    DATA(lv_xml) = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">` &&
+    DATA lv_xml TYPE string.
+    DATA lt_value TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    lv_xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">` &&
                    `<asx:values><DATA href="#o1"/></asx:values><asx:heap>` &&
                    `<cls:ZCL_A id="o1"><local.ZCL_A><MO_X href="#o2"/><MO_Y href="#o3"/></local.ZCL_A></cls:ZCL_A>` &&
                    `<cls:ZCL_B id="o2"><local.ZCL_B><V>1</V></local.ZCL_B></cls:ZCL_B>` &&
                    `<cls:ZCL_B id="o3"><local.ZCL_B><V>2</V></local.ZCL_B></cls:ZCL_B>` &&
                    `</asx:heap></asx:abap>`.
 
-    DATA(lt_value) = z2ui5_cl_cockpit_session=>flatten( lv_xml ).
+
+    lt_value = z2ui5_cl_cockpit_session=>flatten( lv_xml ).
 
     cl_abap_unit_assert=>assert_equals( exp = `-> ZCL_B#2`
                                         act = value_of( it_value = lt_value
@@ -324,19 +446,30 @@ CLASS ltcl_session IMPLEMENTATION.
     DATA lv_xml TYPE string.
     DATA lv_found TYPE i.
 
-    DATA(lo_order) = NEW ltcl_order( ).
+    DATA lo_order TYPE REF TO ltcl_order.
+    DATA temp11 TYPE string_table.
+    DATA lt_value TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA ls_value LIKE LINE OF lt_value.
+    CREATE OBJECT lo_order TYPE ltcl_order.
     lo_order->mv_customer = `ACME & Co`.
-    lo_order->ms_head = VALUE #( qty  = 7
-                                 note = `urgent` ).
-    lo_order->mt_lines = VALUE #( ( `first` ) ( `second` ) ).
-    lo_order->mo_item = NEW ltcl_item( ).
+    CLEAR lo_order->ms_head.
+    lo_order->ms_head-qty = 7.
+    lo_order->ms_head-note = `urgent`.
+
+    CLEAR temp11.
+    INSERT `first` INTO TABLE temp11.
+    INSERT `second` INTO TABLE temp11.
+    lo_order->mt_lines = temp11.
+    CREATE OBJECT lo_order->mo_item TYPE ltcl_item.
     lo_order->mo_item->mv_text = `inner`.
 
     CALL TRANSFORMATION id SOURCE data = lo_order RESULT XML lv_xml.
-    DATA(lt_value) = z2ui5_cl_cockpit_session=>flatten( lv_xml ).
+
+    lt_value = z2ui5_cl_cockpit_session=>flatten( lv_xml ).
 
     " the label of a local class differs between systems - the paths below it do not
-    LOOP AT lt_value INTO DATA(ls_value).
+
+    LOOP AT lt_value INTO ls_value.
       IF ls_value-path CP `*-MV_CUSTOMER` AND ls_value-value = `ACME & Co`.
         lv_found = lv_found + 1.
       ELSEIF ls_value-path CP `*-MS_HEAD-QTY` AND ls_value-value = `7`.
@@ -357,60 +490,163 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD diff_marks_changes.
 
-    DATA(lt_old) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-A` value = `1` )
-                                                                ( path = `APP-B` value = `x` )
-                                                                ( path = `APP-GONE` value = `old` ) ).
-    DATA(lt_new) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-A` value = `1` )
-                                                                ( path = `APP-B` value = `y` )
-                                                                ( path = `APP-NEW` value = `typed` ) ).
+    DATA temp13 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp14 LIKE LINE OF temp13.
+    DATA lt_old LIKE temp13.
+    DATA temp15 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp16 LIKE LINE OF temp15.
+    DATA lt_new LIKE temp15.
+    DATA lt_field TYPE z2ui5_cl_cockpit_session=>ty_t_field.
+    DATA temp17 TYPE z2ui5_cl_cockpit_session=>ty_s_field.
+    FIELD-SYMBOLS <temp1> LIKE LINE OF lt_field.
+    DATA temp2 LIKE sy-tabix.
+    DATA temp18 TYPE z2ui5_cl_cockpit_session=>ty_s_field.
+    FIELD-SYMBOLS <temp3> LIKE LINE OF lt_field.
+    DATA temp4 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp19> LIKE LINE OF lt_field.
+    DATA temp20 LIKE sy-tabix.
+    DATA temp21 TYPE z2ui5_cl_cockpit_session=>ty_s_field.
+    FIELD-SYMBOLS <temp5> LIKE LINE OF lt_field.
+    DATA temp6 LIKE sy-tabix.
+    CLEAR temp13.
 
-    DATA(lt_field) = z2ui5_cl_cockpit_session=>diff( it_new = lt_new
+    temp14-path = `APP-A`.
+    temp14-value = `1`.
+    INSERT temp14 INTO TABLE temp13.
+    temp14-path = `APP-B`.
+    temp14-value = `x`.
+    INSERT temp14 INTO TABLE temp13.
+    temp14-path = `APP-GONE`.
+    temp14-value = `old`.
+    INSERT temp14 INTO TABLE temp13.
+
+    lt_old = temp13.
+
+    CLEAR temp15.
+
+    temp16-path = `APP-A`.
+    temp16-value = `1`.
+    INSERT temp16 INTO TABLE temp15.
+    temp16-path = `APP-B`.
+    temp16-value = `y`.
+    INSERT temp16 INTO TABLE temp15.
+    temp16-path = `APP-NEW`.
+    temp16-value = `typed`.
+    INSERT temp16 INTO TABLE temp15.
+
+    lt_new = temp15.
+
+
+    lt_field = z2ui5_cl_cockpit_session=>diff( it_new = lt_new
                                                     it_old = lt_old ).
 
     cl_abap_unit_assert=>assert_equals( exp = 4
                                         act = lines( lt_field ) ).
-    cl_abap_unit_assert=>assert_equals( exp = VALUE z2ui5_cl_cockpit_session=>ty_s_field( path  = `APP-A`
-                                                                                          value = `1`
-                                                                                          state = `None` )
-                                        act = lt_field[ 1 ] ).
-    cl_abap_unit_assert=>assert_equals( exp = VALUE z2ui5_cl_cockpit_session=>ty_s_field(
-                                                  path   = `APP-B`
-                                                  value  = `y`
-                                                  prev   = `x`
-                                                  change = z2ui5_cl_cockpit_session=>cs_change-changed
-                                                  state  = `Warning` )
-                                        act = lt_field[ 2 ] ).
+
+    CLEAR temp17.
+    temp17-path = `APP-A`.
+    temp17-value = `1`.
+    temp17-state = `None`.
+
+
+    temp2 = sy-tabix.
+    READ TABLE lt_field INDEX 1 ASSIGNING <temp1>.
+    sy-tabix = temp2.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_equals( exp = temp17
+                                        act = <temp1> ).
+
+    CLEAR temp18.
+    temp18-path = `APP-B`.
+    temp18-value = `y`.
+    temp18-prev = `x`.
+    temp18-change = z2ui5_cl_cockpit_session=>cs_change-changed.
+    temp18-state = `Warning`.
+
+
+    temp4 = sy-tabix.
+    READ TABLE lt_field INDEX 2 ASSIGNING <temp3>.
+    sy-tabix = temp4.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_equals( exp = temp18
+                                        act = <temp3> ).
+
+
+    temp20 = sy-tabix.
+    READ TABLE lt_field INDEX 3 ASSIGNING <temp19>.
+    sy-tabix = temp20.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_session=>cs_change-new
-                                        act = lt_field[ 3 ]-change ).
-    cl_abap_unit_assert=>assert_equals( exp = VALUE z2ui5_cl_cockpit_session=>ty_s_field(
-                                                  path   = `APP-GONE`
-                                                  prev   = `old`
-                                                  change = z2ui5_cl_cockpit_session=>cs_change-removed
-                                                  state  = `Error` )
-                                        act = lt_field[ 4 ] ).
+                                        act = <temp19>-change ).
+
+    CLEAR temp21.
+    temp21-path = `APP-GONE`.
+    temp21-prev = `old`.
+    temp21-change = z2ui5_cl_cockpit_session=>cs_change-removed.
+    temp21-state = `Error`.
+
+
+    temp6 = sy-tabix.
+    READ TABLE lt_field INDEX 4 ASSIGNING <temp5>.
+    sy-tabix = temp6.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_equals( exp = temp21
+                                        act = <temp5> ).
 
   ENDMETHOD.
 
   METHOD diff_first_step.
 
-    DATA(lt_new) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-A` value = `1` ) ).
+    DATA temp22 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp23 LIKE LINE OF temp22.
+    DATA lt_new LIKE temp22.
+    DATA lt_field TYPE z2ui5_cl_cockpit_session=>ty_t_field.
+    FIELD-SYMBOLS <temp24> LIKE LINE OF lt_field.
+    DATA temp25 LIKE sy-tabix.
+    CLEAR temp22.
 
-    DATA(lt_field) = z2ui5_cl_cockpit_session=>diff( it_new      = lt_new
+    temp23-path = `APP-A`.
+    temp23-value = `1`.
+    INSERT temp23 INTO TABLE temp22.
+
+    lt_new = temp22.
+
+
+    lt_field = z2ui5_cl_cockpit_session=>diff( it_new      = lt_new
                                                     check_first = abap_true ).
 
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lines( lt_field ) ).
-    cl_abap_unit_assert=>assert_initial( lt_field[ 1 ]-change ).
+
+
+    temp25 = sy-tabix.
+    READ TABLE lt_field INDEX 1 ASSIGNING <temp24>.
+    sy-tabix = temp25.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_initial( <temp24>-change ).
 
   ENDMETHOD.
 
   METHOD roots_follow_the_chain.
 
-    DATA(lt_root) = z2ui5_cl_cockpit_session=>roots_of( nodes( ) ).
+    DATA lt_root TYPE z2ui5_cl_cockpit_session=>ty_t_root.
+    DATA ls_root LIKE LINE OF lt_root.
+    lt_root = z2ui5_cl_cockpit_session=>roots_of( nodes( ) ).
 
     cl_abap_unit_assert=>assert_equals( exp = 6
                                         act = lines( lt_root ) ).
-    LOOP AT lt_root INTO DATA(ls_root).
+
+    LOOP AT lt_root INTO ls_root.
       CASE ls_root-id.
         WHEN `A` OR `B` OR `C` OR `D`.
           cl_abap_unit_assert=>assert_equals( exp = `A`
@@ -427,37 +663,130 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD steps_in_order.
 
-    DATA(lt_node) = nodes( ).
-    DATA(lt_step) = z2ui5_cl_cockpit_session=>steps_of( it_node = lt_node
+    DATA lt_node TYPE z2ui5_cl_cockpit_session=>ty_t_node.
+    DATA lt_step TYPE z2ui5_cl_cockpit_session=>ty_t_step.
+    FIELD-SYMBOLS <temp26> LIKE LINE OF lt_step.
+    DATA temp27 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp28> LIKE LINE OF lt_step.
+    DATA temp29 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp30> LIKE LINE OF lt_step.
+    DATA temp31 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp32> LIKE LINE OF lt_step.
+    DATA temp33 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp34> LIKE LINE OF lt_step.
+    DATA temp35 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp36> LIKE LINE OF lt_step.
+    DATA temp37 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp38> LIKE LINE OF lt_step.
+    DATA temp39 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp40> LIKE LINE OF lt_step.
+    DATA temp41 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp42> LIKE LINE OF lt_step.
+    DATA temp43 LIKE sy-tabix.
+    lt_node = nodes( ).
+
+    lt_step = z2ui5_cl_cockpit_session=>steps_of( it_node = lt_node
                                                        it_root = z2ui5_cl_cockpit_session=>roots_of( lt_node )
                                                        id      = `A` ).
 
     cl_abap_unit_assert=>assert_equals( exp = 4
                                         act = lines( lt_step ) ).
+
+
+    temp27 = sy-tabix.
+    READ TABLE lt_step INDEX 1 ASSIGNING <temp26>.
+    sy-tabix = temp27.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `app start`
-                                        act = lt_step[ 1 ]-note ).
+                                        act = <temp26>-note ).
+
+
+    temp29 = sy-tabix.
+    READ TABLE lt_step INDEX 2 ASSIGNING <temp28>.
+    sy-tabix = temp29.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `+10 s`
-                                        act = lt_step[ 2 ]-delta ).
+                                        act = <temp28>-delta ).
+
+
+    temp31 = sy-tabix.
+    READ TABLE lt_step INDEX 3 ASSIGNING <temp30>.
+    sy-tabix = temp31.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 2
-                                        act = lt_step[ 3 ]-follows ).
-    cl_abap_unit_assert=>assert_initial( lt_step[ 3 ]-note ).
+                                        act = <temp30>-follows ).
+
+
+    temp33 = sy-tabix.
+    READ TABLE lt_step INDEX 3 ASSIGNING <temp32>.
+    sy-tabix = temp33.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_initial( <temp32>-note ).
     " D continues B, not C
+
+
+    temp35 = sy-tabix.
+    READ TABLE lt_step INDEX 4 ASSIGNING <temp34>.
+    sy-tabix = temp35.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `D`
-                                        act = lt_step[ 4 ]-id ).
+                                        act = <temp34>-id ).
+
+
+    temp37 = sy-tabix.
+    READ TABLE lt_step INDEX 4 ASSIGNING <temp36>.
+    sy-tabix = temp37.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 2
-                                        act = lt_step[ 4 ]-follows ).
+                                        act = <temp36>-follows ).
+
+
+    temp39 = sy-tabix.
+    READ TABLE lt_step INDEX 4 ASSIGNING <temp38>.
+    sy-tabix = temp39.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_char_cp( exp = `continues step 2*`
-                                         act = lt_step[ 4 ]-note ).
+                                         act = <temp38>-note ).
+
+
+    temp41 = sy-tabix.
+    READ TABLE lt_step INDEX 4 ASSIGNING <temp40>.
+    sy-tabix = temp41.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `+1 min 10 s`
-                                        act = lt_step[ 4 ]-delta ).
+                                        act = <temp40>-delta ).
 
     lt_step = z2ui5_cl_cockpit_session=>steps_of( it_node = lt_node
                                                  it_root = z2ui5_cl_cockpit_session=>roots_of( lt_node )
                                                  id      = `F` ).
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = lines( lt_step ) ).
+
+
+    temp43 = sy-tabix.
+    READ TABLE lt_step INDEX 1 ASSIGNING <temp42>.
+    sy-tabix = temp43.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `the steps before it expired`
-                                        act = lt_step[ 1 ]-note ).
+                                        act = <temp42>-note ).
 
   ENDMETHOD.
 
@@ -466,13 +795,35 @@ CLASS ltcl_session IMPLEMENTATION.
     " more steps than shown: the newest stay, numbered from 1 again, and a
     " step still names the step it continues by its line
     DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
-    DATA(lv_total) = z2ui5_cl_cockpit_session=>c_max_steps + 3.
+    DATA lv_total TYPE i.
+      DATA temp44 TYPE z2ui5_cl_cockpit_session=>ty_s_step.
+      DATA temp7 TYPE z2ui5_cl_cockpit_session=>ty_s_step-follows.
+    DATA ls_first TYPE z2ui5_cl_cockpit_session=>ty_s_step.
+    FIELD-SYMBOLS <temp8> LIKE LINE OF ls_steps-t_step.
+    DATA temp9 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp45> LIKE LINE OF ls_steps-t_step.
+    DATA temp46 LIKE sy-tabix.
+    DATA ls_last TYPE z2ui5_cl_cockpit_session=>ty_s_step.
+    FIELD-SYMBOLS <temp10> LIKE LINE OF ls_steps-t_step.
+    DATA temp11 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp47> LIKE LINE OF ls_steps-t_step.
+    DATA temp48 LIKE sy-tabix.
+    lv_total = z2ui5_cl_cockpit_session=>c_max_steps + 3.
     " each continues the one before, the last one the third step from the
     " end - browser back
     DO lv_total TIMES.
-      APPEND VALUE #( step    = sy-index
-                      id      = |S{ sy-index }|
-                      follows = COND #( WHEN sy-index = lv_total THEN lv_total - 3 ELSE sy-index - 1 ) )
+
+      CLEAR temp44.
+      temp44-step = sy-index.
+      temp44-id = |S{ sy-index }|.
+
+      IF sy-index = lv_total.
+        temp7 = lv_total - 3.
+      ELSE.
+        temp7 = sy-index - 1.
+      ENDIF.
+      temp44-follows = temp7.
+      APPEND temp44
              TO ls_steps-t_step.
     ENDDO.
 
@@ -481,7 +832,16 @@ CLASS ltcl_session IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( ls_steps-check_capped ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_session=>c_max_steps
                                         act = lines( ls_steps-t_step ) ).
-    DATA(ls_first) = ls_steps-t_step[ 1 ].
+
+
+
+    temp9 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 1 ASSIGNING <temp8>.
+    sy-tabix = temp9.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_first = <temp8>.
     cl_abap_unit_assert=>assert_equals( exp = `S4`
                                         act = ls_first-id ).
     cl_abap_unit_assert=>assert_equals( exp = 1
@@ -490,13 +850,38 @@ CLASS ltcl_session IMPLEMENTATION.
                                         act = ls_first-follows ).
     cl_abap_unit_assert=>assert_char_cp( exp = `continues a step before*`
                                          act = ls_first-note ).
+
+
+    temp46 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 2 ASSIGNING <temp45>.
+    sy-tabix = temp46.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 1
-                                        act = ls_steps-t_step[ 2 ]-follows ).
-    DATA(ls_last) = ls_steps-t_step[ z2ui5_cl_cockpit_session=>c_max_steps ].
+                                        act = <temp45>-follows ).
+
+
+
+    temp11 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX z2ui5_cl_cockpit_session=>c_max_steps ASSIGNING <temp10>.
+    sy-tabix = temp11.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_last = <temp10>.
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_session=>c_max_steps
                                         act = ls_last-step ).
+
+
+    temp48 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX ls_last-follows ASSIGNING <temp47>.
+    sy-tabix = temp48.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = |S{ lv_total - 3 }|
-                                        act = ls_steps-t_step[ ls_last-follows ]-id ).
+                                        act = <temp47>-id ).
     cl_abap_unit_assert=>assert_char_cp( exp = |continues step { ls_last-follows }*|
                                          act = ls_last-note ).
 
@@ -531,21 +916,58 @@ CLASS ltcl_session IMPLEMENTATION.
 
   METHOD business_objects.
 
-    DATA(lt_business) = z2ui5_cl_cockpit_session=>business_of(
-        VALUE #( ( path = `APP-MV_VBELN` value = `4711` )
-                 ( path = `APP-MS_HEAD-KUNNR` value = `1000` )
-                 ( path = `APP-MT_ITEMS[1]-MATNR` value = `M1` )
-                 ( path = `APP-MT_ITEMS[2]-MATNR` value = `M1` )
-                 ( path = `APP-MV_CUSTOMER` value = `` )
-                 ( path = `APP-MS_HEAD-WERKS` value = `0000` )
-                 ( path = `APP-MO_KUNNR` value = `-> ZCL_X` )
-                 ( path = `APP-MV_TEXT` value = `4711` ) ) ).
+    DATA temp49 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp50 LIKE LINE OF temp49.
+    DATA lt_business TYPE z2ui5_cl_cockpit_session=>ty_t_business.
+    DATA temp51 TYPE z2ui5_cl_cockpit_session=>ty_t_business.
+    DATA temp52 LIKE LINE OF temp51.
+    CLEAR temp49.
 
+    temp50-path = `APP-MV_VBELN`.
+    temp50-value = `4711`.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MS_HEAD-KUNNR`.
+    temp50-value = `1000`.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MT_ITEMS[1]-MATNR`.
+    temp50-value = `M1`.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MT_ITEMS[2]-MATNR`.
+    temp50-value = `M1`.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MV_CUSTOMER`.
+    temp50-value = ``.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MS_HEAD-WERKS`.
+    temp50-value = `0000`.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MO_KUNNR`.
+    temp50-value = `-> ZCL_X`.
+    INSERT temp50 INTO TABLE temp49.
+    temp50-path = `APP-MV_TEXT`.
+    temp50-value = `4711`.
+    INSERT temp50 INTO TABLE temp49.
+
+    lt_business = z2ui5_cl_cockpit_session=>business_of(
+        temp49 ).
+
+
+    CLEAR temp51.
+
+    temp52-object = `Sales document`.
+    temp52-value = `4711`.
+    temp52-field = `APP-MV_VBELN`.
+    INSERT temp52 INTO TABLE temp51.
+    temp52-object = `Customer`.
+    temp52-value = `1000`.
+    temp52-field = `APP-MS_HEAD-KUNNR`.
+    INSERT temp52 INTO TABLE temp51.
+    temp52-object = `Material`.
+    temp52-value = `M1`.
+    temp52-field = `APP-MT_ITEMS[1]-MATNR`.
+    INSERT temp52 INTO TABLE temp51.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_business(
-                  ( object = `Sales document` value = `4711` field = `APP-MV_VBELN` )
-                  ( object = `Customer` value = `1000` field = `APP-MS_HEAD-KUNNR` )
-                  ( object = `Material` value = `M1` field = `APP-MT_ITEMS[1]-MATNR` ) )
+        exp = temp51
         act = lt_business ).
 
   ENDMETHOD.
@@ -554,23 +976,64 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " a BAPI return with an error and a success, a UI structure whose TYPE
     " is no message type, an error with a TEXT and a warning with MSG
-    DATA(lt_message) = z2ui5_cl_cockpit_session=>messages_of(
-        VALUE #( ( path = `APP-MT_RETURN[1]-TYPE` value = `E` )
-                 ( path = `APP-MT_RETURN[1]-MESSAGE` value = `Quantity must be greater than 0` )
-                 ( path = `APP-MT_RETURN[2]-TYPE` value = `S` )
-                 ( path = `APP-MT_RETURN[2]-MESSAGE` value = `Saved` )
-                 ( path = `APP-MS_BUTTON-TYPE` value = `Emphasized` )
-                 ( path = `APP-MS_BUTTON-TEXT` value = `Save` )
-                 ( path = `APP-MS_LOCK-SEVERITY` value = `error` )
-                 ( path = `APP-MS_LOCK-TEXT` value = `Order is locked by USER2` )
-                 ( path = `APP-MS_CHECK-MSGTY` value = `W` )
-                 ( path = `APP-MS_CHECK-MSG` value = `Delivery date in the past` ) ) ).
+    DATA temp53 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp54 LIKE LINE OF temp53.
+    DATA lt_message TYPE z2ui5_cl_cockpit_session=>ty_t_message.
+    DATA temp55 TYPE z2ui5_cl_cockpit_session=>ty_t_message.
+    DATA temp56 LIKE LINE OF temp55.
+    CLEAR temp53.
 
+    temp54-path = `APP-MT_RETURN[1]-TYPE`.
+    temp54-value = `E`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MT_RETURN[1]-MESSAGE`.
+    temp54-value = `Quantity must be greater than 0`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MT_RETURN[2]-TYPE`.
+    temp54-value = `S`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MT_RETURN[2]-MESSAGE`.
+    temp54-value = `Saved`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MS_BUTTON-TYPE`.
+    temp54-value = `Emphasized`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MS_BUTTON-TEXT`.
+    temp54-value = `Save`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MS_LOCK-SEVERITY`.
+    temp54-value = `error`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MS_LOCK-TEXT`.
+    temp54-value = `Order is locked by USER2`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MS_CHECK-MSGTY`.
+    temp54-value = `W`.
+    INSERT temp54 INTO TABLE temp53.
+    temp54-path = `APP-MS_CHECK-MSG`.
+    temp54-value = `Delivery date in the past`.
+    INSERT temp54 INTO TABLE temp53.
+
+    lt_message = z2ui5_cl_cockpit_session=>messages_of(
+        temp53 ).
+
+
+    CLEAR temp55.
+
+    temp56-type = `E`.
+    temp56-text = `Quantity must be greater than 0`.
+    temp56-path = `APP-MT_RETURN[1]`.
+    INSERT temp56 INTO TABLE temp55.
+    temp56-type = `ERROR`.
+    temp56-text = `Order is locked by USER2`.
+    temp56-path = `APP-MS_LOCK`.
+    INSERT temp56 INTO TABLE temp55.
+    temp56-type = `W`.
+    temp56-text = `Delivery date in the past`.
+    temp56-path = `APP-MS_CHECK`.
+    INSERT temp56 INTO TABLE temp55.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_message(
-                  ( type = `E` text = `Quantity must be greater than 0` path = `APP-MT_RETURN[1]` )
-                  ( type = `ERROR` text = `Order is locked by USER2` path = `APP-MS_LOCK` )
-                  ( type = `W` text = `Delivery date in the past` path = `APP-MS_CHECK` ) )
+        exp = temp55
         act = lt_message ).
 
   ENDMETHOD.
@@ -579,43 +1042,126 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " QTY = 0 in all three failing states and in one of four others: the
     " hint. MODE = edit everywhere: no hint. NOTE = x in two of three: too few
-    DATA(lt_failing) = VALUE z2ui5_cl_cockpit_session=>ty_t_sample(
-        ( sample = 1 path = `APP-QTY` value = `0` )
-        ( sample = 1 path = `APP-MODE` value = `edit` )
-        ( sample = 1 path = `APP-NOTE` value = `x` )
-        ( sample = 2 path = `APP-QTY` value = `0` )
-        ( sample = 2 path = `APP-MODE` value = `edit` )
-        ( sample = 2 path = `APP-NOTE` value = `x` )
-        ( sample = 3 path = `APP-QTY` value = `0` )
-        ( sample = 3 path = `APP-MODE` value = `edit` )
-        ( sample = 3 path = `APP-NOTE` value = `y` ) ).
-    DATA(lt_others) = VALUE z2ui5_cl_cockpit_session=>ty_t_sample(
-        ( sample = 1 path = `APP-QTY` value = `0` )
-        ( sample = 1 path = `APP-MODE` value = `edit` )
-        ( sample = 2 path = `APP-QTY` value = `5` )
-        ( sample = 2 path = `APP-MODE` value = `edit` )
-        ( sample = 3 path = `APP-QTY` value = `7` )
-        ( sample = 3 path = `APP-MODE` value = `edit` )
-        ( sample = 4 path = `APP-QTY` value = `1` )
-        ( sample = 4 path = `APP-MODE` value = `edit` ) ).
+    DATA temp57 TYPE z2ui5_cl_cockpit_session=>ty_t_sample.
+    DATA temp58 LIKE LINE OF temp57.
+    DATA lt_failing LIKE temp57.
+    DATA temp59 TYPE z2ui5_cl_cockpit_session=>ty_t_sample.
+    DATA temp60 LIKE LINE OF temp59.
+    DATA lt_others LIKE temp59.
+    DATA lt_common TYPE z2ui5_cl_cockpit_session=>ty_t_common.
+    DATA temp61 TYPE z2ui5_cl_cockpit_session=>ty_s_common.
+    FIELD-SYMBOLS <temp12> LIKE LINE OF lt_common.
+    DATA temp13 LIKE sy-tabix.
+    DATA temp62 TYPE z2ui5_cl_cockpit_session=>ty_t_sample.
+    CLEAR temp57.
 
-    DATA(lt_common) = z2ui5_cl_cockpit_session=>common_of( it_failing = lt_failing
+    temp58-sample = 1.
+    temp58-path = `APP-QTY`.
+    temp58-value = `0`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 1.
+    temp58-path = `APP-MODE`.
+    temp58-value = `edit`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 1.
+    temp58-path = `APP-NOTE`.
+    temp58-value = `x`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 2.
+    temp58-path = `APP-QTY`.
+    temp58-value = `0`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 2.
+    temp58-path = `APP-MODE`.
+    temp58-value = `edit`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 2.
+    temp58-path = `APP-NOTE`.
+    temp58-value = `x`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 3.
+    temp58-path = `APP-QTY`.
+    temp58-value = `0`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 3.
+    temp58-path = `APP-MODE`.
+    temp58-value = `edit`.
+    INSERT temp58 INTO TABLE temp57.
+    temp58-sample = 3.
+    temp58-path = `APP-NOTE`.
+    temp58-value = `y`.
+    INSERT temp58 INTO TABLE temp57.
+
+    lt_failing = temp57.
+
+    CLEAR temp59.
+
+    temp60-sample = 1.
+    temp60-path = `APP-QTY`.
+    temp60-value = `0`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 1.
+    temp60-path = `APP-MODE`.
+    temp60-value = `edit`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 2.
+    temp60-path = `APP-QTY`.
+    temp60-value = `5`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 2.
+    temp60-path = `APP-MODE`.
+    temp60-value = `edit`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 3.
+    temp60-path = `APP-QTY`.
+    temp60-value = `7`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 3.
+    temp60-path = `APP-MODE`.
+    temp60-value = `edit`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 4.
+    temp60-path = `APP-QTY`.
+    temp60-value = `1`.
+    INSERT temp60 INTO TABLE temp59.
+    temp60-sample = 4.
+    temp60-path = `APP-MODE`.
+    temp60-value = `edit`.
+    INSERT temp60 INTO TABLE temp59.
+
+    lt_others = temp59.
+
+
+    lt_common = z2ui5_cl_cockpit_session=>common_of( it_failing = lt_failing
                                                           it_others  = lt_others ).
 
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lines( lt_common ) ).
+
+    CLEAR temp61.
+    temp61-path = `APP-QTY`.
+    temp61-value = `0`.
+    temp61-failing = 3.
+    temp61-of_failing = 3.
+    temp61-others_pct = 25.
+    temp61-text = `in 3 of 3 failing, in 25 % of 4 other states`.
+
+
+    temp13 = sy-tabix.
+    READ TABLE lt_common INDEX 1 ASSIGNING <temp12>.
+    sy-tabix = temp13.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_s_common( path       = `APP-QTY`
-                                                           value      = `0`
-                                                           failing    = 3
-                                                           of_failing = 3
-                                                           others_pct = 25
-                                                           text       = `in 3 of 3 failing, in 25 % of 4 other states` )
-        act = lt_common[ 1 ] ).
+        exp = temp61
+        act = <temp12> ).
 
     " no baseline - nothing to tell the failing ones from
+
+    CLEAR temp62.
     cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_session=>common_of( it_failing = lt_failing
-                                                                             it_others  = VALUE #( ) ) ).
+                                                                             it_others  = temp62 ) ).
 
   ENDMETHOD.
 
@@ -623,16 +1169,41 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " nodes( ): B is continued by C and D, C and G are last steps - C long
     " ago, G "now"; X is no draft at all
-    DATA(lt_outcome) = z2ui5_cl_cockpit_session=>outcomes_of( it_node      = nodes( )
-                                                              it_id        = VALUE #( ( `B` ) ( `C` ) ( `G` ) ( `X` ) )
+    DATA temp63 TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+    DATA lt_outcome TYPE z2ui5_cl_cockpit_session=>ty_t_outcome.
+    DATA temp65 TYPE z2ui5_cl_cockpit_session=>ty_t_outcome.
+    DATA temp66 LIKE LINE OF temp65.
+    CLEAR temp63.
+    INSERT `B` INTO TABLE temp63.
+    INSERT `C` INTO TABLE temp63.
+    INSERT `G` INTO TABLE temp63.
+    INSERT `X` INTO TABLE temp63.
+
+    lt_outcome = z2ui5_cl_cockpit_session=>outcomes_of( it_node      = nodes( )
+                                                              it_id        = temp63
                                                               ended_before = `20261008105000.0` ).
 
+
+    CLEAR temp65.
+
+    temp66-id = `B`.
+    temp66-outcome = z2ui5_cl_cockpit_session=>cs_outcome-continued.
+    temp66-state = `Success`.
+    INSERT temp66 INTO TABLE temp65.
+    temp66-id = `C`.
+    temp66-outcome = z2ui5_cl_cockpit_session=>cs_outcome-stopped.
+    temp66-state = `Error`.
+    INSERT temp66 INTO TABLE temp65.
+    temp66-id = `G`.
+    temp66-outcome = z2ui5_cl_cockpit_session=>cs_outcome-open.
+    temp66-state = `Information`.
+    INSERT temp66 INTO TABLE temp65.
+    temp66-id = `X`.
+    temp66-outcome = z2ui5_cl_cockpit_session=>cs_outcome-unknown.
+    temp66-state = `None`.
+    INSERT temp66 INTO TABLE temp65.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_outcome(
-                  ( id = `B` outcome = z2ui5_cl_cockpit_session=>cs_outcome-continued state = `Success` )
-                  ( id = `C` outcome = z2ui5_cl_cockpit_session=>cs_outcome-stopped state = `Error` )
-                  ( id = `G` outcome = z2ui5_cl_cockpit_session=>cs_outcome-open state = `Information` )
-                  ( id = `X` outcome = z2ui5_cl_cockpit_session=>cs_outcome-unknown state = `None` ) )
+        exp = temp65
         act = lt_outcome ).
 
   ENDMETHOD.
@@ -640,24 +1211,85 @@ CLASS ltcl_session IMPLEMENTATION.
   METHOD flows_with_ends.
 
     " the sessions of flows_between_apps, all over: D's roundtrip failed
-    DATA(lt_flow) = z2ui5_cl_cockpit_session=>flows_of(
-        it_link      = VALUE #( ( id = `A` app = `X` )
-                                ( id = `B` id_prev = `A` app = `X` )
-                                ( id = `C` id_prev = `B` app = `Y` )
-                                ( id = `D` id_prev = `C` app = `X` )
-                                ( id = `E` id_prev = `GONE` app = `Z` )
-                                ( id = `F` id_prev = `` app = `Y` ) )
-        it_failed    = VALUE #( ( `D` ) )
+    DATA temp67 TYPE z2ui5_cl_cockpit_session=>ty_t_link.
+    DATA temp68 LIKE LINE OF temp67.
+    DATA temp14 TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+    DATA lt_flow TYPE z2ui5_cl_cockpit_session=>ty_t_flow.
+    DATA temp69 TYPE z2ui5_cl_cockpit_session=>ty_t_flow.
+    DATA temp70 LIKE LINE OF temp69.
+    CLEAR temp67.
+
+    CLEAR temp68.
+    temp68-id = `A`.
+    temp68-app = `X`.
+    INSERT temp68 INTO TABLE temp67.
+    CLEAR temp68.
+    temp68-id = `B`.
+    temp68-id_prev = `A`.
+    temp68-app = `X`.
+    INSERT temp68 INTO TABLE temp67.
+    CLEAR temp68.
+    temp68-id = `C`.
+    temp68-id_prev = `B`.
+    temp68-app = `Y`.
+    INSERT temp68 INTO TABLE temp67.
+    CLEAR temp68.
+    temp68-id = `D`.
+    temp68-id_prev = `C`.
+    temp68-app = `X`.
+    INSERT temp68 INTO TABLE temp67.
+    CLEAR temp68.
+    temp68-id = `E`.
+    temp68-id_prev = `GONE`.
+    temp68-app = `Z`.
+    INSERT temp68 INTO TABLE temp67.
+    CLEAR temp68.
+    temp68-id = `F`.
+    temp68-id_prev = ``.
+    temp68-app = `Y`.
+    INSERT temp68 INTO TABLE temp67.
+
+    CLEAR temp14.
+    INSERT `D` INTO TABLE temp14.
+
+    lt_flow = z2ui5_cl_cockpit_session=>flows_of(
+        it_link      = temp67
+        it_failed    = temp14
         ended_before = `20991231000000.0` ).
 
+
+    CLEAR temp69.
+
+    temp70-source = `(start)`.
+    temp70-target = `X`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
+    temp70-source = `(start)`.
+    temp70-target = `Y`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
+    temp70-source = `X`.
+    temp70-target = `(end after an error)`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
+    temp70-source = `X`.
+    temp70-target = `Y`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
+    temp70-source = `Y`.
+    temp70-target = `(end)`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
+    temp70-source = `Y`.
+    temp70-target = `X`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
+    temp70-source = `Z`.
+    temp70-target = `(end)`.
+    temp70-count = 1.
+    INSERT temp70 INTO TABLE temp69.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_flow( ( source = `(start)` target = `X` count = 1 )
-                                                         ( source = `(start)` target = `Y` count = 1 )
-                                                         ( source = `X` target = `(end after an error)` count = 1 )
-                                                         ( source = `X` target = `Y` count = 1 )
-                                                         ( source = `Y` target = `(end)` count = 1 )
-                                                         ( source = `Y` target = `X` count = 1 )
-                                                         ( source = `Z` target = `(end)` count = 1 ) )
+        exp = temp69
         act = lt_flow ).
 
   ENDMETHOD.
@@ -666,22 +1298,67 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " MT_LOG grows from 1 to 3 rows, the nested T_SUB of row 1 from 1 to 2,
     " MT_SAME keeps its row
-    DATA(lt_before) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-MT_LOG[1]-TEXT` value = `a` )
-                                                                  ( path = `APP-MT_A[1]-T_SUB[1]-X` value = `1` )
-                                                                  ( path = `APP-MT_SAME[1]` value = `s` ) ).
-    DATA(lt_after) = VALUE z2ui5_cl_cockpit_session=>ty_t_value( ( path = `APP-MT_LOG[1]-TEXT` value = `a` )
-                                                                 ( path = `APP-MT_LOG[1]-NR` value = `1` )
-                                                                 ( path = `APP-MT_LOG[2]-TEXT` value = `b` )
-                                                                 ( path = `APP-MT_LOG[3]-TEXT` value = `c` )
-                                                                 ( path = `APP-MT_A[1]-T_SUB[1]-X` value = `1` )
-                                                                 ( path = `APP-MT_A[1]-T_SUB[2]-X` value = `2` )
-                                                                 ( path = `APP-MT_SAME[1]` value = `t` ) ).
+    DATA temp71 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp72 LIKE LINE OF temp71.
+    DATA lt_before LIKE temp71.
+    DATA temp73 TYPE z2ui5_cl_cockpit_session=>ty_t_value.
+    DATA temp74 LIKE LINE OF temp73.
+    DATA lt_after LIKE temp73.
+    DATA temp75 TYPE z2ui5_cl_cockpit_session=>ty_t_growth.
+    DATA temp76 LIKE LINE OF temp75.
+    CLEAR temp71.
 
+    temp72-path = `APP-MT_LOG[1]-TEXT`.
+    temp72-value = `a`.
+    INSERT temp72 INTO TABLE temp71.
+    temp72-path = `APP-MT_A[1]-T_SUB[1]-X`.
+    temp72-value = `1`.
+    INSERT temp72 INTO TABLE temp71.
+    temp72-path = `APP-MT_SAME[1]`.
+    temp72-value = `s`.
+    INSERT temp72 INTO TABLE temp71.
+
+    lt_before = temp71.
+
+    CLEAR temp73.
+
+    temp74-path = `APP-MT_LOG[1]-TEXT`.
+    temp74-value = `a`.
+    INSERT temp74 INTO TABLE temp73.
+    temp74-path = `APP-MT_LOG[1]-NR`.
+    temp74-value = `1`.
+    INSERT temp74 INTO TABLE temp73.
+    temp74-path = `APP-MT_LOG[2]-TEXT`.
+    temp74-value = `b`.
+    INSERT temp74 INTO TABLE temp73.
+    temp74-path = `APP-MT_LOG[3]-TEXT`.
+    temp74-value = `c`.
+    INSERT temp74 INTO TABLE temp73.
+    temp74-path = `APP-MT_A[1]-T_SUB[1]-X`.
+    temp74-value = `1`.
+    INSERT temp74 INTO TABLE temp73.
+    temp74-path = `APP-MT_A[1]-T_SUB[2]-X`.
+    temp74-value = `2`.
+    INSERT temp74 INTO TABLE temp73.
+    temp74-path = `APP-MT_SAME[1]`.
+    temp74-value = `t`.
+    INSERT temp74 INTO TABLE temp73.
+
+    lt_after = temp73.
+
+
+    CLEAR temp75.
+
+    temp76-path = `APP-MT_LOG`.
+    temp76-rows_before = 1.
+    temp76-rows_after = 3.
+    INSERT temp76 INTO TABLE temp75.
+    temp76-path = `APP-MT_A[1]-T_SUB`.
+    temp76-rows_before = 1.
+    temp76-rows_after = 2.
+    INSERT temp76 INTO TABLE temp75.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_growth( ( path = `APP-MT_LOG` rows_before = 1 rows_after = 3 )
-                                                           ( path        = `APP-MT_A[1]-T_SUB`
-                                                             rows_before = 1
-                                                             rows_after  = 2 ) )
+        exp = temp75
         act = z2ui5_cl_cockpit_session=>growth_of( it_before = lt_before
                                                    it_after  = lt_after ) ).
 
@@ -691,18 +1368,66 @@ CLASS ltcl_session IMPLEMENTATION.
 
     " two sessions: X -> X -> Y -> X and one starting in Y; E's predecessor
     " is gone, so it is neither a start nor a navigation
-    DATA(lt_flow) = z2ui5_cl_cockpit_session=>flows_of( VALUE #( ( id = `A` app = `X` )
-                                                                 ( id = `B` id_prev = `A` app = `X` )
-                                                                 ( id = `C` id_prev = `B` app = `Y` )
-                                                                 ( id = `D` id_prev = `C` app = `X` )
-                                                                 ( id = `E` id_prev = `GONE` app = `Z` )
-                                                                 ( id = `F` id_prev = `` app = `Y` ) ) ).
+    DATA temp77 TYPE z2ui5_cl_cockpit_session=>ty_t_link.
+    DATA temp78 LIKE LINE OF temp77.
+    DATA lt_flow TYPE z2ui5_cl_cockpit_session=>ty_t_flow.
+    DATA temp79 TYPE z2ui5_cl_cockpit_session=>ty_t_flow.
+    DATA temp80 LIKE LINE OF temp79.
+    CLEAR temp77.
 
+    CLEAR temp78.
+    temp78-id = `A`.
+    temp78-app = `X`.
+    INSERT temp78 INTO TABLE temp77.
+    CLEAR temp78.
+    temp78-id = `B`.
+    temp78-id_prev = `A`.
+    temp78-app = `X`.
+    INSERT temp78 INTO TABLE temp77.
+    CLEAR temp78.
+    temp78-id = `C`.
+    temp78-id_prev = `B`.
+    temp78-app = `Y`.
+    INSERT temp78 INTO TABLE temp77.
+    CLEAR temp78.
+    temp78-id = `D`.
+    temp78-id_prev = `C`.
+    temp78-app = `X`.
+    INSERT temp78 INTO TABLE temp77.
+    CLEAR temp78.
+    temp78-id = `E`.
+    temp78-id_prev = `GONE`.
+    temp78-app = `Z`.
+    INSERT temp78 INTO TABLE temp77.
+    CLEAR temp78.
+    temp78-id = `F`.
+    temp78-id_prev = ``.
+    temp78-app = `Y`.
+    INSERT temp78 INTO TABLE temp77.
+
+    lt_flow = z2ui5_cl_cockpit_session=>flows_of( temp77 ).
+
+
+    CLEAR temp79.
+
+    temp80-source = `(start)`.
+    temp80-target = `X`.
+    temp80-count = 1.
+    INSERT temp80 INTO TABLE temp79.
+    temp80-source = `(start)`.
+    temp80-target = `Y`.
+    temp80-count = 1.
+    INSERT temp80 INTO TABLE temp79.
+    temp80-source = `X`.
+    temp80-target = `Y`.
+    temp80-count = 1.
+    INSERT temp80 INTO TABLE temp79.
+    temp80-source = `Y`.
+    temp80-target = `X`.
+    temp80-count = 1.
+    INSERT temp80 INTO TABLE temp79.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_flow( ( source = `(start)` target = `X` count = 1 )
-                                                         ( source = `(start)` target = `Y` count = 1 )
-                                                         ( source = `X` target = `Y` count = 1 )
-                                                         ( source = `Y` target = `X` count = 1 ) )
+        exp = temp79
         act = lt_flow ).
 
   ENDMETHOD.
@@ -780,45 +1505,78 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
   METHOD setup.
 
-    DATA lt_draft TYPE STANDARD TABLE OF ty_s_draft WITH EMPTY KEY.
+    TYPES temp1 TYPE STANDARD TABLE OF ty_s_draft WITH DEFAULT KEY.
+DATA lt_draft TYPE temp1.
     DATA lv_tab TYPE string.
 
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA temp81 LIKE lt_draft.
+    DATA temp82 LIKE LINE OF temp81.
+    FIELD-SYMBOLS <draft> LIKE LINE OF lt_draft.
+    DATA temp83 TYPE z2ui5_t_25.
+    DATA ls_log LIKE temp83.
+    ls_set = z2ui5_cl_cockpit_setup=>get_default( ).
     ls_set-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-name.
     z2ui5_cl_cockpit_setup=>set_buffer( ls_set ).
 
-    lt_draft = VALUE #( uname = `ZZ_COCKPIT_UT`
-                        ( id = `ZZCKUT1` timestampl = `20991231100000.0` data = order( `` ) )
-                        ( id = `ZZCKUT2` id_prev = `ZZCKUT1` timestampl = `20991231100005.0` data = order( `4711` ) )
-                        ( id = `ZZCKUT3` id_prev = `ZZCKUT2` timestampl = `20991231100105.0` data = order( `4712` ) ) ).
+
+    CLEAR temp81.
+
+    CLEAR temp82.
+    temp82-uname = `ZZ_COCKPIT_UT`.
+    temp82-id = `ZZCKUT1`.
+    temp82-timestampl = `20991231100000.0`.
+    temp82-data = order( `` ).
+    INSERT temp82 INTO TABLE temp81.
+    CLEAR temp82.
+    temp82-uname = `ZZ_COCKPIT_UT`.
+    temp82-id = `ZZCKUT2`.
+    temp82-id_prev = `ZZCKUT1`.
+    temp82-timestampl = `20991231100005.0`.
+    temp82-data = order( `4711` ).
+    INSERT temp82 INTO TABLE temp81.
+    CLEAR temp82.
+    temp82-uname = `ZZ_COCKPIT_UT`.
+    temp82-id = `ZZCKUT3`.
+    temp82-id_prev = `ZZCKUT2`.
+    temp82-timestampl = `20991231100105.0`.
+    temp82-data = order( `4712` ).
+    INSERT temp82 INTO TABLE temp81.
+    lt_draft = temp81.
     lv_tab = c_table.
-    LOOP AT lt_draft ASSIGNING FIELD-SYMBOL(<draft>).
+
+    LOOP AT lt_draft ASSIGNING <draft>.
       <draft>-mandt = sy-mandt.
     ENDLOOP.
-    INSERT (lv_tab) FROM TABLE @lt_draft.
+    INSERT (lv_tab) FROM TABLE lt_draft.
 
     " what the monitor logged: the slow roundtrip that wrote step 3, and a
     " failed one that started from step 2
-    DATA(ls_log) = VALUE z2ui5_t_25( id            = `ZZCKUTLOG1`
-                                         timestampl    = `20991231100105.0`
-                                         utc_day       = `20991231`
-                                         app           = c_app
-                                         event         = `SAVE`
-                                         draft_id      = `ZZCKUT3`
-                                         draft_id_prev = `ZZCKUT2`
-                                         check_slow    = abap_true
-                                         ms_total      = 2500 ).
-    INSERT z2ui5_t_25 FROM @ls_log.
-    ls_log = VALUE #( id            = `ZZCKUTLOG2`
-                      timestampl    = `20991231100030.0`
-                      utc_day       = `20991231`
-                      app           = c_app
-                      event         = `POST`
-                      draft_id_prev = `ZZCKUT2`
-                      check_error   = abap_true
-                      error_class   = `CX_SY_ZERODIVIDE`
-                      error_head    = `Division by zero` ).
-    INSERT z2ui5_t_25 FROM @ls_log.
+
+    CLEAR temp83.
+    temp83-id = `ZZCKUTLOG1`.
+    temp83-timestampl = `20991231100105.0`.
+    temp83-utc_day = `20991231`.
+    temp83-app = c_app.
+    temp83-event = `SAVE`.
+    temp83-draft_id = `ZZCKUT3`.
+    temp83-draft_id_prev = `ZZCKUT2`.
+    temp83-check_slow = abap_true.
+    temp83-ms_total = 2500.
+
+    ls_log = temp83.
+    INSERT z2ui5_t_25 FROM ls_log.
+    CLEAR ls_log.
+    ls_log-id = `ZZCKUTLOG2`.
+    ls_log-timestampl = `20991231100030.0`.
+    ls_log-utc_day = `20991231`.
+    ls_log-app = c_app.
+    ls_log-event = `POST`.
+    ls_log-draft_id_prev = `ZZCKUT2`.
+    ls_log-check_error = abap_true.
+    ls_log-error_class = `CX_SY_ZERODIVIDE`.
+    ls_log-error_head = `Division by zero`.
+    INSERT z2ui5_t_25 FROM ls_log.
 
   ENDMETHOD.
 
@@ -826,13 +1584,23 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
     DATA lv_tab TYPE string.
     DATA lv_pattern TYPE string.
+    DATA temp84 TYPE z2ui5_t_25-app.
+    DATA lv_app LIKE temp84.
+    DATA temp85 TYPE z2ui5_t_28-app.
+    DATA lv_wire_app LIKE temp85.
     lv_tab = c_table.
     lv_pattern = `ZZCKUT%`.
-    DELETE FROM (lv_tab) WHERE id LIKE @lv_pattern.
-    DATA(lv_app) = CONV z2ui5_t_25-app( c_app ).
-    DELETE FROM z2ui5_t_25 WHERE app = @lv_app.
-    DATA(lv_wire_app) = CONV z2ui5_t_28-app( c_app ).
-    DELETE FROM z2ui5_t_28 WHERE app = @lv_wire_app.
+    DELETE FROM (lv_tab) WHERE id LIKE lv_pattern.
+
+    temp84 = c_app.
+
+    lv_app = temp84.
+    DELETE FROM z2ui5_t_25 WHERE app = lv_app.
+
+    temp85 = c_app.
+
+    lv_wire_app = temp85.
+    DELETE FROM z2ui5_t_28 WHERE app = lv_wire_app.
     ROLLBACK WORK.                                       "#EC CI_ROLLBACK
     z2ui5_cl_cockpit_setup=>reset_buffer( ).
 
@@ -850,56 +1618,96 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
   METHOD search_reads_newest_only.
 
-    DATA lt_draft TYPE STANDARD TABLE OF ty_s_draft WITH EMPTY KEY.
+    TYPES temp2 TYPE STANDARD TABLE OF ty_s_draft WITH DEFAULT KEY.
+DATA lt_draft TYPE temp2.
     DATA lv_tab TYPE string.
     DATA lv_ts TYPE timestampl.
     DATA lv_end TYPE timestampl.
+      DATA temp86 TYPE ltcl_session_db=>ty_s_draft.
+    DATA temp87 TYPE ltcl_session_db=>ty_s_draft.
+    DATA ls_list TYPE z2ui5_cl_cockpit_session=>ty_s_list.
+    DATA temp1 TYPE xsdboolean.
+    FIELD-SYMBOLS <temp88> LIKE LINE OF ls_list-t_session.
+    DATA temp89 LIKE sy-tabix.
 
     " 300 sessions of one user, all newer than the one session of another
     lv_end = '20991231120000'.
     DO 300 TIMES.
       lv_ts = z2ui5_cl_cockpit_setup=>ts_minus_seconds( ts      = lv_end
                                                         seconds = sy-index ).
-      APPEND VALUE #( mandt      = sy-mandt
-                      id         = |ZZCKUTS{ sy-index }|
-                      uname      = `ZZ_COCKPIT_UT`
-                      timestampl = lv_ts
-                      data       = order( `` ) ) TO lt_draft.
+
+      CLEAR temp86.
+      temp86-mandt = sy-mandt.
+      temp86-id = |ZZCKUTS{ sy-index }|.
+      temp86-uname = `ZZ_COCKPIT_UT`.
+      temp86-timestampl = lv_ts.
+      temp86-data = order( `` ).
+      APPEND temp86 TO lt_draft.
     ENDDO.
-    APPEND VALUE #( mandt      = sy-mandt
-                    id         = `ZZCKUTOLD`
-                    uname      = `ZZ_COCKPIT_OLD`
-                    timestampl = '20991231090000'
-                    data       = order( `` ) ) TO lt_draft.
+
+    CLEAR temp87.
+    temp87-mandt = sy-mandt.
+    temp87-id = `ZZCKUTOLD`.
+    temp87-uname = `ZZ_COCKPIT_OLD`.
+    temp87-timestampl = '20991231090000'.
+    temp87-data = order( `` ).
+    APPEND temp87 TO lt_draft.
     lv_tab = c_table.
-    INSERT (lv_tab) FROM TABLE @lt_draft.
+    INSERT (lv_tab) FROM TABLE lt_draft.
 
     " the default reads 300 sessions at most - the match is older
-    DATA(ls_list) = z2ui5_cl_cockpit_session=>get_sessions( search = `ZZ_COCKPIT_OLD` ).
+
+    ls_list = z2ui5_cl_cockpit_session=>get_sessions( search = `ZZ_COCKPIT_OLD` ).
     cl_abap_unit_assert=>assert_initial( ls_list-t_session ).
     cl_abap_unit_assert=>assert_equals( exp = 300
                                         act = ls_list-searched ).
     cl_abap_unit_assert=>assert_true( ls_list-check_more ).
-    cl_abap_unit_assert=>assert_true( xsdbool( ls_list-sessions >= 302 ) ).
+
+    temp1 = boolc( ls_list-sessions >= 302 ).
+    cl_abap_unit_assert=>assert_true( temp1 ).
 
     " a larger budget reaches it
     ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 200
                                                       search       = `ZZ_COCKPIT_OLD` ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lines( ls_list-t_session ) ).
+
+
+    temp89 = sy-tabix.
+    READ TABLE ls_list-t_session INDEX 1 ASSIGNING <temp88>.
+    sy-tabix = temp89.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `ZZCKUTOLD`
-                                        act = ls_list-t_session[ 1 ]-id ).
+                                        act = <temp88>-id ).
 
   ENDMETHOD.
 
   METHOD session_listed.
 
-    DATA(ls_list) = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1 ).
+    DATA ls_list TYPE z2ui5_cl_cockpit_session=>ty_s_list.
+    DATA ls_session TYPE z2ui5_cl_cockpit_session=>ty_s_session.
+    FIELD-SYMBOLS <temp16> LIKE LINE OF ls_list-t_session.
+    DATA temp17 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp90> LIKE LINE OF ls_list-t_session.
+    DATA temp91 LIKE sy-tabix.
+    DATA temp2 TYPE xsdboolean.
+    ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1 ).
 
     cl_abap_unit_assert=>assert_true( ls_list-check_readable ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lines( ls_list-t_session ) ).
-    DATA(ls_session) = ls_list-t_session[ 1 ].
+
+
+
+    temp17 = sy-tabix.
+    READ TABLE ls_list-t_session INDEX 1 ASSIGNING <temp16>.
+    sy-tabix = temp17.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    ls_session = <temp16>.
     cl_abap_unit_assert=>assert_equals( exp = `ZZCKUT1`
                                         act = ls_session-id ).
     cl_abap_unit_assert=>assert_equals( exp = 3
@@ -917,14 +1725,24 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
     ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1
                                                       check_errors = abap_true ).
+
+
+    temp91 = sy-tabix.
+    READ TABLE ls_list-t_session INDEX 1 ASSIGNING <temp90>.
+    sy-tabix = temp91.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `ZZCKUT1`
-                                        act = ls_list-t_session[ 1 ]-id ).
+                                        act = <temp90>-id ).
 
     " the overview's count: no session listed, none read
     ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 0
                                                       check_errors = abap_true ).
     cl_abap_unit_assert=>assert_initial( ls_list-t_session ).
-    cl_abap_unit_assert=>assert_true( xsdbool( ls_list-sessions >= 1 ) ).
+
+    temp2 = boolc( ls_list-sessions >= 1 ).
+    cl_abap_unit_assert=>assert_true( temp2 ).
 
     ls_list = z2ui5_cl_cockpit_session=>get_sessions( max_sessions = 1
                                                       search       = `no such app` ).
@@ -934,33 +1752,94 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
   METHOD steps_and_changes.
 
-    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+    DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+    FIELD-SYMBOLS <temp92> LIKE LINE OF ls_steps-t_step.
+    DATA temp93 LIKE sy-tabix.
+    DATA ls_step LIKE LINE OF ls_steps-t_step.
+    FIELD-SYMBOLS <temp94> LIKE LINE OF ls_steps-t_step.
+    DATA temp95 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp96> LIKE LINE OF ls_steps-t_step.
+    DATA temp97 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp98> LIKE LINE OF ls_steps-t_step.
+    DATA temp99 LIKE sy-tabix.
+    DATA temp100 TYPE z2ui5_cl_cockpit_session=>ty_t_business.
+    DATA temp101 LIKE LINE OF temp100.
+    DATA ls_view TYPE z2ui5_cl_cockpit_session=>ty_s_view.
+    DATA temp102 TYPE z2ui5_cl_cockpit_session=>ty_s_field.
+    FIELD-SYMBOLS <temp18> LIKE LINE OF ls_view-t_field.
+    DATA temp19 LIKE sy-tabix.
+    ls_steps = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
 
     cl_abap_unit_assert=>assert_initial( ls_steps-error ).
     cl_abap_unit_assert=>assert_equals( exp = 3
                                         act = lines( ls_steps-t_step ) ).
+
+
+    temp93 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp92>.
+    sy-tabix = temp93.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `ZCL_ORDER`
-                                        act = ls_steps-t_step[ 3 ]-app ).
+                                        act = <temp92>-app ).
     " nothing recorded for these drafts - the states bound to an ObjectStatus
     " are still a ValueState, an empty one terminates the app
-    LOOP AT ls_steps-t_step INTO DATA(ls_step).
+
+    LOOP AT ls_steps-t_step INTO ls_step.
       cl_abap_unit_assert=>assert_not_initial( ls_step-shown_state ).
       cl_abap_unit_assert=>assert_not_initial( ls_step-monitor_state ).
       cl_abap_unit_assert=>assert_not_initial( ls_step-messages_state ).
     ENDLOOP.
+
+
+    temp95 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp94>.
+    sy-tabix = temp95.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 1
-                                        act = ls_steps-t_step[ 3 ]-kb ).
+                                        act = <temp94>-kb ).
+
+
+    temp97 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 2 ASSIGNING <temp96>.
+    sy-tabix = temp97.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 1
-                                        act = ls_steps-t_step[ 2 ]-changes ).
+                                        act = <temp96>-changes ).
+
+
+    temp99 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp98>.
+    sy-tabix = temp99.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = 1
-                                        act = ls_steps-t_step[ 3 ]-changes ).
+                                        act = <temp98>-changes ).
+
+    CLEAR temp100.
+
+    temp101-object = `Customer`.
+    temp101-value = `4711`.
+    temp101-field = `ZCL_ORDER-MV_CUSTOMER`.
+    temp101-step = 2.
+    INSERT temp101 INTO TABLE temp100.
+    temp101-object = `Customer`.
+    temp101-value = `4712`.
+    temp101-field = `ZCL_ORDER-MV_CUSTOMER`.
+    temp101-step = 3.
+    INSERT temp101 INTO TABLE temp100.
     cl_abap_unit_assert=>assert_equals(
-        exp = VALUE z2ui5_cl_cockpit_session=>ty_t_business(
-                  ( object = `Customer` value = `4711` field = `ZCL_ORDER-MV_CUSTOMER` step = 2 )
-                  ( object = `Customer` value = `4712` field = `ZCL_ORDER-MV_CUSTOMER` step = 3 ) )
+        exp = temp100
         act = ls_steps-t_business ).
 
-    DATA(ls_view) = z2ui5_cl_cockpit_session=>get_view( id            = `ZZCKUT3`
+
+    ls_view = z2ui5_cl_cockpit_session=>get_view( id            = `ZZCKUT3`
                                                        id_prev       = `ZZCKUT2`
                                                        check_changes = abap_true ).
     cl_abap_unit_assert=>assert_initial( ls_view-error ).
@@ -968,13 +1847,23 @@ CLASS ltcl_session_db IMPLEMENTATION.
                                         act = ls_view-fields ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = ls_view-changes ).
-    cl_abap_unit_assert=>assert_equals( exp = VALUE z2ui5_cl_cockpit_session=>ty_s_field(
-                                                  path   = `ZCL_ORDER-MV_CUSTOMER`
-                                                  value  = `4712`
-                                                  prev   = `4711`
-                                                  change = z2ui5_cl_cockpit_session=>cs_change-changed
-                                                  state  = `Warning` )
-                                        act = ls_view-t_field[ 1 ] ).
+
+    CLEAR temp102.
+    temp102-path = `ZCL_ORDER-MV_CUSTOMER`.
+    temp102-value = `4712`.
+    temp102-prev = `4711`.
+    temp102-change = z2ui5_cl_cockpit_session=>cs_change-changed.
+    temp102-state = `Warning`.
+
+
+    temp19 = sy-tabix.
+    READ TABLE ls_view-t_field INDEX 1 ASSIGNING <temp18>.
+    sy-tabix = temp19.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_equals( exp = temp102
+                                        act = <temp18> ).
 
     ls_view = z2ui5_cl_cockpit_session=>get_view( `ZZCKUT_GONE` ).
     cl_abap_unit_assert=>assert_not_initial( ls_view-error ).
@@ -983,52 +1872,184 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
   METHOD monitor_marks_steps.
 
-    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+    DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+    FIELD-SYMBOLS <temp103> LIKE LINE OF ls_steps-t_step.
+    DATA temp104 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp105> LIKE LINE OF ls_steps-t_step.
+    DATA temp106 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp107> LIKE LINE OF ls_steps-t_step.
+    DATA temp108 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp109> LIKE LINE OF ls_steps-t_step.
+    DATA temp110 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp111> LIKE LINE OF ls_steps-t_step.
+    DATA temp112 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp113> LIKE LINE OF ls_steps-t_step.
+    DATA temp114 LIKE sy-tabix.
+    ls_steps = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
 
+
+
+    temp104 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 1 ASSIGNING <temp103>.
+    sy-tabix = temp104.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `None`
-                                        act = ls_steps-t_step[ 1 ]-monitor_state ).
+                                        act = <temp103>-monitor_state ).
+
+
+    temp106 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 2 ASSIGNING <temp105>.
+    sy-tabix = temp106.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `Error`
-                                        act = ls_steps-t_step[ 2 ]-monitor_state ).
+                                        act = <temp105>-monitor_state ).
+
+
+    temp108 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 2 ASSIGNING <temp107>.
+    sy-tabix = temp108.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_char_cp( exp = `*CX_SY_ZERODIVIDE*event POST*`
-                                         act = ls_steps-t_step[ 2 ]-monitor ).
+                                         act = <temp107>-monitor ).
+
+
+    temp110 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp109>.
+    sy-tabix = temp110.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `Warning`
-                                        act = ls_steps-t_step[ 3 ]-monitor_state ).
+                                        act = <temp109>-monitor_state ).
+
+
+    temp112 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp111>.
+    sy-tabix = temp112.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `SAVE`
-                                        act = ls_steps-t_step[ 3 ]-event ).
+                                        act = <temp111>-event ).
+
+
+    temp114 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp113>.
+    sy-tabix = temp114.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `slow: 2500 ms`
-                                        act = ls_steps-t_step[ 3 ]-monitor ).
+                                        act = <temp113>-monitor ).
 
   ENDMETHOD.
 
   METHOD history_of_a_field.
 
-    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
-    DATA(lt_history) = z2ui5_cl_cockpit_session=>get_history( it_step = ls_steps-t_step
+    DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+    DATA lt_history TYPE z2ui5_cl_cockpit_session=>ty_t_history.
+    DATA temp115 TYPE z2ui5_cl_cockpit_session=>ty_s_history.
+    FIELD-SYMBOLS <temp20> LIKE LINE OF lt_history.
+    DATA temp21 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp116> LIKE LINE OF lt_history.
+    DATA temp117 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp118> LIKE LINE OF lt_history.
+    DATA temp119 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp120> LIKE LINE OF lt_history.
+    DATA temp121 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp122> LIKE LINE OF lt_history.
+    DATA temp123 LIKE sy-tabix.
+    ls_steps = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+
+    lt_history = z2ui5_cl_cockpit_session=>get_history( it_step = ls_steps-t_step
                                                              path    = `ZCL_ORDER-MV_CUSTOMER` ).
 
     cl_abap_unit_assert=>assert_equals( exp = 3
                                         act = lines( lt_history ) ).
-    cl_abap_unit_assert=>assert_equals( exp = VALUE z2ui5_cl_cockpit_session=>ty_s_history( step  = 1
-                                                                                            time  = `2099-12-31 10:00:00`
-                                                                                            state = `None` )
-                                        act = lt_history[ 1 ] ).
+
+    CLEAR temp115.
+    temp115-step = 1.
+    temp115-time = `2099-12-31 10:00:00`.
+    temp115-state = `None`.
+
+
+    temp21 = sy-tabix.
+    READ TABLE lt_history INDEX 1 ASSIGNING <temp20>.
+    sy-tabix = temp21.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
+    cl_abap_unit_assert=>assert_equals( exp = temp115
+                                        act = <temp20> ).
+
+
+    temp117 = sy-tabix.
+    READ TABLE lt_history INDEX 2 ASSIGNING <temp116>.
+    sy-tabix = temp117.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `4711`
-                                        act = lt_history[ 2 ]-value ).
+                                        act = <temp116>-value ).
+
+
+    temp119 = sy-tabix.
+    READ TABLE lt_history INDEX 2 ASSIGNING <temp118>.
+    sy-tabix = temp119.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `Warning`
-                                        act = lt_history[ 2 ]-state ).
+                                        act = <temp118>-state ).
+
+
+    temp121 = sy-tabix.
+    READ TABLE lt_history INDEX 3 ASSIGNING <temp120>.
+    sy-tabix = temp121.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `4712`
-                                        act = lt_history[ 3 ]-value ).
+                                        act = <temp120>-value ).
 
     lt_history = z2ui5_cl_cockpit_session=>get_history( it_step = ls_steps-t_step
                                                        path    = `ZCL_ORDER-NO_SUCH_FIELD` ).
+
+
+    temp123 = sy-tabix.
+    READ TABLE lt_history INDEX 3 ASSIGNING <temp122>.
+    sy-tabix = temp123.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `(not there)`
-                                        act = lt_history[ 3 ]-value ).
+                                        act = <temp122>-value ).
 
   ENDMETHOD.
 
   METHOD playback_from_recordings.
 
     DATA lv_res_body TYPE string.
+    DATA temp124 TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+    DATA lt_wire LIKE temp124.
+    DATA temp125 TYPE z2ui5_t_28.
+    DATA ls_wire LIKE temp125.
+    DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+    FIELD-SYMBOLS <temp126> LIKE LINE OF ls_steps-t_step.
+    DATA temp127 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp128> LIKE LINE OF ls_steps-t_step.
+    DATA temp129 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp130> LIKE LINE OF ls_steps-t_step.
+    DATA temp131 LIKE sy-tabix.
+    FIELD-SYMBOLS <temp132> LIKE LINE OF ls_steps-t_step.
+    DATA temp133 LIKE sy-tabix.
+    DATA ls_screen TYPE z2ui5_cl_cockpit_wire=>ty_s_screen.
 
     " the body built ahead of the VALUE: inside it the 7.02 downport writes
     " the whole concatenation on one line, longer than 255 characters
@@ -1040,46 +2061,87 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
     " the recorder saw step 2 display the screen and step 3 come from a
     " press on Save with a customer typed - and answer with an error
-    DATA(lt_wire) = VALUE z2ui5_cl_cockpit_session=>ty_t_id( ).
-    DATA(ls_wire) = VALUE z2ui5_t_28(
-        id            = `ZZCKUTWS2`
-        timestampl    = `20991231100005.0`
-        utc_day       = `20991231`
-        app           = c_app
-        draft_id      = `ZZCKUT2`
-        draft_id_prev = `ZZCKUT1`
-        http_status   = 200
-        req_body      = `{"S_FRONT":{"ID":"ZZCKUT1"}}`
-        res_body      = lv_res_body ).
-    INSERT z2ui5_t_28 FROM @ls_wire.
+
+    CLEAR temp124.
+
+    lt_wire = temp124.
+
+    CLEAR temp125.
+    temp125-id = `ZZCKUTWS2`.
+    temp125-timestampl = `20991231100005.0`.
+    temp125-utc_day = `20991231`.
+    temp125-app = c_app.
+    temp125-draft_id = `ZZCKUT2`.
+    temp125-draft_id_prev = `ZZCKUT1`.
+    temp125-http_status = 200.
+    temp125-req_body = `{"S_FRONT":{"ID":"ZZCKUT1"}}`.
+    temp125-res_body = lv_res_body.
+
+    ls_wire = temp125.
+    INSERT z2ui5_t_28 FROM ls_wire.
     APPEND ls_wire-id TO lt_wire.
-    ls_wire = VALUE #( id            = `ZZCKUTWS3`
-                       timestampl    = `20991231100105.0`
-                       utc_day       = `20991231`
-                       app           = c_app
-                       event         = `SAVE`
-                       draft_id      = `ZZCKUT3`
-                       draft_id_prev = `ZZCKUT2`
-                       http_status   = 200
-                       req_body      = `{"S_FRONT":{"ID":"ZZCKUT2","EVENT":"SAVE"},"MODEL":{"MV_CUSTOMER":"4712"}}`
-                       res_body      = `{"S_FRONT":{"ID":"ZZCKUT3","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":` &&
-                                       `{"T_CUSTOM":[["MESSAGE_BOX","error","Customer 4712 is blocked"]]}}}` ).
-    INSERT z2ui5_t_28 FROM @ls_wire.
+    CLEAR ls_wire.
+    ls_wire-id = `ZZCKUTWS3`.
+    ls_wire-timestampl = `20991231100105.0`.
+    ls_wire-utc_day = `20991231`.
+    ls_wire-app = c_app.
+    ls_wire-event = `SAVE`.
+    ls_wire-draft_id = `ZZCKUT3`.
+    ls_wire-draft_id_prev = `ZZCKUT2`.
+    ls_wire-http_status = 200.
+    ls_wire-req_body = `{"S_FRONT":{"ID":"ZZCKUT2","EVENT":"SAVE"},"MODEL":{"MV_CUSTOMER":"4712"}}`.
+    ls_wire-res_body = `{"S_FRONT":{"ID":"ZZCKUT3","APP":"ZCL_ORDER","PROTOCOL":2,"S_ACTION":` &&
+`{"T_CUSTOM":[["MESSAGE_BOX","error","Customer 4712 is blocked"]]}}}`.
+    INSERT z2ui5_t_28 FROM ls_wire.
     APPEND ls_wire-id TO lt_wire.
 
-    DATA(ls_steps) = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
 
+    ls_steps = z2ui5_cl_cockpit_session=>get_steps( `ZZCKUT1` ).
+
+
+
+    temp127 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp126>.
+    sy-tabix = temp127.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `ZZCKUTWS3`
-                                        act = ls_steps-t_step[ 3 ]-wire_id ).
+                                        act = <temp126>-wire_id ).
+
+
+    temp129 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp128>.
+    sy-tabix = temp129.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `pressed Button "Save" (SAVE), typed Input "Customer" = 4712`
-                                        act = ls_steps-t_step[ 3 ]-did ).
+                                        act = <temp128>-did ).
+
+
+    temp131 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp130>.
+    sy-tabix = temp131.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `error box: Customer 4712 is blocked`
-                                        act = ls_steps-t_step[ 3 ]-shown ).
+                                        act = <temp130>-shown ).
+
+
+    temp133 = sy-tabix.
+    READ TABLE ls_steps-t_step INDEX 3 ASSIGNING <temp132>.
+    sy-tabix = temp133.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `Error`
-                                        act = ls_steps-t_step[ 3 ]-shown_state ).
+                                        act = <temp132>-shown_state ).
 
     " the screen of step 3: the view of step 2 with the customer the user typed
-    DATA(ls_screen) = z2ui5_cl_cockpit_wire=>get_screen( lt_wire ).
+
+    ls_screen = z2ui5_cl_cockpit_wire=>get_screen( lt_wire ).
     cl_abap_unit_assert=>assert_initial( ls_screen-error ).
     cl_abap_unit_assert=>assert_equals( exp = `Order`
                                         act = ls_screen-title ).
@@ -1091,23 +2153,47 @@ CLASS ltcl_session_db IMPLEMENTATION.
   METHOD failures_and_app_objects.
 
     " steps 2 and 3 as the failing states: step 1 is a baseline of the app
-    DATA(ls_failures) = z2ui5_cl_cockpit_session=>analyze_failures( it_id = VALUE #( ( `ZZCKUT2` ) ( `ZZCKUT3` ) )
+    DATA temp134 TYPE z2ui5_cl_cockpit_session=>ty_t_id.
+    DATA ls_failures TYPE z2ui5_cl_cockpit_session=>ty_s_failures.
+    DATA temp3 TYPE xsdboolean.
+    DATA ls_objects TYPE z2ui5_cl_cockpit_session=>ty_s_app_objects.
+    DATA temp4 TYPE xsdboolean.
+    FIELD-SYMBOLS <temp136> LIKE LINE OF ls_objects-t_object.
+    DATA temp137 LIKE sy-tabix.
+    CLEAR temp134.
+    INSERT `ZZCKUT2` INTO TABLE temp134.
+    INSERT `ZZCKUT3` INTO TABLE temp134.
+
+    ls_failures = z2ui5_cl_cockpit_session=>analyze_failures( it_id = temp134
                                                                    app   = `ZCL_ORDER` ).
 
     cl_abap_unit_assert=>assert_initial( ls_failures-error ).
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = ls_failures-failing ).
-    cl_abap_unit_assert=>assert_true( xsdbool( ls_failures-others >= 1 ) ).
+
+    temp3 = boolc( ls_failures-others >= 1 ).
+    cl_abap_unit_assert=>assert_true( temp3 ).
     " MV_MODE = edit is in every state, the customers differ - no hint
     cl_abap_unit_assert=>assert_initial( ls_failures-t_common ).
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = lines( ls_failures-t_business ) ).
 
-    DATA(ls_objects) = z2ui5_cl_cockpit_session=>get_app_objects( `ZCL_ORDER` ).
+
+    ls_objects = z2ui5_cl_cockpit_session=>get_app_objects( `ZCL_ORDER` ).
     cl_abap_unit_assert=>assert_initial( ls_objects-error ).
-    cl_abap_unit_assert=>assert_true( xsdbool( ls_objects-drafts >= 3 ) ).
+
+    temp4 = boolc( ls_objects-drafts >= 3 ).
+    cl_abap_unit_assert=>assert_true( temp4 ).
+
+
+    temp137 = sy-tabix.
+    READ TABLE ls_objects-t_object INDEX 1 ASSIGNING <temp136>.
+    sy-tabix = temp137.
+    IF sy-subrc <> 0.
+      ASSERT 1 = 0.
+    ENDIF.
     cl_abap_unit_assert=>assert_equals( exp = `Customer`
-                                        act = ls_objects-t_object[ 1 ]-object ).
+                                        act = <temp136>-object ).
 
   ENDMETHOD.
 
@@ -1115,10 +2201,13 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
     DATA lv_found TYPE abap_bool.
 
-    DATA(ls_find) = z2ui5_cl_cockpit_session=>search_drafts( `4711` ).
+    DATA ls_find TYPE z2ui5_cl_cockpit_session=>ty_s_find.
+    DATA ls_hit LIKE LINE OF ls_find-t_hit.
+    ls_find = z2ui5_cl_cockpit_session=>search_drafts( `4711` ).
 
     cl_abap_unit_assert=>assert_initial( ls_find-error ).
-    LOOP AT ls_find-t_hit INTO DATA(ls_hit) WHERE id = `ZZCKUT2`. "#EC CI_SORTSEQ
+
+    LOOP AT ls_find-t_hit INTO ls_hit WHERE id = `ZZCKUT2`. "#EC CI_SORTSEQ
       cl_abap_unit_assert=>assert_equals( exp = `ZZCKUT1`
                                           act = ls_hit-session ).
       cl_abap_unit_assert=>assert_equals( exp = `ZCL_ORDER-MV_CUSTOMER`
@@ -1136,7 +2225,8 @@ CLASS ltcl_session_db IMPLEMENTATION.
 
   METHOD export_as_text.
 
-    DATA(lv_text) = z2ui5_cl_cockpit_session=>export( id   = `ZZCKUT1`
+    DATA lv_text TYPE string.
+    lv_text = z2ui5_cl_cockpit_session=>export( id   = `ZZCKUT1`
                                                      user = `ZZ_COCKPIT_UT` ).
 
     cl_abap_unit_assert=>assert_char_cp( exp = `abap2UI5 session ZZCKUT1*user: ZZ_COCKPIT_UT*3 steps*`

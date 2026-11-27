@@ -64,14 +64,19 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     " each part on its own: a purge that fails (a lock timeout on a big
     " DELETE, a half-imported table) must not stop the drafts and the
     " alerting of every later run
-    DATA(lv_purged) = ``.
+    DATA lv_purged TYPE string.
+        DATA lx_purge TYPE REF TO cx_root.
+        DATA lx TYPE REF TO cx_root.
+        DATA lx_alert TYPE REF TO cx_root.
+    lv_purged = ``.
     TRY.
         result = purge_own( ).
         COMMIT WORK.
         lv_purged = |{ result-log_deleted } log rows, { result-agg_deleted } aggregate rows, | &&
                     |{ result-usr_deleted } user rows, { result-act_deleted } activity rows, | &&
                     |{ result-wir_deleted } recorded roundtrips past retention|.
-      CATCH cx_root INTO DATA(lx_purge).
+
+      CATCH cx_root INTO lx_purge.
         ROLLBACK WORK.                                   "#EC CI_ROLLBACK
         CLEAR result.
         lv_purged = |own tables not purged: { lx_purge->get_text( ) }|.
@@ -80,7 +85,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     TRY.
         result-drafts_deleted = z2ui5_cl_cockpit_draft=>delete_expired( ).
         result-message = |{ result-drafts_deleted } expired drafts deleted, { lv_purged }|.
-      CATCH cx_root INTO DATA(lx).
+
+      CATCH cx_root INTO lx.
         result-message = |Drafts not deleted: { lx->get_text( ) }; { lv_purged }|.
     ENDTRY.
 
@@ -88,7 +94,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
         result-alerts = z2ui5_cl_cockpit_alert=>run( ).
         COMMIT WORK.
         result-message = |{ result-message }; { result-alerts-message }|.
-      CATCH cx_root INTO DATA(lx_alert).
+
+      CATCH cx_root INTO lx_alert.
         ROLLBACK WORK.                                   "#EC CI_ROLLBACK
         result-message = |{ result-message }; alerts not evaluated: { lx_alert->get_text( ) }|.
     ENDTRY.
@@ -97,7 +104,8 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
   METHOD purge_daily.
 
-    DATA(lv_day) = z2ui5_cl_cockpit_setup=>day_of( z2ui5_cl_cockpit_setup=>now( ) ).
+    DATA lv_day TYPE string.
+    lv_day = z2ui5_cl_cockpit_setup=>day_of( z2ui5_cl_cockpit_setup=>now( ) ).
     " the buffered day first - one statement per roll area and day at most
     IF z2ui5_cl_cockpit_setup=>get( )-last_purge >= lv_day.
       RETURN.
@@ -116,34 +124,47 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
     " the open alerts are kept - cleared is initial
     DATA lv_open TYPE timestampl.
-    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    DATA ls_set TYPE z2ui5_cl_cockpit_setup=>ty_s_settings.
+    DATA lv_log_ts TYPE timestampl.
+    DATA lv_usr_day TYPE string.
+    DATA lv_agg_day TYPE string.
+    DATA lv_act_ts TYPE timestampl.
+    DATA lv_aud_ts TYPE timestampl.
+    DATA lv_wir_ts TYPE timestampl.
+    ls_set = z2ui5_cl_cockpit_setup=>get( ).
 
-    DATA(lv_log_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-retention_days ).
-    DATA(lv_usr_day) = z2ui5_cl_cockpit_setup=>day_minus( ls_set-retention_days ).
-    DATA(lv_agg_day) = z2ui5_cl_cockpit_setup=>day_minus( ls_set-agg_retention_days ).
+
+    lv_log_ts = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-retention_days ).
+
+    lv_usr_day = z2ui5_cl_cockpit_setup=>day_minus( ls_set-retention_days ).
+
+    lv_agg_day = z2ui5_cl_cockpit_setup=>day_minus( ls_set-agg_retention_days ).
     " the live table only answers "who is active now" - a day is plenty
-    DATA(lv_act_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( 86400 ).
 
-    DELETE FROM z2ui5_t_25 WHERE timestampl < @lv_log_ts.
+    lv_act_ts = z2ui5_cl_cockpit_setup=>now_minus_seconds( 86400 ).
+
+    DELETE FROM z2ui5_t_25 WHERE timestampl < lv_log_ts.
     result-log_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_27 WHERE utc_day < @lv_usr_day.
+    DELETE FROM z2ui5_t_27 WHERE utc_day < lv_usr_day.
     result-usr_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_22 WHERE utc_day < @lv_agg_day.
+    DELETE FROM z2ui5_t_22 WHERE utc_day < lv_agg_day.
     result-agg_deleted = sy-dbcnt.
-    DELETE FROM z2ui5_t_20 WHERE last_seen < @lv_act_ts.
+    DELETE FROM z2ui5_t_20 WHERE last_seen < lv_act_ts.
     result-act_deleted = sy-dbcnt.
     " the change log follows the long retention of the aggregates
-    DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-agg_retention_days ).
-    DELETE FROM z2ui5_t_24 WHERE timestampl < @lv_aud_ts.
+
+    lv_aud_ts = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-agg_retention_days ).
+    DELETE FROM z2ui5_t_24 WHERE timestampl < lv_aud_ts.
     result-aud_deleted = sy-dbcnt.
     " and so does the alert history - of the cleared alerts: an open one
     " stays until a run clears or closes it (z2ui5_cl_cockpit_alert)
-    DELETE FROM z2ui5_t_23 WHERE raised < @lv_aud_ts AND cleared <> @lv_open.
+    DELETE FROM z2ui5_t_23 WHERE raised < lv_aud_ts AND cleared <> lv_open.
     result-alr_deleted = sy-dbcnt.
     " the recorder's raw requests and responses are the biggest and the most
     " sensitive rows - their own, short retention; 0 days deletes them all
-    DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days ).
-    DELETE FROM z2ui5_t_28 WHERE timestampl < @lv_wir_ts.
+
+    lv_wir_ts = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days ).
+    DELETE FROM z2ui5_t_28 WHERE timestampl < lv_wir_ts.
     result-wir_deleted = sy-dbcnt.
     " the pseudonym salts of earlier days: salt_of_day deletes them only
     " when a later day's first recorded roundtrip creates its salt - after a
