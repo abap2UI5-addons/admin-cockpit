@@ -619,6 +619,27 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    TYPES:
+      BEGIN OF ty_s_bound,
+        path  TYPE string,
+        value TYPE string,
+      END OF ty_s_bound.
+    TYPES ty_t_bound TYPE HASHED TABLE OF ty_s_bound WITH UNIQUE KEY path.
+
+    "! text with every binding {open}NAME} whose path prefix &amp;&amp; NAME has a
+    "! value in it_bound replaced by that value, which is escaped already -
+    "! one pass over the text, the other bindings stay as they are.
+    "! @parameter open   | what a binding starts with - {/ for the absolute ones
+    "! @parameter prefix | put in front of NAME - the row of a template
+    CLASS-METHODS bindings_replaced
+      IMPORTING
+        text          TYPE string
+        open          TYPE string
+        prefix        TYPE string
+        it_bound      TYPE ty_t_bound
+      RETURNING
+        VALUE(result) TYPE string.
+
     "! xml without every attribute of that name - with the blank before it.
     "! @parameter name | the attribute with its prefix - core:require
     CLASS-METHODS attribute_dropped
@@ -1748,6 +1769,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     DATA lv_pos TYPE i.
     DATA lv_out TYPE string.
+    " the model by path, every value escaped once - and the rows that have one
+    DATA lt_bound TYPE ty_t_bound.
+    DATA lt_row TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
 
     " the root element: <mvc:View xmlns="sap.m" xmlns:mvc="..." ...>
     DATA(lv_start) = find( val = xml
@@ -1806,6 +1830,21 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA(lv_content) = substring( val = xml
                                   off = lv_root_end + 1
                                   len = lv_last - lv_root_end - 1 ).
+
+    LOOP AT it_model INTO DATA(ls_model).
+      INSERT VALUE #( path  = ls_model-path
+                      value = xml_escape( ls_model-value ) ) INTO TABLE lt_bound.
+      " every path a value lies below: LIST/1/COL is below LIST/1 and LIST
+      DATA(lv_slash) = find( val = ls_model-path
+                             sub = `/` ).
+      WHILE lv_slash > 0.
+        INSERT substring( val = ls_model-path
+                          len = lv_slash ) INTO TABLE lt_row.
+        lv_slash = find( val = ls_model-path
+                         sub = `/`
+                         off = lv_slash + 1 ).
+      ENDWHILE.
+    ENDLOOP.
 
     IF event IS NOT INITIAL.
       result-marked = mark_pressed( EXPORTING event = event
@@ -1867,31 +1906,17 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       CLEAR lv_out.
       DO 50 TIMES.
         DATA(lv_row) = sy-index.
-        " keys and patterns in variables - no template there on 7.02
+        " keys in variables - no template there on 7.02
         DATA(lv_prefix) = |{ lv_list }/{ lv_row }/|.
         DATA(lv_row_path) = |{ lv_list }/{ lv_row }|.
-        DATA(lv_pattern) = |{ lv_prefix }*|.
-        IF NOT line_exists( it_model[ path = lv_row_path ] ).
-          DATA(lv_found) = abap_false.
-          LOOP AT it_model INTO DATA(ls_model) WHERE path CP lv_pattern. "#EC CI_SORTSEQ
-            lv_found = abap_true.
-            EXIT.
-          ENDLOOP.
-          IF lv_found = abap_false.
-            EXIT.
-          ENDIF.
+        IF NOT line_exists( lt_bound[ path = lv_row_path ] ) AND NOT line_exists( lt_row[ table_line = lv_row_path ] ).
+          EXIT.
         ENDIF.
         " the relative bindings of the template, {COL}, from this row
-        DATA(lv_copy) = lv_template.
-        LOOP AT it_model INTO ls_model WHERE path CP lv_pattern. "#EC CI_SORTSEQ
-          DATA(lv_col) = substring( val = ls_model-path
-                                    off = strlen( lv_prefix ) ).
-          lv_copy = replace( val  = lv_copy
-                             sub  = |\{{ lv_col }\}|
-                             with = xml_escape( ls_model-value )
-                             occ  = 0 ).
-        ENDLOOP.
-        lv_out = lv_out && lv_copy.
+        lv_out = lv_out && bindings_replaced( text     = lv_template
+                                              open     = `{`
+                                              prefix   = lv_prefix
+                                              it_bound = lt_bound ).
       ENDDO.
       lv_content = substring( val = lv_content
                               len = lv_items ) &&
@@ -1905,13 +1930,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDDO.
 
     " the absolute bindings {/PATH} by their value
-    LOOP AT it_model INTO ls_model.
-      " replace( ) - see xml_escape, the value carries \{ and maybe a $
-      lv_content = replace( val  = lv_content
-                            sub  = |\{/{ ls_model-path }\}|
-                            with = xml_escape( ls_model-value )
-                            occ  = 0 ).
-    ENDLOOP.
+    lv_content = bindings_replaced( text     = lv_content
+                                    open     = `{/`
+                                    prefix   = ``
+                                    it_bound = lt_bound ).
 
     result-content = content_defused( xml     = xml
                                       content = lv_content ).
@@ -2152,6 +2174,50 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         lv_pos = lv_after + 1.
       ENDDO.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD bindings_replaced.
+
+    DATA lv_pos TYPE i.
+    DATA lv_from TYPE i.
+
+    DATA(lv_len) = strlen( text ).
+    DO.
+      DATA(lv_at) = find( val = text
+                          sub = open
+                          off = lv_pos ).
+      IF lv_at < 0.
+        EXIT.
+      ENDIF.
+      DATA(lv_name_at) = lv_at + strlen( open ).
+      DATA(lv_close) = find( val = text
+                             sub = `}`
+                             off = lv_name_at ).
+      IF lv_close < 0.
+        EXIT.
+      ENDIF.
+      " the value, by its path - substrings and keys in variables, none in
+      " an expression: the 7.02 downport
+      DATA(lv_path) = prefix && substring( val = text
+                                           off = lv_name_at
+                                           len = lv_close - lv_name_at ).
+      READ TABLE it_bound INTO DATA(ls_bound) WITH TABLE KEY path = lv_path.
+      IF sy-subrc = 0.
+        result = result && substring( val = text
+                                      off = lv_from
+                                      len = lv_at - lv_from ) && ls_bound-value.
+        lv_from = lv_close + 1.
+        lv_pos = lv_close + 1.
+      ELSE.
+        lv_pos = lv_at + 1.
+      ENDIF.
+      IF lv_pos >= lv_len.
+        EXIT.
+      ENDIF.
+    ENDDO.
+    result = result && substring( val = text
+                                  off = lv_from ).
 
   ENDMETHOD.
 
@@ -2425,6 +2491,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lt_model TYPE SORTED TABLE OF ty_s_model WITH UNIQUE KEY path.
     DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
     DATA ls_row TYPE ty_s_row.
+    DATA lt_row TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
+    DATA lt_range TYPE z2ui5_cl_cockpit_session=>ty_r_draft_id.
     DATA lv_id TYPE c LENGTH 32.
     DATA lv_main TYPE string.
     DATA lv_popup TYPE string.
@@ -2437,13 +2505,24 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDIF.
 
     TRY.
+        " the recordings in one read - at most 30, one IN list
         LOOP AT it_id INTO DATA(lv_rec) FROM lv_first.
+          IF lv_rec IS NOT INITIAL.
+            APPEND VALUE #( sign   = `I`
+                            option = `EQ`
+                            low    = lv_rec ) TO lt_range.
+          ENDIF.
+        ENDLOOP.
+        IF lt_range IS NOT INITIAL.
+          SELECT id, req_body, res_body FROM z2ui5_t_28
+            WHERE id IN @lt_range
+            INTO CORRESPONDING FIELDS OF TABLE @lt_row.
+        ENDIF.
+
+        LOOP AT it_id INTO lv_rec FROM lv_first.
           DATA(lv_index) = sy-tabix.
           lv_id = lv_rec.
-          CLEAR ls_row.
-          SELECT SINGLE id, req_body, res_body FROM z2ui5_t_28
-            WHERE id = @lv_id
-            INTO CORRESPONDING FIELDS OF @ls_row.
+          READ TABLE lt_row INTO ls_row WITH TABLE KEY id = lv_id.
           IF sy-subrc <> 0.
             CONTINUE.
           ENDIF.
