@@ -1030,8 +1030,6 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD get_records.
 
-    TYPES ty_id TYPE c LENGTH 32.
-    TYPES ty_r_id TYPE RANGE OF ty_id.
     TYPES:
       BEGIN OF ty_s_row,
         id            TYPE c LENGTH 32,
@@ -1044,29 +1042,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         ms_total      TYPE i,
       END OF ty_s_row.
     DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_range TYPE ty_r_id.
-    DATA lv_done TYPE i.
 
     TRY.
-        LOOP AT it_id INTO DATA(lv_id).
-          lv_done = lv_done + 1.
-          IF lv_id IS NOT INITIAL.
-            APPEND VALUE #( sign   = `I`
-                            option = `EQ`
-                            low    = lv_id ) TO lt_range.
-          ENDIF.
-          IF lines( lt_range ) < 50 AND lv_done < lines( it_id ).
-            CONTINUE.
-          ENDIF.
-          IF lt_range IS INITIAL.
-            CONTINUE.
-          ENDIF.
+        DATA(lt_ranges) = z2ui5_cl_cockpit_session=>id_ranges( it_id ).
+        LOOP AT lt_ranges INTO DATA(lt_range).
           SELECT id, timestampl, app, event, draft_id, draft_id_prev, http_status, ms_total
             FROM z2ui5_t_28
             WHERE draft_id IN @lt_range
                OR draft_id_prev IN @lt_range
             APPENDING CORRESPONDING FIELDS OF TABLE @lt_rows.
-          CLEAR lt_range.
         ENDLOOP.
       CATCH cx_root.
         RETURN.

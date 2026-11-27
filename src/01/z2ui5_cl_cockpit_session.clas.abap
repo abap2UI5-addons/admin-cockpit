@@ -200,6 +200,10 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     TYPES ty_t_id TYPE STANDARD TABLE OF string WITH EMPTY KEY.
 
+    TYPES ty_draft_id TYPE c LENGTH 32.
+    TYPES ty_r_draft_id TYPE RANGE OF ty_draft_id.
+    TYPES ty_t_id_range TYPE STANDARD TABLE OF ty_r_draft_id WITH EMPTY KEY.
+
     TYPES:
       "! A field of one sample - a draft - for common_of.
       BEGIN OF ty_s_sample,
@@ -636,6 +640,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_first   TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE ty_t_field.
+
+    "! Draft ids as range tables of at most 50 ids each, in their order -
+    "! the IN lists of the SELECTs that read many drafts or their logs and
+    "! recordings. Empty ids are left out (they would match every start).
+    CLASS-METHODS id_ranges
+      IMPORTING
+        it_id         TYPE ty_t_id
+      RETURNING
+        VALUE(result) TYPE ty_t_id_range.
 
     "! The next drafts of the draft table after a key, in key order, 200 at
     "! a time - the page of a scan that reads every draft with its state.
@@ -2262,7 +2275,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD fill_steps.
 
     TYPES ty_id TYPE c LENGTH 32.
-    TYPES ty_r_id TYPE RANGE OF ty_id.
     TYPES:
       BEGIN OF ty_s_row,
         id   TYPE c LENGTH 32,
@@ -2275,7 +2287,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       END OF ty_s_seen.
     DATA lt_data TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
     DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
-    DATA lt_range TYPE ty_r_id.
+    DATA lt_id TYPE ty_t_id.
     DATA lt_prev TYPE ty_t_value.
     DATA lv_prev_id TYPE string.
     DATA lv_prev_messages TYPE string.
@@ -2288,19 +2300,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     LOOP AT cs_steps-t_step INTO DATA(ls_step).
-      lv_done = lv_done + 1.
-      APPEND VALUE #( sign   = `I`
-                      option = `EQ`
-                      low    = ls_step-id ) TO lt_range.
-      IF lines( lt_range ) < 50 AND lv_done < lines( cs_steps-t_step ).
-        CONTINUE.
-      ENDIF.
+      APPEND ls_step-id TO lt_id.
+    ENDLOOP.
+    " a step's id is never empty - each batch is the next lines of steps
+    DATA(lt_ranges) = id_ranges( lt_id ).
+    LOOP AT lt_ranges INTO DATA(lt_range).
+      lv_done = lv_from + lines( lt_range ) - 1.
 
       CLEAR lt_data.
       SELECT id, data FROM (lv_tab)
         WHERE id IN @lt_range
         INTO CORRESPONDING FIELDS OF TABLE @lt_data.
-      CLEAR lt_range.
 
       " the steps of this batch in their order - each compared with the
       " step it continues, which is the one before it unless the user went
@@ -2552,8 +2562,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD fill_monitor.
 
-    TYPES ty_id TYPE c LENGTH 32.
-    TYPES ty_r_id TYPE RANGE OF ty_id.
     TYPES:
       BEGIN OF ty_s_log,
         draft_id      TYPE c LENGTH 32,
@@ -2566,23 +2574,18 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         error_head    TYPE c LENGTH 200,
       END OF ty_s_log.
     DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
-    DATA lt_range TYPE ty_r_id.
-    DATA lv_done TYPE i.
+    DATA lt_id TYPE ty_t_id.
 
     LOOP AT ct_step INTO DATA(ls_step).
-      lv_done = lv_done + 1.
-      APPEND VALUE #( sign   = `I`
-                      option = `EQ`
-                      low    = ls_step-id ) TO lt_range.
-      IF lines( lt_range ) < 50 AND lv_done < lines( ct_step ).
-        CONTINUE.
-      ENDIF.
+      APPEND ls_step-id TO lt_id.
+    ENDLOOP.
+    DATA(lt_ranges) = id_ranges( lt_id ).
+    LOOP AT lt_ranges INTO DATA(lt_range).
       SELECT draft_id, draft_id_prev, event, check_error, check_slow, ms_total, error_class, error_head
         FROM z2ui5_t_25
         WHERE draft_id IN @lt_range
            OR draft_id_prev IN @lt_range
         APPENDING CORRESPONDING FIELDS OF TABLE @lt_log.
-      CLEAR lt_range.
     ENDLOOP.
 
     LOOP AT lt_log INTO DATA(ls_log).
@@ -3128,6 +3131,28 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ORDER BY timestampl DESCENDING
       INTO CORRESPONDING FIELDS OF TABLE @result
       UP TO @c_max_nodes ROWS.                        "#EC CI_NOWHERE
+
+  ENDMETHOD.
+
+  METHOD id_ranges.
+
+    DATA lt_range TYPE ty_r_draft_id.
+
+    LOOP AT it_id INTO DATA(lv_id).
+      IF lv_id IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( sign   = `I`
+                      option = `EQ`
+                      low    = lv_id ) TO lt_range.
+      IF lines( lt_range ) >= 50.
+        APPEND lt_range TO result.
+        CLEAR lt_range.
+      ENDIF.
+    ENDLOOP.
+    IF lt_range IS NOT INITIAL.
+      APPEND lt_range TO result.
+    ENDIF.
 
   ENDMETHOD.
 
