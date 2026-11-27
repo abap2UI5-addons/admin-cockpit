@@ -3217,14 +3217,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
     " the pseudonym of today - the one the Errors tab shows for today's
     " occurrences, so a session can be matched with an error
-    DATA(lv_key) = z2ui5_cl_cockpit_setup=>user_key( uname = uname
-                                                     day   = z2ui5_cl_cockpit_setup=>day_minus( 0 ) ).
-    IF strlen( lv_key ) >= 8.
-      result = |pseudonym { substring( val = lv_key
-                                       len = 8 ) }|.
-    ELSE.
-      result = `not recorded`.
-    ENDIF.
+    result = z2ui5_cl_cockpit_setup=>pseudonym_text(
+                 z2ui5_cl_cockpit_setup=>user_key( uname = uname
+                                                   day   = z2ui5_cl_cockpit_setup=>day_minus( 0 ) ) ).
 
   ENDMETHOD.
 

@@ -216,6 +216,21 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! A day YYYYMMDD as readable text, YYYY-MM-DD - a shorter text as it is.
+    CLASS-METHODS day_text
+      IMPORTING
+        day           TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! How a stored user key is shown where names are not: "pseudonym" and
+    "! its first 8 characters, "not recorded" when there is none.
+    CLASS-METHODS pseudonym_text
+      IMPORTING
+        user_key      TYPE clike
+      RETURNING
+        VALUE(result) TYPE string.
+
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -810,7 +825,33 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
       RETURN.
     ENDIF.
     CONVERT TIME STAMP ts TIME ZONE `UTC` INTO DATE lv_date TIME lv_time.
-    result = |{ lv_date(4) }-{ lv_date+4(2) }-{ lv_date+6(2) } { lv_time(2) }:{ lv_time+2(2) }:{ lv_time+4(2) }|.
+    result = |{ day_text( lv_date ) } { lv_time(2) }:{ lv_time+2(2) }:{ lv_time+4(2) }|.
+
+  ENDMETHOD.
+
+  METHOD day_text.
+
+    DATA lv_day TYPE string.
+    lv_day = day.
+    IF strlen( lv_day ) < 8.
+      result = lv_day.
+      RETURN.
+    ENDIF.
+    result = |{ lv_day(4) }-{ lv_day+4(2) }-{ lv_day+6(2) }|.
+
+  ENDMETHOD.
+
+  METHOD pseudonym_text.
+
+    DATA lv_key TYPE string.
+    lv_key = user_key.
+    IF lv_key IS INITIAL.
+      result = `not recorded`.
+    ELSEIF strlen( lv_key ) > 8.
+      result = |pseudonym { lv_key(8) }|.
+    ELSE.
+      result = |pseudonym { lv_key }|.
+    ENDIF.
 
   ENDMETHOD.
 

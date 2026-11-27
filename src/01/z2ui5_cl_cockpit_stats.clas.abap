@@ -443,12 +443,6 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE i.
 
-    CLASS-METHODS day_text
-      IMPORTING
-        day           TYPE clike
-      RETURNING
-        VALUE(result) TYPE string.
-
     CLASS-METHODS last_text
       IMPORTING
         day           TYPE clike
@@ -649,7 +643,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     lv_date = z2ui5_cl_cockpit_setup=>day_minus( 0 ).
     DO days TIMES.
       DATA(lv_day) = CONV string( lv_date ).
-      DATA(ls_day) = VALUE ty_s_day( day = day_text( lv_day ) ).
+      DATA(ls_day) = VALUE ty_s_day( day = z2ui5_cl_cockpit_setup=>day_text( lv_day ) ).
       READ TABLE lt_sum INTO ls_sum WITH TABLE KEY utc_day = lv_day.
       IF sy-subrc = 0.
         ls_day-roundtrips = to_i( ls_sum-cnt ).
@@ -795,7 +789,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                         last_used = `never recorded` ) TO result.
       ELSEIF ls_last-utc_day < from_day.
         APPEND VALUE #( app       = lv_app
-                        last_used = day_text( ls_last-utc_day ) ) TO result.
+                        last_used = z2ui5_cl_cockpit_setup=>day_text( ls_last-utc_day ) ) TO result.
       ENDIF.
     ENDLOOP.
 
@@ -904,10 +898,8 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                                                                     THEN `app start` ) ).
       IF lv_privacy = abap_false AND ls_log-uname IS NOT INITIAL.
         ls_occ-user = ls_log-uname.
-      ELSEIF ls_log-user_key IS NOT INITIAL.
-        ls_occ-user = |pseudonym { ls_log-user_key(8) }|.
       ELSE.
-        ls_occ-user = `not recorded`.
+        ls_occ-user = z2ui5_cl_cockpit_setup=>pseudonym_text( ls_log-user_key ).
       ENDIF.
       APPEND ls_occ TO result.
     ENDLOOP.
@@ -1390,22 +1382,12 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD day_text.
-
-    IF strlen( day ) < 8.
-      result = day.
-      RETURN.
-    ENDIF.
-    result = |{ day(4) }-{ day+4(2) }-{ day+6(2) }|.
-
-  ENDMETHOD.
-
   METHOD last_text.
 
     IF day IS INITIAL.
       RETURN.
     ENDIF.
-    result = |{ day_text( day ) } { hour }:00 UTC|.
+    result = |{ z2ui5_cl_cockpit_setup=>day_text( day ) } { hour }:00 UTC|.
 
   ENDMETHOD.
 
