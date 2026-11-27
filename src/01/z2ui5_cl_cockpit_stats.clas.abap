@@ -413,6 +413,23 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
       CHANGING
         cs_sum TYPE ty_s_sum.
 
+    "! One sum added to another: counts and sums added, maxima kept.
+    CLASS-METHODS merge_sum
+      IMPORTING
+        is_sum TYPE ty_s_sum
+      CHANGING
+        cs_sum TYPE ty_s_sum.
+
+    "! A row added to the sum of its app, created when there is none yet -
+    "! with the newest day and hour of the app's rows, for "last used".
+    "! Not by field symbol: the key of a sorted line is write-protected, and
+    "! a CHANGING parameter bound to it is CX_SY_DYN_CALL_ILLEGAL_TYPE.
+    CLASS-METHODS add_to_app
+      IMPORTING
+        is_row TYPE ty_s_db_sum
+      CHANGING
+        ct_sum TYPE ty_t_sum_app.
+
     CLASS-METHODS p95
       IMPORTING
         is_sum        TYPE ty_s_sum
@@ -667,25 +684,13 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
         cnt TYPE i,
       END OF ty_s_users.
     DATA lt_users TYPE STANDARD TABLE OF ty_s_users WITH EMPTY KEY.
-    DATA lt_sum TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
-    DATA ls_acc TYPE ty_s_sum.
+    DATA lt_sum TYPE ty_t_sum_app.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
     LOOP AT select_sums( lv_from ) INTO DATA(ls_row).
-      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app INTO ls_acc.
-      IF sy-subrc <> 0.
-        ls_acc = VALUE #( app = ls_row-app ).
-        INSERT ls_acc INTO TABLE lt_sum.
-      ENDIF.
-      " the newest day and hour of the group, for "last used"
-      IF ls_row-utc_day > ls_acc-utc_day OR ( ls_row-utc_day = ls_acc-utc_day AND ls_row-utc_hour > ls_acc-utc_hour ).
-        ls_acc-utc_day  = ls_row-utc_day.
-        ls_acc-utc_hour = ls_row-utc_hour.
-      ENDIF.
-      add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = ls_acc ).
-      MODIFY TABLE lt_sum FROM ls_acc.
+      add_to_app( EXPORTING is_row = ls_row
+                  CHANGING  ct_sum = lt_sum ).
     ENDLOOP.
 
     SELECT utc_day, app, COUNT( * ) AS cnt FROM z2ui5_t_27
@@ -1001,30 +1006,17 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     DATA lt_new TYPE ty_t_sum_app.
     DATA lt_old TYPE ty_t_sum_app.
-    DATA ls_acc TYPE ty_s_sum.
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     " growth: the model maximum of the newer half against the older half
     DATA(lv_half) = z2ui5_cl_cockpit_setup=>day_minus( days DIV 2 ).
 
     LOOP AT select_sums( lv_from ) INTO DATA(ls_row).
       IF ls_row-utc_day > lv_half.
-        READ TABLE lt_new WITH TABLE KEY app = ls_row-app INTO ls_acc.
-        IF sy-subrc <> 0.
-          ls_acc = VALUE #( app = ls_row-app ).
-          INSERT ls_acc INTO TABLE lt_new.
-        ENDIF.
-        add_sum( EXPORTING is_row = ls_row
-                 CHANGING  cs_sum = ls_acc ).
-        MODIFY TABLE lt_new FROM ls_acc.
+        add_to_app( EXPORTING is_row = ls_row
+                    CHANGING  ct_sum = lt_new ).
       ELSE.
-        READ TABLE lt_old WITH TABLE KEY app = ls_row-app INTO ls_acc.
-        IF sy-subrc <> 0.
-          ls_acc = VALUE #( app = ls_row-app ).
-          INSERT ls_acc INTO TABLE lt_old.
-        ENDIF.
-        add_sum( EXPORTING is_row = ls_row
-                 CHANGING  cs_sum = ls_acc ).
-        MODIFY TABLE lt_old FROM ls_acc.
+        add_to_app( EXPORTING is_row = ls_row
+                    CHANGING  ct_sum = lt_old ).
       ENDIF.
     ENDLOOP.
 
@@ -1038,6 +1030,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
   METHOD hints_of.
 
     DATA lt_all TYPE ty_t_sum_app.
+    DATA ls_acc TYPE ty_s_sum.
     DATA lv_model_limit TYPE ty_p.
     DATA lv_response_limit TYPE ty_p.
     DATA lv_new_mod TYPE ty_p.
@@ -1045,37 +1038,14 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     " the whole period per app = newer + older half
     lt_all = it_new.
     LOOP AT it_old INTO DATA(ls_old).
-      READ TABLE lt_all WITH TABLE KEY app = ls_old-app ASSIGNING FIELD-SYMBOL(<sum>).
+      READ TABLE lt_all WITH TABLE KEY app = ls_old-app INTO ls_acc.
       IF sy-subrc <> 0.
         INSERT ls_old INTO TABLE lt_all.
         CONTINUE.
       ENDIF.
-      <sum>-cnt       = <sum>-cnt + ls_old-cnt.
-      <sum>-cnt_err   = <sum>-cnt_err + ls_old-cnt_err.
-      <sum>-ms_sum    = <sum>-ms_sum + ls_old-ms_sum.
-      <sum>-ms_load   = <sum>-ms_load + ls_old-ms_load.
-      <sum>-ms_main   = <sum>-ms_main + ls_old-ms_main.
-      <sum>-ms_render = <sum>-ms_render + ls_old-ms_render.
-      <sum>-ms_client = <sum>-ms_client + ls_old-ms_client.
-      <sum>-cnt_client = <sum>-cnt_client + ls_old-cnt_client.
-      <sum>-h01 = <sum>-h01 + ls_old-h01.
-      <sum>-h02 = <sum>-h02 + ls_old-h02.
-      <sum>-h03 = <sum>-h03 + ls_old-h03.
-      <sum>-h04 = <sum>-h04 + ls_old-h04.
-      <sum>-h05 = <sum>-h05 + ls_old-h05.
-      <sum>-h06 = <sum>-h06 + ls_old-h06.
-      <sum>-h07 = <sum>-h07 + ls_old-h07.
-      <sum>-h08 = <sum>-h08 + ls_old-h08.
-      <sum>-h09 = <sum>-h09 + ls_old-h09.
-      IF ls_old-ms_max > <sum>-ms_max.
-        <sum>-ms_max = ls_old-ms_max.
-      ENDIF.
-      IF ls_old-res_max > <sum>-res_max.
-        <sum>-res_max = ls_old-res_max.
-      ENDIF.
-      IF ls_old-mod_max > <sum>-mod_max.
-        <sum>-mod_max = ls_old-mod_max.
-      ENDIF.
+      merge_sum( EXPORTING is_sum = ls_old
+                 CHANGING  cs_sum = ls_acc ).
+      MODIFY TABLE lt_all FROM ls_acc.
     ENDLOOP.
 
     " the thresholds in bytes, and the growth below, in p - an INT4 product
@@ -1235,7 +1205,6 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     DATA lt_rows TYPE ty_t_db_sum.
     DATA ls_all TYPE ty_s_sum.
     DATA lt_sum TYPE ty_t_sum_app.
-    DATA ls_acc TYPE ty_s_sum.
 
     DATA(lv_from_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( hours * 3600 ).
     DATA(lv_from_day) = z2ui5_cl_cockpit_setup=>day_of( lv_from_ts ).
@@ -1257,14 +1226,8 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       IF |{ ls_row-utc_day }{ ls_row-utc_hour }| < lv_from_key.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_sum WITH TABLE KEY app = ls_row-app INTO ls_acc.
-      IF sy-subrc <> 0.
-        ls_acc = VALUE #( app = ls_row-app ).
-        INSERT ls_acc INTO TABLE lt_sum.
-      ENDIF.
-      add_sum( EXPORTING is_row = ls_row
-               CHANGING  cs_sum = ls_acc ).
-      MODIFY TABLE lt_sum FROM ls_acc.
+      add_to_app( EXPORTING is_row = ls_row
+                  CHANGING  ct_sum = lt_sum ).
       add_sum( EXPORTING is_row = ls_row
                CHANGING  cs_sum = ls_all ).
     ENDLOOP.
@@ -1320,33 +1283,60 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD add_sum.
 
-    cs_sum-cnt        = cs_sum-cnt + is_row-cnt.
-    cs_sum-cnt_start  = cs_sum-cnt_start + is_row-cnt_start.
-    cs_sum-cnt_err    = cs_sum-cnt_err + is_row-cnt_err.
-    cs_sum-ms_sum     = cs_sum-ms_sum + is_row-ms_sum.
-    cs_sum-ms_load    = cs_sum-ms_load + is_row-ms_load.
-    cs_sum-ms_main    = cs_sum-ms_main + is_row-ms_main.
-    cs_sum-ms_render  = cs_sum-ms_render + is_row-ms_render.
-    cs_sum-ms_client  = cs_sum-ms_client + is_row-ms_client.
-    cs_sum-cnt_client = cs_sum-cnt_client + is_row-cnt_client.
-    cs_sum-kb_res     = cs_sum-kb_res + is_row-kb_res.
-    cs_sum-h01 = cs_sum-h01 + is_row-h01.
-    cs_sum-h02 = cs_sum-h02 + is_row-h02.
-    cs_sum-h03 = cs_sum-h03 + is_row-h03.
-    cs_sum-h04 = cs_sum-h04 + is_row-h04.
-    cs_sum-h05 = cs_sum-h05 + is_row-h05.
-    cs_sum-h06 = cs_sum-h06 + is_row-h06.
-    cs_sum-h07 = cs_sum-h07 + is_row-h07.
-    cs_sum-h08 = cs_sum-h08 + is_row-h08.
-    cs_sum-h09 = cs_sum-h09 + is_row-h09.
-    IF is_row-ms_max > cs_sum-ms_max.
-      cs_sum-ms_max = is_row-ms_max.
+    DATA ls_sum TYPE ty_s_sum.
+    MOVE-CORRESPONDING is_row TO ls_sum.
+    merge_sum( EXPORTING is_sum = ls_sum
+               CHANGING  cs_sum = cs_sum ).
+
+  ENDMETHOD.
+
+  METHOD add_to_app.
+
+    DATA ls_acc TYPE ty_s_sum.
+    READ TABLE ct_sum WITH TABLE KEY app = is_row-app INTO ls_acc.
+    IF sy-subrc <> 0.
+      ls_acc = VALUE #( app = is_row-app ).
+      INSERT ls_acc INTO TABLE ct_sum.
     ENDIF.
-    IF is_row-res_max > cs_sum-res_max.
-      cs_sum-res_max = is_row-res_max.
+    IF is_row-utc_day > ls_acc-utc_day OR ( is_row-utc_day = ls_acc-utc_day AND is_row-utc_hour > ls_acc-utc_hour ).
+      ls_acc-utc_day  = is_row-utc_day.
+      ls_acc-utc_hour = is_row-utc_hour.
     ENDIF.
-    IF is_row-mod_max > cs_sum-mod_max.
-      cs_sum-mod_max = is_row-mod_max.
+    add_sum( EXPORTING is_row = is_row
+             CHANGING  cs_sum = ls_acc ).
+    MODIFY TABLE ct_sum FROM ls_acc.
+
+  ENDMETHOD.
+
+  METHOD merge_sum.
+
+    cs_sum-cnt        = cs_sum-cnt + is_sum-cnt.
+    cs_sum-cnt_start  = cs_sum-cnt_start + is_sum-cnt_start.
+    cs_sum-cnt_err    = cs_sum-cnt_err + is_sum-cnt_err.
+    cs_sum-ms_sum     = cs_sum-ms_sum + is_sum-ms_sum.
+    cs_sum-ms_load    = cs_sum-ms_load + is_sum-ms_load.
+    cs_sum-ms_main    = cs_sum-ms_main + is_sum-ms_main.
+    cs_sum-ms_render  = cs_sum-ms_render + is_sum-ms_render.
+    cs_sum-ms_client  = cs_sum-ms_client + is_sum-ms_client.
+    cs_sum-cnt_client = cs_sum-cnt_client + is_sum-cnt_client.
+    cs_sum-kb_res     = cs_sum-kb_res + is_sum-kb_res.
+    cs_sum-h01 = cs_sum-h01 + is_sum-h01.
+    cs_sum-h02 = cs_sum-h02 + is_sum-h02.
+    cs_sum-h03 = cs_sum-h03 + is_sum-h03.
+    cs_sum-h04 = cs_sum-h04 + is_sum-h04.
+    cs_sum-h05 = cs_sum-h05 + is_sum-h05.
+    cs_sum-h06 = cs_sum-h06 + is_sum-h06.
+    cs_sum-h07 = cs_sum-h07 + is_sum-h07.
+    cs_sum-h08 = cs_sum-h08 + is_sum-h08.
+    cs_sum-h09 = cs_sum-h09 + is_sum-h09.
+    IF is_sum-ms_max > cs_sum-ms_max.
+      cs_sum-ms_max = is_sum-ms_max.
+    ENDIF.
+    IF is_sum-res_max > cs_sum-res_max.
+      cs_sum-res_max = is_sum-res_max.
+    ENDIF.
+    IF is_sum-mod_max > cs_sum-mod_max.
+      cs_sum-mod_max = is_sum-mod_max.
     ENDIF.
 
   ENDMETHOD.
