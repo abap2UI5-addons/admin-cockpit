@@ -192,6 +192,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
         user   TYPE clike OPTIONAL
         search TYPE clike OPTIONAL.
 
+    "! Forget the open session - its steps, fields and recordings are other
+    "! users' data, not kept in the cockpit's own drafts once it is closed.
+    METHODS session_clear.
+
     "! Whether the app state of the open session grows from step to step,
     "! and which tables - into growth_text.
     METHODS growth_check.
@@ -2946,7 +2950,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     dialog->ele( `endButton`
         )->tag( `Button`
             )->a( n = `text`  v = `Close`
-            )->a( n = `press` v = client->follow_up_action( z2ui5_if_client=>cs_event-popup_close ) ).
+            )->a( n = `press` v = client->_event( `SESSION_CLOSE` ) ).
 
     client->popup_display( popup->stringify( ) ).
 
@@ -3432,6 +3436,20 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD session_clear.
+
+    CLEAR t_steps.
+    CLEAR t_secret.
+    CLEAR s_step.
+    CLEAR s_wire.
+    CLEAR story_text.
+    CLEAR t_history.
+    CLEAR history_shown.
+    CLEAR step_index.
+    CLEAR step_base.
+
+  ENDMETHOD.
+
   METHOD growth_check.
 
     DATA lv_tables TYPE string.
@@ -3891,7 +3909,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `SESSION_BACK`.
+            session_clear( ).
             popup_error( ).
+
+          WHEN `SESSION_CLOSE`.
+            session_clear( ).
+            client->popup_destroy( ).
 
           WHEN `SESSION_EXPORT`.
             IF check_change( ) = abap_true.
@@ -4031,6 +4054,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 WHEN `WIRE_FAILED`.
                   popup_wire( abap_true ).
                 WHEN OTHERS.
+                  " the bodies and the story are other users' data - not kept
+                  " in the cockpit's own drafts once their popup is closed
+                  CLEAR s_wire.
+                  CLEAR story_text.
                   popup_session( ).
               ENDCASE.
             ENDIF.

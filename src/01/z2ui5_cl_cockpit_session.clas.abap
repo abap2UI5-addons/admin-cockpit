@@ -1025,6 +1025,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     " the framework keeps only the newest drafts of a session by default
     DATA(lv_pruned) = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ).
+    DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
     " the app of a session is in its newest draft - read for as many
     " sessions as are listed, and a few more when a filter skips some
     DATA(lv_reads) = 0.
@@ -1051,6 +1052,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDTRY.
       IF ls_session-app IS INITIAL.
         ls_session-app = `(unknown)`.
+      ENDIF.
+      " the cockpit's own sessions hold copies of other users' data - the
+      " recorder leaves them out too
+      IF ls_session-app = lv_own.
+        result-sessions = result-sessions - 1.
+        CONTINUE.
       ENDIF.
       IF ls_agg-id_prev IS NOT INITIAL.
         ls_session-note = COND #( WHEN lv_pruned = abap_true THEN `earlier steps pruned or expired`
@@ -1341,6 +1348,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the serialized text escapes <, > and &, so a term with one of them
     " is only found in the decoded fields - every draft is taken apart then
     DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
+    " the cockpit's own drafts hold copies of what it showed - other users' data
+    DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
     DO.
       TRY.
           lt_rows = read_page( lv_last ).
@@ -1356,6 +1365,10 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         lv_last = ls_row-id.
         result-drafts = result-drafts + 1.
         IF lv_prefilter = abap_true AND ls_row-data NS lv_search.
+          CONTINUE.
+        ENDIF.
+        DATA(lv_app) = app_of( ls_row-data ).
+        IF lv_app = lv_own.
           CONTINUE.
         ENDIF.
         DATA(lv_matched) = abap_false.
@@ -1375,7 +1388,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                           id      = ls_row-id
                           time    = z2ui5_cl_cockpit_setup=>ts_text( ls_meta-timestampl )
                           user    = user_text( ls_meta-uname )
-                          app     = app_of( ls_row-data )
+                          app     = lv_app
                           path    = ls_value-path
                           value   = cut( ls_value-value ) ) TO result-t_hit.
           CLEAR ls_meta.
