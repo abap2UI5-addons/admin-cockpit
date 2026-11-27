@@ -725,6 +725,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       ENDTRY.
       UNASSIGN <any>.
       ASSIGN server->(`STATEFUL`) TO <any>.
+      IF <any> IS NOT ASSIGNED.
+        " the attribute of if_http_server, where the class has no alias for it
+        ASSIGN server->(`IF_HTTP_SERVER~STATEFUL`) TO <any>.
+      ENDIF.
       IF <any> IS ASSIGNED.
         check_sticky = xsdbool( <any> = 1 ).
       ENDIF.
