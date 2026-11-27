@@ -3706,6 +3706,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   METHOD on_event.
 
     DATA lv_flows TYPE string.
+    DATA lv_newest TYPE string.
 
     TRY.
         CASE client->get_event( ).
@@ -3968,7 +3969,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             flows_shown = abap_true.
             " built ahead of the COND: inside it the 7.02 downport writes the
             " whole concatenation on one line, longer than 255 characters
-            lv_flows = |How users move between apps, from { s_flows-drafts } drafts - "(start)" is | &&
+            IF s_flows-check_capped = abap_true.
+              lv_newest = ` (the newest)`.
+            ENDIF.
+            lv_flows = |How users move between apps, from { s_flows-drafts } drafts{ lv_newest } - "(start)" is | &&
                        |where a session began, "(end)" where a session without a step for 30 minutes | &&
                        |stopped, "(end after an error)" where it stopped right after a failed roundtrip|.
             flows_text = COND #( WHEN s_flows-error IS NOT INITIAL

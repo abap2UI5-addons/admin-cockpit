@@ -352,6 +352,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       BEGIN OF ty_s_flows,
         error   TYPE string,
         drafts  TYPE i,
+        " only the newest c_max_nodes drafts were read
+        check_capped TYPE abap_bool,
         t_flow  TYPE ty_t_flow,
       END OF ty_s_flows.
 
@@ -763,6 +765,19 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
+    "! A page of the drafts of it_node with their serialized state, at most
+    "! 50 - in the order of it_node, so a scan over read_nodes( ) reads the
+    "! newest drafts first. A draft gone since is left out.
+    "! @parameter page | the page, from 1 - empty once past the last draft
+    CLASS-METHODS read_nodes_data
+      IMPORTING
+        it_node       TYPE ty_t_node
+        page          TYPE i
+      RETURNING
+        VALUE(result) TYPE ty_t_page
+      RAISING
+        cx_static_check.
+
     "! Only the newest c_max_steps steps, numbered from 1 again - the step
     "! numbers are the lines of the table (follows and the viewer read the
     "! step they name by its line). A step that continues one left out
@@ -829,8 +844,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       CHANGING
         cs_step TYPE ty_s_step.
 
-    "! Drafts of an app, in the order of their ids - at most c_max_scan
-    "! drafts are read to find them.
+    "! Drafts of an app, the newest first - at most c_max_scan drafts are
+    "! read to find them.
     "! @parameter max_hits  | the most drafts returned
     "! @parameter it_skip   | drafts not to return
     CLASS-METHODS scan_app
@@ -1323,7 +1338,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lt_rows TYPE ty_t_page.
     DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
     DATA lt_node TYPE ty_t_node.
-    DATA lv_last TYPE c LENGTH 32.
     DATA lv_search TYPE string.
 
     lv_search = condense( search ).
@@ -1350,19 +1364,23 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
     " the cockpit's own drafts hold copies of what it showed - other users' data
     DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
+    " the newest drafts first - read_nodes( ) stops at c_max_nodes
+    IF lines( lt_node ) >= c_max_nodes.
+      result-check_capped = abap_true.
+    ENDIF.
     DO.
+      IF ( sy-index - 1 ) * 50 >= lines( lt_node ).
+        EXIT.
+      ENDIF.
       TRY.
-          lt_rows = read_page( lv_last ).
+          lt_rows = read_nodes_data( it_node = lt_node
+                                     page    = sy-index ).
         CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
       ENDTRY.
-      IF lt_rows IS INITIAL.
-        EXIT.
-      ENDIF.
 
       LOOP AT lt_rows INTO DATA(ls_row).
-        lv_last = ls_row-id.
         result-drafts = result-drafts + 1.
         IF lv_prefilter = abap_true AND ls_row-data NS lv_search.
           CONTINUE.
@@ -1398,11 +1416,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           result-matched = result-matched + 1.
         ENDIF.
       ENDLOOP.
-
-      IF result-drafts >= c_max_nodes.
-        result-check_capped = abap_true.
-        EXIT.
-      ENDIF.
     ENDDO.
 
   ENDMETHOD.
@@ -1415,20 +1428,28 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lt_ids TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
     DATA lt_failed TYPE ty_t_id.
     DATA lv_oldest TYPE timestampl.
-    DATA lv_last TYPE c LENGTH 32.
+    DATA lt_node TYPE ty_t_node.
 
+    " the newest drafts, by time - their ids are UUIDs, in no order of time
+    TRY.
+        lt_node = read_nodes( ).
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    result-check_capped = xsdbool( lines( lt_node ) >= c_max_nodes ).
     DO.
+      IF ( sy-index - 1 ) * 50 >= lines( lt_node ).
+        EXIT.
+      ENDIF.
       TRY.
-          lt_rows = read_page( lv_last ).
-        CATCH cx_root INTO DATA(lx).
+          lt_rows = read_nodes_data( it_node = lt_node
+                                     page    = sy-index ).
+        CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
       ENDTRY.
-      IF lt_rows IS INITIAL.
-        EXIT.
-      ENDIF.
       LOOP AT lt_rows INTO DATA(ls_row).
-        lv_last = ls_row-id.
         APPEND VALUE #( id         = ls_row-id
                         id_prev    = ls_row-id_prev
                         timestampl = ls_row-timestampl
@@ -1437,9 +1458,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           lv_oldest = ls_row-timestampl.
         ENDIF.
       ENDLOOP.
-      IF lines( lt_link ) >= c_max_nodes.
-        EXIT.
-      ENDIF.
     ENDDO.
 
     " the drafts a failed roundtrip started from - a session ending there
@@ -2068,20 +2086,21 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lt_rows TYPE ty_t_page.
     DATA lt_skip TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lv_last TYPE c LENGTH 32.
     DATA lv_scanned TYPE i.
 
     DATA(lv_app) = to_upper( condense( app ) ).
     LOOP AT it_skip INTO DATA(lv_skip).
       INSERT lv_skip INTO TABLE lt_skip.
     ENDLOOP.
+    " the newest drafts first - their ids are UUIDs, in no order of time
+    DATA(lt_node) = read_nodes( ).
     DO.
-      lt_rows = read_page( lv_last ).
-      IF lt_rows IS INITIAL.
+      IF ( sy-index - 1 ) * 50 >= lines( lt_node ).
         RETURN.
       ENDIF.
+      lt_rows = read_nodes_data( it_node = lt_node
+                                 page    = sy-index ).
       LOOP AT lt_rows INTO DATA(ls_row).
-        lv_last = ls_row-id.
         lv_scanned = lv_scanned + 1.
         DATA(lv_id) = CONV string( ls_row-id ).
         IF line_exists( lt_skip[ table_line = lv_id ] ).
@@ -3221,6 +3240,40 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     IF lt_range IS NOT INITIAL.
       APPEND lt_range TO result.
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD read_nodes_data.
+
+    DATA lv_tab TYPE string.
+    DATA lt_range TYPE ty_r_draft_id.
+    DATA lt_order TYPE HASHED TABLE OF ty_s_page_row WITH UNIQUE KEY id.
+
+    DATA(lv_from) = ( page - 1 ) * 50 + 1.
+    IF page < 1 OR lv_from > lines( it_node ).
+      RETURN.
+    ENDIF.
+    LOOP AT it_node INTO DATA(ls_node) FROM lv_from TO lv_from + 49.
+      IF ls_node-id IS NOT INITIAL.
+        APPEND VALUE #( sign   = `I`
+                        option = `EQ`
+                        low    = ls_node-id ) TO lt_range.
+      ENDIF.
+    ENDLOOP.
+    IF lt_range IS INITIAL.
+      RETURN.
+    ENDIF.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
+    SELECT id, id_prev, timestampl, data FROM (lv_tab)
+      WHERE id IN @lt_range
+      INTO CORRESPONDING FIELDS OF TABLE @lt_order.
+    " back in the order of it_node
+    LOOP AT it_node INTO ls_node FROM lv_from TO lv_from + 49.
+      READ TABLE lt_order INTO DATA(ls_row) WITH TABLE KEY id = ls_node-id.
+      IF sy-subrc = 0.
+        APPEND ls_row TO result.
+      ENDIF.
+    ENDLOOP.
 
   ENDMETHOD.
 
