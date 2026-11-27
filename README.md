@@ -727,7 +727,10 @@ history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
 history in `Z2UI5_T_23`: an alert is *raised* by the first run that finds
 the threshold exceeded and *cleared* by the first run that no longer finds it -
 so a broken app costs one notification when it breaks and one when it is fine
-again, not one per run. Schedule the job every 15 minutes (see
+again, not one per run. An app with fewer roundtrips in the window than the
+minimum cannot be judged: its alert stays open until there are enough again
+(a quiet night is no recovery), and a run whose evaluation fails changes
+nothing. Schedule the job every 15 minutes (see
 [Housekeeping and background jobs](#housekeeping-and-background-jobs)); without
 it the Overview still shows what is exceeded, but nothing is kept or sent.
 

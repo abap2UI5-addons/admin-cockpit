@@ -7,8 +7,9 @@
 "! run( ) - called by the housekeeping job z2ui5_cl_cockpit_job=&gt;run( ) -
 "! keeps the history in Z2UI5_T_23: an alert is raised by the first run
 "! that finds the threshold exceeded and cleared by the first run that no
-"! longer finds it, and each of the two is handed to the customer class
-"! implementing z2ui5_if_cockpit_notify, if there is one.
+"! longer finds it with enough roundtrips to judge, and each of the two is
+"! handed to the customer class implementing z2ui5_if_cockpit_notify, if
+"! there is one.
 "!
 "! Reads only the cockpit's own tables: without the monitor (package 02)
 "! there are no figures and nothing is ever raised.
@@ -125,6 +126,18 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_t_alert.
 
+    "! The open alerts the window can judge - pure. The alert of an app (or
+    "! of all apps) with fewer roundtrips in the window than the minimum is
+    "! left out and stays open: a quiet hour is no recovery. The alert of a
+    "! rule that is switched off is judged - and cleared.
+    CLASS-METHODS judged
+      IMPORTING
+        it_open       TYPE ty_t_open
+        it_window     TYPE z2ui5_cl_cockpit_stats=>ty_t_window
+        is_set        TYPE z2ui5_cl_cockpit_setup=>ty_s_settings
+      RETURNING
+        VALUE(result) TYPE ty_t_open.
+
     "! What changed since the last run - pure: the alerts of it_now without
     "! an open row are raised, the open rows without an alert are cleared.
     CLASS-METHODS diff
@@ -224,6 +237,31 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD judged.
+
+    LOOP AT it_open INTO DATA(ls_open).
+      DATA(lv_active) = SWITCH abap_bool( CONV string( ls_open-rule_id )
+        WHEN z2ui5_if_cockpit_notify=>cs_rule-error_rate
+        THEN xsdbool( is_set-alert_err_pct > 0 AND is_set-mode <> z2ui5_cl_cockpit_setup=>cs_mode-errors )
+        WHEN z2ui5_if_cockpit_notify=>cs_rule-p95
+        THEN xsdbool( is_set-alert_p95_ms > 0 ) ).
+      IF lv_active = abap_true.
+        DATA(lv_roundtrips) = 0.
+        LOOP AT it_window INTO DATA(ls_win).
+          IF CONV ty_s_open-app( ls_win-app ) = ls_open-app.
+            lv_roundtrips = ls_win-roundtrips.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+        IF lv_roundtrips < is_set-alert_min_cnt.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+      APPEND ls_open TO result.
+    ENDLOOP.
+
+  ENDMETHOD.
+
   METHOD diff.
 
     CLEAR et_raised.
@@ -257,16 +295,27 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
     DATA lt_open TYPE ty_t_open.
     DATA lt_raised TYPE ty_t_alert.
     DATA lt_cleared TYPE ty_t_open.
+    DATA lt_window TYPE z2ui5_cl_cockpit_stats=>ty_t_window.
+    DATA lt_now TYPE ty_t_alert.
     DATA ls_row TYPE z2ui5_t_23.
     DATA lv_zero TYPE timestampl.
 
-    DATA(lt_now) = check( ).
+    " not check( ), which swallows a failure: an evaluation that fails must
+    " raise - an empty result would clear every open alert
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+    IF ls_set-alert_err_pct > 0 OR ls_set-alert_p95_ms > 0.
+      lt_window = z2ui5_cl_cockpit_stats=>get_window( ls_set-alert_hours ).
+      lt_now = evaluate( it_window = lt_window
+                         is_set    = ls_set ).
+    ENDIF.
 
     SELECT id, rule_id, app, raised, measured, threshold, cnt, note FROM z2ui5_t_23
       WHERE cleared = @lv_zero
       INTO CORRESPONDING FIELDS OF TABLE @lt_open.
 
-    diff( EXPORTING it_open    = lt_open
+    diff( EXPORTING it_open    = judged( it_open   = lt_open
+                                         it_window = lt_window
+                                         is_set    = ls_set )
                     it_now     = lt_now
           IMPORTING et_raised  = lt_raised
                     et_cleared = lt_cleared ).
