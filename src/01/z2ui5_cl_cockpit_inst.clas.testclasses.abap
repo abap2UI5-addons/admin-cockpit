@@ -17,6 +17,8 @@ CLASS ltcl_checks DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHOR
     METHODS csp_missing FOR TESTING.
     METHODS csp_in_header_counts FOR TESTING.
     METHODS csp_wildcard_host FOR TESTING.
+    METHODS csp_directive_exact FOR TESTING.
+    METHODS csp_every_policy FOR TESTING.
     METHODS headers_missing FOR TESTING.
     METHODS long_expiry FOR TESTING.
     METHODS drafts_pruned FOR TESTING.
@@ -157,6 +159,37 @@ CLASS ltcl_checks IMPLEMENTATION.
     REPLACE `script-src 'self'` IN ms_get-content_security_policy WITH `script-src 'self' https://cdn.jsdelivr.net`.
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-warn
                                         act = check( `CSP_HOSTS` )-status ).
+
+  ENDMETHOD.
+
+  METHOD csp_directive_exact.
+
+    " script-src-elem is not script-src, and the meta tag's content only
+    DATA(lv_csp) = `<meta http-equiv="Content-Security-Policy" content="script-src-elem 'unsafe-inline'; ` &&
+                   `Script-Src 'self'; script-src 'unsafe-eval'">`.
+    cl_abap_unit_assert=>assert_equals( exp = ` Script-Src 'self' `
+                                        act = z2ui5_cl_cockpit_inst=>csp_directive( csp       = lv_csp
+                                                                                    directive = `script-src` ) ).
+    cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_inst=>csp_directive( csp       = `default-src 'self'`
+                                                                               directive = `script-src` ) ).
+
+  ENDMETHOD.
+
+  METHOD csp_every_policy.
+
+    " the meta tag forbids what the header allows - the script does not run
+    APPEND VALUE #( n = `Content-Security-Policy`
+                    v = `script-src 'self' 'unsafe-inline' 'unsafe-eval'` ) TO ms_get-t_security_header.
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-ok
+                                        act = check( `CSP_INLINE` )-status ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-ok
+                                        act = check( `CSP_EVAL` )-status ).
+
+    " a policy that says nothing about scripts allows every one of them
+    ms_get-content_security_policy = `<meta http-equiv="Content-Security-Policy" content="style-src 'self'">`.
+    CLEAR ms_get-t_security_header.
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_inst=>cs_status-error
+                                        act = check( `CSP_INLINE` )-status ).
 
   ENDMETHOD.
 

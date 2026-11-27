@@ -171,7 +171,10 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
-    "! The script-src directive of a CSP meta tag or header value.
+    "! A directive of one Content Security Policy - a meta tag or a header
+    "! value - with its name, between blanks: " script-src 'self' ". The
+    "! name matches exactly (script-src is not script-src-elem), the first
+    "! occurrence counts, as in the browser. Empty when the policy has none.
     CLASS-METHODS csp_directive
       IMPORTING
         csp           TYPE string
@@ -438,18 +441,42 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                     `extend the default instead.`
                  CHANGING  checks = result ).
     ELSE.
-      DATA(lv_all) = to_lower( |{ lv_csp } { lv_csp_header }| ).
-      DATA(lv_script) = csp_directive( csp       = lv_all
-                                       directive = `script-src` ).
-      IF lv_script IS INITIAL.
-        lv_script = csp_directive( csp       = lv_all
-                                   directive = `default-src` ).
-      ENDIF.
+      " a page with two policies (meta tag and header) runs a script only
+      " when both allow it; a policy without script-src and default-src
+      " allows every script
+      DATA(lt_policy) = VALUE string_table( ( lv_csp ) ( lv_csp_header ) ).
+      DATA(lv_eval) = abap_true.
+      DATA(lv_inline) = abap_true.
+      DATA(lv_wild) = abap_true.
+      LOOP AT lt_policy INTO DATA(lv_policy).
+        IF lv_policy IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        DATA(lv_script) = csp_directive( csp       = lv_policy
+                                         directive = `script-src` ).
+        IF lv_script IS INITIAL.
+          lv_script = csp_directive( csp       = lv_policy
+                                     directive = `default-src` ).
+        ENDIF.
+        IF lv_script IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        IF lv_script NS `'unsafe-eval'`.
+          lv_eval = abap_false.
+        ENDIF.
+        IF lv_script NS `'unsafe-inline'`.
+          lv_inline = abap_false.
+        ENDIF.
+        IF lv_script NS ` * ` AND lv_script NS ` https: ` AND lv_script NS ` http: `
+            AND lv_script NS `cdn.jsdelivr.net` AND lv_script NS `cdnjs.cloudflare.com`.
+          lv_wild = abap_false.
+        ENDIF.
+      ENDLOOP.
 
       add_check( EXPORTING id     = `CSP_EVAL`
-                           status = COND #( WHEN lv_script CS `'unsafe-eval'` THEN cs_status-warn ELSE cs_status-ok )
+                           status = COND #( WHEN lv_eval = abap_true THEN cs_status-warn ELSE cs_status-ok )
                            title  = `CSP without 'unsafe-eval'`
-                           value  = COND #( WHEN lv_script CS `'unsafe-eval'` THEN `contains 'unsafe-eval'` ELSE `ok` )
+                           value  = COND #( WHEN lv_eval = abap_true THEN `allows 'unsafe-eval'` ELSE `ok` )
                            text   = `'unsafe-eval' lets strings become code. Only UI5 1.71-1.82 popups with ` &&
                                     `unloaded binding types need it ('wasm-unsafe-eval' is fine).`
                            fix    = `Remove 'unsafe-eval' from script-src in set_config_http_get of your user exit, ` &&
@@ -457,17 +484,15 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                  CHANGING  checks = result ).
 
       add_check( EXPORTING id     = `CSP_INLINE`
-                           status = COND #( WHEN lv_script CS `'unsafe-inline'` THEN cs_status-error ELSE cs_status-ok )
+                           status = COND #( WHEN lv_inline = abap_true THEN cs_status-error ELSE cs_status-ok )
                            title  = `CSP without 'unsafe-inline' for scripts`
-                           value  = COND #( WHEN lv_script CS `'unsafe-inline'` THEN `contains 'unsafe-inline'` ELSE `ok` )
+                           value  = COND #( WHEN lv_inline = abap_true THEN `allows 'unsafe-inline'` ELSE `ok` )
                            text   = `With 'unsafe-inline' in script-src every injected inline script runs; ` &&
                                     `the framework then also stops adding the hash of its own inline script.`
                            fix    = `Remove 'unsafe-inline' from script-src in your user exit ` &&
                                     `(style-src may keep it - UI5 needs it there).`
                  CHANGING  checks = result ).
 
-      DATA(lv_wild) = xsdbool( lv_script CS ` * ` OR lv_script CS ` https: ` OR lv_script CS ` http: `
-                               OR lv_script CS `cdn.jsdelivr.net` OR lv_script CS `cdnjs.cloudflare.com` ).
       add_check( EXPORTING id     = `CSP_HOSTS`
                            status = COND #( WHEN lv_wild = abap_true THEN cs_status-warn ELSE cs_status-ok )
                            title  = `Script hosts limited`
@@ -841,22 +866,36 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD csp_directive.
 
-    DATA(lv_off) = find( val = csp
-                         sub = directive ).
-    IF lv_off < 0.
-      RETURN.
+    DATA lt_part TYPE string_table.
+    DATA lv_name TYPE string.
+
+    " a meta tag: the policy is its content
+    DATA(lv_policy) = csp.
+    DATA(lv_content) = find( val  = csp
+                             sub  = `content="`
+                             case = abap_false ).
+    IF lv_content >= 0.
+      lv_policy = substring( val = csp
+                             off = lv_content + strlen( `content="` ) ).
+      IF lv_policy CS `"`.
+        lv_policy = substring_before( val = lv_policy
+                                      sub = `"` ).
+      ENDIF.
     ENDIF.
-    result = substring( val = csp
-                        off = lv_off ).
-    IF result CS `;`.
-      result = substring_before( val = result
-                                 sub = `;` ).
-    ENDIF.
-    IF result CS `"`.
-      result = substring_before( val = result
-                                 sub = `"` ).
-    ENDIF.
-    result = | { result } |.
+
+    SPLIT lv_policy AT `;` INTO TABLE lt_part.
+    LOOP AT lt_part INTO DATA(lv_part).
+      lv_part = condense( lv_part ).
+      lv_name = lv_part.
+      IF lv_name CS ` `.
+        lv_name = substring_before( val = lv_name
+                                    sub = ` ` ).
+      ENDIF.
+      IF to_lower( lv_name ) = to_lower( directive ).
+        result = | { lv_part } |.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
 
   ENDMETHOD.
 
