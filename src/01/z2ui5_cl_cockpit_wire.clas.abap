@@ -399,6 +399,15 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_s_inputs.
 
+    "! get_messages and get_input_errors from one read of the recordings -
+    "! the Errors tab asks for both. Never raises.
+    CLASS-METHODS get_trouble
+      IMPORTING
+        days     TYPE i
+      EXPORTING
+        messages TYPE ty_s_messages
+        inputs   TYPE ty_s_inputs.
+
     "! A recorded popup taken apart for showing it inline: what its Dialog
     "! or Popover holds, and its buttons. Its outer element goes, a popup
     "! cannot be shown inside another one.
@@ -497,6 +506,46 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS c_secret_names TYPE string VALUE `[A-Z0-9_]*(PASSW|KENNWORT|PWD|SECRET)[A-Z0-9_]*`.
 
     TYPES ty_t_row TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
+
+    TYPES:
+      "! A recording as the message and input statistics read it.
+      BEGIN OF ty_s_read,
+        app           TYPE c LENGTH 30,
+        uname         TYPE c LENGTH 12,
+        user_key      TYPE c LENGTH 64,
+        timestampl    TYPE timestampl,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        http_status   TYPE i,
+        req_body      TYPE string,
+        res_body      TYPE string,
+      END OF ty_s_read.
+    TYPES ty_t_read TYPE STANDARD TABLE OF ty_s_read WITH EMPTY KEY.
+
+    "! The newest recordings of the last days, at most c_max_read.
+    "! @parameter check_request | with the request bodies - else they stay empty
+    CLASS-METHODS read_recent
+      IMPORTING
+        days          TYPE i
+        check_request TYPE abap_bool
+      RETURNING
+        VALUE(result) TYPE ty_t_read
+      RAISING
+        cx_static_check.
+
+    "! What the responses showed - get_messages over rows read already.
+    CLASS-METHODS messages_from
+      IMPORTING
+        it_row        TYPE ty_t_read
+      RETURNING
+        VALUE(result) TYPE ty_s_messages.
+
+    "! The inputs before errors - get_input_errors over rows read already.
+    CLASS-METHODS inputs_from
+      IMPORTING
+        it_row        TYPE ty_t_read
+      RETURNING
+        VALUE(result) TYPE ty_s_inputs.
 
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_pending WITH EMPTY KEY.
 
@@ -1260,16 +1309,57 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD get_messages.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        app           TYPE c LENGTH 30,
-        uname         TYPE c LENGTH 12,
-        user_key      TYPE c LENGTH 64,
-        timestampl    TYPE timestampl,
-        draft_id      TYPE c LENGTH 32,
-        draft_id_prev TYPE c LENGTH 32,
-        res_body      TYPE string,
-      END OF ty_s_row.
+    TRY.
+        result = messages_from( read_recent( days          = days
+                                             check_request = abap_false ) ).
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD get_trouble.
+
+    CLEAR messages.
+    CLEAR inputs.
+    TRY.
+        DATA(lt_row) = read_recent( days          = days
+                                    check_request = abap_true ).
+      CATCH cx_root INTO DATA(lx).
+        messages-error = lx->get_text( ).
+        inputs-error   = messages-error.
+        RETURN.
+    ENDTRY.
+    messages = messages_from( lt_row ).
+    inputs   = inputs_from( lt_row ).
+
+  ENDMETHOD.
+
+  METHOD read_recent.
+
+    DATA lv_from TYPE c LENGTH 8.
+
+    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
+    IF check_request = abap_true.
+      SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, http_status, req_body, res_body
+        FROM z2ui5_t_28
+        WHERE utc_day >= @lv_from
+        ORDER BY timestampl DESCENDING
+        INTO CORRESPONDING FIELDS OF TABLE @result
+        UP TO @c_max_read ROWS.
+    ELSE.
+      SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, http_status, res_body
+        FROM z2ui5_t_28
+        WHERE utc_day >= @lv_from
+        ORDER BY timestampl DESCENDING
+        INTO CORRESPONDING FIELDS OF TABLE @result
+        UP TO @c_max_read ROWS.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD messages_from.
+
     TYPES:
       BEGIN OF ty_s_user,
         app  TYPE string,
@@ -1278,25 +1368,12 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         text TYPE string,
         user TYPE string,
       END OF ty_s_user.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
     DATA lt_users TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY app kind type text user.
-    DATA lv_from TYPE c LENGTH 8.
 
-    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
-    TRY.
-        SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, res_body FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
-          ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @c_max_read ROWS.
-      CATCH cx_root INTO DATA(lx).
-        result-error = lx->get_text( ).
-        RETURN.
-    ENDTRY.
-    result-records = lines( lt_rows ).
+    result-records = lines( it_row ).
     result-check_capped = xsdbool( result-records >= c_max_read ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
+    LOOP AT it_row INTO DATA(ls_row).
       DATA(lv_user) = COND string( WHEN ls_row-uname IS NOT INITIAL THEN ls_row-uname ELSE ls_row-user_key ).
       LOOP AT shown_of( ls_row-res_body ) INTO DATA(ls_shown).
         IF ls_shown-kind = cs_kind-view.
@@ -2551,32 +2628,22 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD get_input_errors.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        app         TYPE c LENGTH 30,
-        http_status TYPE i,
-        req_body    TYPE string,
-        res_body    TYPE string,
-      END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_exchange TYPE ty_t_exchange.
-    DATA lv_from TYPE c LENGTH 8.
-
-    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, http_status, req_body, res_body FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
-          ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @c_max_read ROWS.
+        result = inputs_from( read_recent( days          = days
+                                           check_request = abap_true ) ).
       CATCH cx_root INTO DATA(lx).
         result-error = lx->get_text( ).
-        RETURN.
     ENDTRY.
-    result-records = lines( lt_rows ).
-    result-check_capped = xsdbool( result-records >= c_max_read ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
+  ENDMETHOD.
+
+  METHOD inputs_from.
+
+    DATA lt_exchange TYPE ty_t_exchange.
+
+    result-records = lines( it_row ).
+    result-check_capped = xsdbool( result-records >= c_max_read ).
+    LOOP AT it_row INTO DATA(ls_row).
       APPEND VALUE #( app         = ls_row-app
                       request     = ls_row-req_body
                       response    = ls_row-res_body

@@ -141,6 +141,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA s_session  TYPE z2ui5_cl_cockpit_session=>ty_s_session.
     " the members of the open session bound to a password input - masked
     DATA t_secret   TYPE string_table.
+    " the messages users saw as read, before wire_message_search filters them
+    DATA t_wire_message_all TYPE z2ui5_cl_cockpit_wire=>ty_t_message.
     DATA step_index TYPE i.
     " the step every other one is compared with, 0 for the step it continues
     DATA step_base  TYPE i.
@@ -195,6 +197,10 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! Forget the open session - its steps, fields and recordings are other
     "! users' data, not kept in the cockpit's own drafts once it is closed.
     METHODS session_clear.
+
+    "! The messages users saw that match wire_message_search - from
+    "! t_wire_message_all, nothing is read again.
+    METHODS messages_filter.
 
     "! Whether the app state of the open session grows from step to step,
     "! and which tables - into growth_text.
@@ -3436,6 +3442,16 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD messages_filter.
+
+    s_wire_messages-t_message = t_wire_message_all.
+    IF wire_message_search IS NOT INITIAL.
+      DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
+                                                   OR app CS wire_message_search ).
+    ENDIF.
+
+  ENDMETHOD.
+
   METHOD session_clear.
 
     CLEAR t_steps.
@@ -4026,7 +4042,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `MESSAGES_SEARCH`.
-            load_tab( ).
+            messages_filter( ).
 
           WHEN `APP_SESSIONS`.
             IF check_change( ) = abap_true.
@@ -4151,8 +4167,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
         " the texts users saw - administrators only, they hold business data
         wire_messages_shown = change_allowed.
+        CLEAR t_wire_message_all.
         IF wire_messages_shown = abap_true.
-          s_wire_messages = z2ui5_cl_cockpit_wire=>get_messages( lv_days ).
+          " both from one read of the recordings
+          z2ui5_cl_cockpit_wire=>get_trouble( EXPORTING days     = lv_days
+                                              IMPORTING messages = s_wire_messages
+                                                        inputs   = s_wire_inputs ).
           wire_messages_text = COND #(
               WHEN s_wire_messages-error IS NOT INITIAL
               THEN |Messages users saw - the recordings could not be read: { s_wire_messages-error }|
@@ -4163,11 +4183,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&
                    |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) } - | &&
                    |select one for the session where it was shown last| ).
-          IF wire_message_search IS NOT INITIAL.
-            DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
-                                                         OR app CS wire_message_search ).
-          ENDIF.
-          s_wire_inputs = z2ui5_cl_cockpit_wire=>get_input_errors( lv_days ).
+          t_wire_message_all = s_wire_messages-t_message.
+          messages_filter( ).
           " built ahead of the COND: inside it the 7.02 downport writes the
           " whole concatenation on one line, longer than 255 characters
           IF s_wire_inputs-check_capped = abap_true.
