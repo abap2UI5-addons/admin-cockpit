@@ -116,7 +116,8 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The alert rules over the window figures - pure. An app below the
     "! minimum of roundtrips raises nothing; the line over all apps raises
-    "! a rule only when no single app raises it already.
+    "! a rule only when no single app raises it already. The error rate is
+    "! no rule in mode ERRORS, which records failed roundtrips only.
     CLASS-METHODS evaluate
       IMPORTING
         it_window     TYPE z2ui5_cl_cockpit_stats=>ty_t_window
@@ -185,7 +186,8 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      IF is_set-alert_err_pct > 0.
+      " ERRORS records failed roundtrips only - every rate would be 100 %
+      IF is_set-alert_err_pct > 0 AND is_set-mode <> z2ui5_cl_cockpit_setup=>cs_mode-errors.
         lv_rate = ls_win-errors * 100 / ls_win-roundtrips.
         IF lv_rate >= is_set-alert_err_pct.
           APPEND VALUE #( rule       = z2ui5_if_cockpit_notify=>cs_rule-error_rate
@@ -391,6 +393,9 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       result-text       = |{ lines( it_now ) } alert threshold(s) exceeded in { lv_window }.|.
     ENDIF.
 
+    IF ls_set-alert_err_pct > 0 AND ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
+      result-text = result-text && ` The error rate is not evaluated: mode ERRORS records failed roundtrips only.`.
+    ENDIF.
     result-text = result-text && | Alerts are kept and sent by the housekeeping job z2ui5_cl_cockpit_job=>run( )| &&
                   COND string( WHEN result-notifier IS INITIAL
                                THEN ` - nobody is told: no class implements z2ui5_if_cockpit_notify.`

@@ -560,7 +560,11 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       result-users = |{ lv_users }|.
     ENDIF.
 
-    IF ls_sum-cnt > 0.
+    IF z2ui5_cl_cockpit_setup=>get( )-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
+      " failed roundtrips only - no rate to tell
+      result-error_rate  = `-`.
+      result-error_state = `Neutral`.
+    ELSEIF ls_sum-cnt > 0.
       lv_rate = ls_sum-cnt_err * 100 / ls_sum-cnt.
       result-error_rate = |{ lv_rate }|.
       result-error_state = COND #( WHEN lv_rate >= 5 THEN `Error`
@@ -1111,7 +1115,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                         fix   = `See the slowest roundtrips of this app and their dominant phase.` ) TO result.
       ENDIF.
 
-      IF ls_sum-cnt >= 20 AND ls_sum-cnt_err * 20 >= ls_sum-cnt.
+      " not in mode ERRORS: it records failed roundtrips only
+      IF ls_sum-cnt >= 20 AND ls_sum-cnt_err * 20 >= ls_sum-cnt
+          AND is_set-mode <> z2ui5_cl_cockpit_setup=>cs_mode-errors.
         APPEND VALUE #( state = `Error`
                         app   = lv_app
                         hint  = `Error rate of 5 % or more`

@@ -16,6 +16,7 @@ CLASS ltcl_alert DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT
     METHODS p95_raised FOR TESTING.
     METHODS below_minimum_raises_nothing FOR TESTING.
     METHODS zero_switches_rule_off FOR TESTING.
+    METHODS errors_mode_has_no_rate FOR TESTING.
     METHODS all_apps_only_without_app FOR TESTING.
     METHODS all_apps_when_apps_are_small FOR TESTING.
     METHODS diff_raises_new FOR TESTING.
@@ -125,6 +126,19 @@ CLASS ltcl_alert IMPLEMENTATION.
                                         act = lines( lt_alert ) ).
     cl_abap_unit_assert=>assert_equals( exp = z2ui5_if_cockpit_notify=>cs_rule-p95
                                         act = lt_alert[ 1 ]-rule ).
+
+  ENDMETHOD.
+
+  METHOD errors_mode_has_no_rate.
+
+    " mode ERRORS records failed roundtrips only - 100 % says nothing
+    DATA(ls_set) = settings( ).
+    ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
+    DATA(lt_alert) = z2ui5_cl_cockpit_alert=>evaluate(
+        it_window = VALUE #( ( app = c_app roundtrips = 30 errors = 30 p95_ms = 100 ) )
+        is_set    = ls_set ).
+
+    cl_abap_unit_assert=>assert_initial( lt_alert ).
 
   ENDMETHOD.
 

@@ -244,7 +244,8 @@ ABAP only.
 (settings and the daily salt are read once per roll area). Mode `SAMPLE`
 records errors fully and only a share of the rest - decided on the
 milliseconds of the start time - weighted so counts stay estimates of the
-totals; `ERRORS` records failed roundtrips only; `OFF` stops
+totals; `ERRORS` records failed roundtrips only (no error rate then - the
+Overview shows none, and the error-rate alert and hint are not evaluated); `OFF` stops
 recording without uninstalling. The own tables purge themselves once per day
 on the first recorded roundtrip that is not sticky: that roundtrip claims the
 UTC day (`LAST_PURGE` moves forward in one conditional `UPDATE`, committed on
@@ -717,7 +718,9 @@ before it (default: 1, so 60 to 120 minutes), per app and over all apps:
   raises nothing - three failures out of four are no alert;
 - the line over all apps raises a rule only when no single app raises it
   already - it is there for the many small apps that stay below the minimum
-  one by one, and one broken app is not reported twice.
+  one by one, and one broken app is not reported twice;
+- in mode `ERRORS` the error rate is no rule - only failed roundtrips are
+  recorded, so every rate would be 100 %.
 
 The Overview tab evaluates the rules live: what is exceeded right now, and the
 history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
