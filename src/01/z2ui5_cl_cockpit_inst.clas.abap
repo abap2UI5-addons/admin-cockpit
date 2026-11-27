@@ -167,6 +167,14 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     CLASS-DATA gv_prefix TYPE string.
 
+    "! The roundtrip configuration the framework computes - raises when
+    "! the framework's exit cannot be reached, like get_config_get( ).
+    CLASS-METHODS config_post
+      RETURNING
+        VALUE(result) TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post
+      RAISING
+        cx_static_check.
+
     "! RTTI lookup of a class or type: found, or why it could not be loaded
     "! (error stays empty when it does not exist).
     CLASS-METHODS describe
@@ -226,7 +234,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     IF result-user_exit IS INITIAL.
       result-user_exit = `(none - framework defaults)`.
     ENDIF.
-    result-draft_expiry = |{ get_config_post( )-draft_exp_time_in_hours } hours|.
+    TRY.
+        result-draft_expiry = |{ config_post( )-draft_exp_time_in_hours } hours|.
+      CATCH cx_root.
+        result-draft_expiry = `(unknown - the framework configuration is not readable)`.
+    ENDTRY.
 
     TRY.
         DATA(ls_get) = get_config_get( ).
@@ -247,9 +259,10 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
     DATA ls_get TYPE z2ui5_if_ui5_exit=>ty_s_http_config.
     TRY.
+        " both raise - an initial configuration would pass checks it fails
         ls_get = get_config_get( ).
         result = evaluate_config( is_get  = ls_get
-                                  is_post = get_config_post( ) ).
+                                  is_post = config_post( ) ).
       CATCH cx_root INTO DATA(lx).
         add_check( EXPORTING id     = `CONFIG`
                              status = cs_status-error
@@ -660,10 +673,16 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   METHOD get_config_post.
 
     TRY.
-        get_exit( )->set_config_http_post( CHANGING cs_config = result ).
+        result = config_post( ).
       CATCH cx_root.
         CLEAR result.
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD config_post.
+
+    get_exit( )->set_config_http_post( CHANGING cs_config = result ).
 
   ENDMETHOD.
 
