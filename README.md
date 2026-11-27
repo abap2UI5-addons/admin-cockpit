@@ -80,7 +80,7 @@ COMMIT WORK.
 3. Start `z2ui5_cl_cockpit_app` right away: a cockpit without an
    administrator shows nothing but a **Claim the administrator role** screen -
    the first user who presses its button becomes the administrator (see
-   [Security of the cockpit itself](#security-of-the-cockpit-itself)).
+   [Security](#security)).
 
 4. **Hook the cockpit into your HTTP handler** - one line, on every
    abap2UI5 release, once the pull is complete and every object is active.
@@ -301,7 +301,7 @@ cockpit on the side of aggregate system monitoring; agree `NAME` with your
 works council and your data protection officer before switching it on, and
 document the retention. This is not legal advice.
 
-## Security of the cockpit itself
+## Security
 
 The cockpit shows usage and configuration of the whole system and can delete
 drafts - it must be restricted. Like every abap2UI5 app it can be started by
