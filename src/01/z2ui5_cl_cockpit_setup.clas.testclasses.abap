@@ -18,6 +18,7 @@ CLASS ltcl_privacy DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS hash_mode_ignores_case FOR TESTING.
     METHODS buckets FOR TESTING.
     METHODS alert_settings FOR TESTING.
+    METHODS settings_bounds FOR TESTING.
     METHODS ts_minus_seconds FOR TESTING.
     METHODS assert_minus
       IMPORTING
@@ -174,6 +175,32 @@ CLASS ltcl_privacy IMPLEMENTATION.
                                         act = ls_set-alert_min_cnt ).
     cl_abap_unit_assert=>assert_equals( exp = ls_def-alert_hours
                                         act = ls_set-alert_hours ).
+
+  ENDMETHOD.
+
+  METHOD settings_bounds.
+
+    " a day setting no date can hold and a size no INT4 byte count can hold
+    " are cut - the housekeeping and the hints compute with them
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    ls_set-retention_days     = 99999.
+    ls_set-agg_retention_days = 0.
+    ls_set-wire_days          = 2147483647.
+    ls_set-model_warn_kb      = 2147483647.
+
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>c_max_days
+                                        act = ls_set-retention_days ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>get_default( )-agg_retention_days
+                                        act = ls_set-agg_retention_days ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>c_max_days
+                                        act = ls_set-wire_days ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>c_max_kb
+                                        act = ls_set-model_warn_kb ).
+    " and the longest retention is still a date
+    cl_abap_unit_assert=>assert_true( xsdbool( z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days )
+                                               < z2ui5_cl_cockpit_setup=>now( ) ) ).
 
   ENDMETHOD.
 

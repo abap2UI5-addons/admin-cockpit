@@ -1034,6 +1034,10 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
   METHOD hints_of.
 
     DATA lt_all TYPE ty_t_sum_app.
+    DATA lv_model_limit TYPE ty_p.
+    DATA lv_response_limit TYPE ty_p.
+    DATA lv_new_mod TYPE ty_p.
+    DATA lv_old_mod TYPE ty_p.
     " the whole period per app = newer + older half
     lt_all = it_new.
     LOOP AT it_old INTO DATA(ls_old).
@@ -1070,10 +1074,17 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
+    " the thresholds in bytes, and the growth below, in p - an INT4 product
+    " overflows from 2 GB on
+    lv_model_limit = is_set-model_warn_kb.
+    lv_model_limit = lv_model_limit * 1024.
+    lv_response_limit = is_set-response_warn_kb.
+    lv_response_limit = lv_response_limit * 1024.
+
     LOOP AT lt_all INTO DATA(ls_sum).
       DATA(lv_app) = CONV string( ls_sum-app ).
 
-      IF ls_sum-mod_max > is_set-model_warn_kb * 1024.
+      IF ls_sum-mod_max > lv_model_limit.
         APPEND VALUE #( state = `Warning`
                         app   = lv_app
                         hint  = `Large model`
@@ -1082,7 +1093,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                                 `bound data public, page large tables.` ) TO result.
       ENDIF.
 
-      IF ls_sum-res_max > is_set-response_warn_kb * 1024.
+      IF ls_sum-res_max > lv_response_limit.
         APPEND VALUE #( state = `Warning`
                         app   = lv_app
                         hint  = `Large response`
@@ -1142,13 +1153,17 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       READ TABLE it_old INTO ls_old WITH TABLE KEY app = ls_sum-app.
       IF sy-subrc = 0.
         READ TABLE it_new INTO DATA(ls_new) WITH TABLE KEY app = ls_sum-app.
-        IF sy-subrc = 0 AND ls_new-mod_max > 102400 AND ls_new-mod_max * 2 > ls_old-mod_max * 3.
-          APPEND VALUE #( state = `Warning`
-                          app   = lv_app
-                          hint  = `Growing app state`
-                          value = |{ ls_old-mod_max DIV 1024 } KB to { ls_new-mod_max DIV 1024 } KB|
-                          fix   = `The model grows from one period to the next - data accumulating in ` &&
-                                  `attributes (a log, a history table) that is never cleared?` ) TO result.
+        IF sy-subrc = 0.
+          lv_new_mod = ls_new-mod_max.
+          lv_old_mod = ls_old-mod_max.
+          IF lv_new_mod > 102400 AND lv_new_mod * 2 > lv_old_mod * 3.
+            APPEND VALUE #( state = `Warning`
+                            app   = lv_app
+                            hint  = `Growing app state`
+                            value = |{ ls_old-mod_max DIV 1024 } KB to { ls_new-mod_max DIV 1024 } KB|
+                            fix   = `The model grows from one period to the next - data accumulating in ` &&
+                                    `attributes (a log, a history table) that is never cleared?` ) TO result.
+          ENDIF.
         ENDIF.
       ENDIF.
     ENDLOOP.

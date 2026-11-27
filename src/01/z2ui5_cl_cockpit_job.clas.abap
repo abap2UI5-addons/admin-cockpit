@@ -81,7 +81,7 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
     DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
 
-    DATA(lv_log_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-retention_days * 86400 ).
+    DATA(lv_log_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-retention_days ).
     DATA(lv_usr_day) = z2ui5_cl_cockpit_setup=>day_minus( ls_set-retention_days ).
     DATA(lv_agg_day) = z2ui5_cl_cockpit_setup=>day_minus( ls_set-agg_retention_days ).
     " the live table only answers "who is active now" - a day is plenty
@@ -96,7 +96,7 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     DELETE FROM z2ui5_t_20 WHERE last_seen < @lv_act_ts.
     result-act_deleted = sy-dbcnt.
     " the change log follows the long retention of the aggregates
-    DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-agg_retention_days * 86400 ).
+    DATA(lv_aud_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-agg_retention_days ).
     DELETE FROM z2ui5_t_24 WHERE timestampl < @lv_aud_ts.
     result-aud_deleted = sy-dbcnt.
     " and so does the alert history
@@ -104,7 +104,7 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
     result-alr_deleted = sy-dbcnt.
     " the recorder's raw requests and responses are the biggest and the most
     " sensitive rows - their own, short retention; 0 days deletes them all
-    DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( ls_set-wire_days * 86400 ).
+    DATA(lv_wir_ts) = z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days ).
     DELETE FROM z2ui5_t_28 WHERE timestampl < @lv_wir_ts.
     result-wir_deleted = sy-dbcnt.
 

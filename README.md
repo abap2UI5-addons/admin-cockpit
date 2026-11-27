@@ -270,6 +270,10 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 | Alert: window | running UTC hour plus 1 | `0` to `23` hours before the running one |
 | Recorder retention | 2 days | `0` stops the [recorder](#recorder---replay-what-the-user-saw) |
 
+A day setting takes at most 36,500 days and a size threshold at most
+2,097,151 KB; a larger value is cut to that, a value of `0` or below falls back
+to the default (except where `0` switches something off).
+
 ## Privacy and the works council
 
 **Privacy mode is on by default: no user names are stored.**

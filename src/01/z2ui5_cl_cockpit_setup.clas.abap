@@ -67,6 +67,11 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     TYPES ty_t_names TYPE STANDARD TABLE OF string WITH EMPTY KEY.
 
+    " the most days a day setting takes - a hundred years
+    CONSTANTS c_max_days TYPE i VALUE 36500.
+    " the most KB a size threshold takes - still an INT4 in bytes
+    CONSTANTS c_max_kb TYPE i VALUE 2097151.
+
     "! The effective settings - stored values over the defaults.
     CLASS-METHODS get
       RETURNING
@@ -173,6 +178,14 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE timestampl.
 
+    "! A timestamp n days before now - by the date, so any day setting
+    "! fits (n * 86400 seconds overflows an INT4 beyond 24855 days).
+    CLASS-METHODS now_minus_days
+      IMPORTING
+        days          TYPE i
+      RETURNING
+        VALUE(result) TYPE timestampl.
+
     "! A timestamp n seconds before the given one, in whole seconds.
     CLASS-METHODS ts_minus_seconds
       IMPORTING
@@ -214,6 +227,20 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
         day           TYPE clike
       RETURNING
         VALUE(result) TYPE string.
+
+    "! Every setting in its bounds - what get( ) reads and save( ) stores.
+    CLASS-METHODS check_settings
+      CHANGING
+        cs_set TYPE ty_s_settings.
+
+    "! A setting in days: a non-positive value falls back, a value beyond
+    "! c_max_days is cut to it.
+    CLASS-METHODS days_in_range
+      IMPORTING
+        val           TYPE i
+        fallback      TYPE i
+      RETURNING
+        VALUE(result) TYPE i.
 
     "! The alert settings in their bounds: 0 switches a threshold off (not
     "! the default, unlike the other settings), a value out of range falls
@@ -303,14 +330,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
       ENDCASE.
     ENDLOOP.
 
-    IF result-sample_pct < 1 OR result-sample_pct > 100.
-      result-sample_pct = get_default( )-sample_pct.
-    ENDIF.
-    " 0 is off, as with the alert thresholds - only a negative value is wrong
-    IF result-wire_days < 0.
-      result-wire_days = get_default( )-wire_days.
-    ENDIF.
-    check_alerts( CHANGING cs_set = result ).
+    check_settings( CHANGING cs_set = result ).
 
     gs_settings = result.
     gv_loaded   = abap_true.
@@ -339,41 +359,7 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
   METHOD save.
 
     DATA(ls_set) = settings.
-    DATA(ls_def) = get_default( ).
-
-    IF ls_set-mode <> cs_mode-all AND ls_set-mode <> cs_mode-errors
-        AND ls_set-mode <> cs_mode-sample AND ls_set-mode <> cs_mode-off.
-      ls_set-mode = ls_def-mode.
-    ENDIF.
-    IF ls_set-user_tracking <> cs_users-hash AND ls_set-user_tracking <> cs_users-none
-        AND ls_set-user_tracking <> cs_users-name.
-      ls_set-user_tracking = ls_def-user_tracking.
-    ENDIF.
-    IF ls_set-sample_pct < 1 OR ls_set-sample_pct > 100.
-      ls_set-sample_pct = ls_def-sample_pct.
-    ENDIF.
-    IF ls_set-slow_ms <= 0.
-      ls_set-slow_ms = ls_def-slow_ms.
-    ENDIF.
-    IF ls_set-retention_days <= 0.
-      ls_set-retention_days = ls_def-retention_days.
-    ENDIF.
-    IF ls_set-agg_retention_days <= 0.
-      ls_set-agg_retention_days = ls_def-agg_retention_days.
-    ENDIF.
-    IF ls_set-unused_days <= 0.
-      ls_set-unused_days = ls_def-unused_days.
-    ENDIF.
-    IF ls_set-response_warn_kb <= 0.
-      ls_set-response_warn_kb = ls_def-response_warn_kb.
-    ENDIF.
-    IF ls_set-model_warn_kb <= 0.
-      ls_set-model_warn_kb = ls_def-model_warn_kb.
-    ENDIF.
-    check_alerts( CHANGING cs_set = ls_set ).
-    IF ls_set-wire_days < 0.
-      ls_set-wire_days = ls_def-wire_days.
-    ENDIF.
+    check_settings( CHANGING cs_set = ls_set ).
 
     row_save( name  = `MODE`
               value = ls_set-mode ).
@@ -555,6 +541,65 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD check_settings.
+
+    DATA(ls_def) = get_default( ).
+
+    IF cs_set-mode <> cs_mode-all AND cs_set-mode <> cs_mode-errors
+        AND cs_set-mode <> cs_mode-sample AND cs_set-mode <> cs_mode-off.
+      cs_set-mode = ls_def-mode.
+    ENDIF.
+    IF cs_set-user_tracking <> cs_users-hash AND cs_set-user_tracking <> cs_users-none
+        AND cs_set-user_tracking <> cs_users-name.
+      cs_set-user_tracking = ls_def-user_tracking.
+    ENDIF.
+    IF cs_set-sample_pct < 1 OR cs_set-sample_pct > 100.
+      cs_set-sample_pct = ls_def-sample_pct.
+    ENDIF.
+    IF cs_set-slow_ms <= 0.
+      cs_set-slow_ms = ls_def-slow_ms.
+    ENDIF.
+    " the day settings from above as well: the housekeeping turns them into
+    " a date before today, and a value no date can hold failed every purge
+    cs_set-retention_days = days_in_range( val      = cs_set-retention_days
+                                           fallback = ls_def-retention_days ).
+    cs_set-agg_retention_days = days_in_range( val      = cs_set-agg_retention_days
+                                               fallback = ls_def-agg_retention_days ).
+    cs_set-unused_days = days_in_range( val      = cs_set-unused_days
+                                        fallback = ls_def-unused_days ).
+    " the hint thresholds are compared in bytes
+    IF cs_set-response_warn_kb <= 0.
+      cs_set-response_warn_kb = ls_def-response_warn_kb.
+    ELSEIF cs_set-response_warn_kb > c_max_kb.
+      cs_set-response_warn_kb = c_max_kb.
+    ENDIF.
+    IF cs_set-model_warn_kb <= 0.
+      cs_set-model_warn_kb = ls_def-model_warn_kb.
+    ELSEIF cs_set-model_warn_kb > c_max_kb.
+      cs_set-model_warn_kb = c_max_kb.
+    ENDIF.
+    check_alerts( CHANGING cs_set = cs_set ).
+    " 0 is off, as with the alert thresholds - only a negative value is wrong
+    IF cs_set-wire_days < 0.
+      cs_set-wire_days = ls_def-wire_days.
+    ELSEIF cs_set-wire_days > c_max_days.
+      cs_set-wire_days = c_max_days.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD days_in_range.
+
+    IF val <= 0.
+      result = fallback.
+    ELSEIF val > c_max_days.
+      result = c_max_days.
+    ELSE.
+      result = val.
+    ENDIF.
+
+  ENDMETHOD.
+
   METHOD check_alerts.
 
     DATA(ls_def) = get_default( ).
@@ -662,6 +707,17 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
 
     result = ts_minus_seconds( ts      = now( )
                                seconds = seconds ).
+
+  ENDMETHOD.
+
+  METHOD now_minus_days.
+
+    DATA lv_date TYPE d.
+    DATA lv_time TYPE t.
+    DATA(lv_now) = now( ).
+    CONVERT TIME STAMP lv_now TIME ZONE `UTC` INTO DATE lv_date TIME lv_time.
+    lv_date = lv_date - days.
+    CONVERT DATE lv_date TIME lv_time INTO TIME STAMP result TIME ZONE `UTC`.
 
   ENDMETHOD.
 
