@@ -1,3 +1,6 @@
+CLASS ltcl_session DEFINITION DEFERRED.
+CLASS z2ui5_cl_cockpit_session DEFINITION LOCAL FRIENDS ltcl_session.
+
 "! An object graph as CALL TRANSFORMATION id writes it - the round trip
 "! test serializes one of these instead of a hand-written document.
 CLASS ltcl_item DEFINITION FINAL.
@@ -54,6 +57,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS diff_first_step FOR TESTING.
     METHODS roots_follow_the_chain FOR TESTING.
     METHODS steps_in_order FOR TESTING.
+    METHODS steps_trimmed FOR TESTING.
     METHODS decode_entities FOR TESTING.
     METHODS app_is_first_own_object FOR TESTING.
     METHODS base64_of_utf8 FOR TESTING.
@@ -413,6 +417,52 @@ CLASS ltcl_session IMPLEMENTATION.
                                         act = lines( lt_step ) ).
     cl_abap_unit_assert=>assert_equals( exp = `the steps before it expired`
                                         act = lt_step[ 1 ]-note ).
+
+  ENDMETHOD.
+
+  METHOD steps_trimmed.
+
+    " more steps than shown: the newest stay, numbered from 1 again, and a
+    " step still names the step it continues by its line
+    DATA ls_steps TYPE z2ui5_cl_cockpit_session=>ty_s_steps.
+    DATA(lv_total) = z2ui5_cl_cockpit_session=>c_max_steps + 3.
+    " each continues the one before, the last one the third step from the
+    " end - browser back
+    DO lv_total TIMES.
+      APPEND VALUE #( step    = sy-index
+                      id      = |S{ sy-index }|
+                      follows = COND #( WHEN sy-index = lv_total THEN lv_total - 3 ELSE sy-index - 1 ) )
+             TO ls_steps-t_step.
+    ENDDO.
+
+    z2ui5_cl_cockpit_session=>trim_steps( CHANGING cs_steps = ls_steps ).
+
+    cl_abap_unit_assert=>assert_true( ls_steps-check_capped ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_session=>c_max_steps
+                                        act = lines( ls_steps-t_step ) ).
+    DATA(ls_first) = ls_steps-t_step[ 1 ].
+    cl_abap_unit_assert=>assert_equals( exp = `S4`
+                                        act = ls_first-id ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = ls_first-step ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = ls_first-follows ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `continues a step before*`
+                                         act = ls_first-note ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = ls_steps-t_step[ 2 ]-follows ).
+    DATA(ls_last) = ls_steps-t_step[ z2ui5_cl_cockpit_session=>c_max_steps ].
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_session=>c_max_steps
+                                        act = ls_last-step ).
+    cl_abap_unit_assert=>assert_equals( exp = |S{ lv_total - 3 }|
+                                        act = ls_steps-t_step[ ls_last-follows ]-id ).
+    cl_abap_unit_assert=>assert_char_cp( exp = |continues step { ls_last-follows }*|
+                                         act = ls_last-note ).
+
+    " within the limit nothing changes
+    CLEAR ls_steps-check_capped.
+    z2ui5_cl_cockpit_session=>trim_steps( CHANGING cs_steps = ls_steps ).
+    cl_abap_unit_assert=>assert_false( ls_steps-check_capped ).
 
   ENDMETHOD.
 

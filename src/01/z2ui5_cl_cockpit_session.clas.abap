@@ -692,6 +692,14 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
+    "! Only the newest c_max_steps steps, numbered from 1 again - the step
+    "! numbers are the lines of the table (follows and the viewer read the
+    "! step they name by its line). A step that continues one left out
+    "! says so; check_capped tells that steps were left out.
+    CLASS-METHODS trim_steps
+      CHANGING
+        cs_steps TYPE ty_s_steps.
+
     "! The serialized state of a draft, empty when it is gone.
     CLASS-METHODS read_data
       IMPORTING
@@ -996,11 +1004,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         result-t_step = steps_of( it_node = lt_node
                                   it_root = roots_of( lt_node )
                                   id      = id ).
-        DATA(lv_over) = lines( result-t_step ) - c_max_steps.
-        IF lv_over > 0.
-          result-check_capped = abap_true.
-          DELETE result-t_step TO lv_over.
-        ENDIF.
+        trim_steps( CHANGING cs_steps = result ).
         fill_steps( CHANGING cs_steps = result ).
       CATCH cx_root INTO DATA(lx).
         result-error = lx->get_text( ).
@@ -2233,6 +2237,30 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ls_step-note = `app start`.
       ENDIF.
       APPEND ls_step TO result.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD trim_steps.
+
+    DATA(lv_over) = lines( cs_steps-t_step ) - c_max_steps.
+    IF lv_over <= 0.
+      RETURN.
+    ENDIF.
+    cs_steps-check_capped = abap_true.
+
+    DELETE cs_steps-t_step TO lv_over.
+    LOOP AT cs_steps-t_step ASSIGNING FIELD-SYMBOL(<step>).
+      <step>-step = sy-tabix.
+      IF <step>-follows > lv_over.
+        <step>-follows = <step>-follows - lv_over.
+        IF <step>-follows <> <step>-step - 1.
+          <step>-note = |continues step { <step>-follows } (browser back or a second window)|.
+        ENDIF.
+      ELSEIF <step>-follows > 0.
+        <step>-follows = 0.
+        <step>-note = |continues a step before the newest { c_max_steps }|.
+      ENDIF.
     ENDLOOP.
 
   ENDMETHOD.
