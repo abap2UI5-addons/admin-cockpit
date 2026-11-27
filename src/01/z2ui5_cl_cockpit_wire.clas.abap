@@ -570,7 +570,8 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
-    "! The value of an XML attribute in the first element that has it.
+    "! The value of an XML attribute in the first element that has it -
+    "! z2ui5_cl_cockpit_session=&gt;xml_attribute( ).
     CLASS-METHODS xml_attribute
       IMPORTING
         xml           TYPE string
@@ -2785,19 +2786,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD xml_attribute.
 
-    DATA(lv_key) = | { name }="|.
-    DATA(lv_off) = find( val = xml
-                         sub = lv_key ).
-    IF lv_off < 0.
-      RETURN.
-    ENDIF.
-    result = substring( val = xml
-                        off = lv_off + strlen( lv_key ) ).
-    IF result CS `"`.
-      result = substring_before( val = result
-                                 sub = `"` ).
-    ENDIF.
-    result = z2ui5_cl_cockpit_session=>decode( result ).
+    result = z2ui5_cl_cockpit_session=>xml_attribute( xml  = xml
+                                                      name = name ).
 
   ENDMETHOD.
 

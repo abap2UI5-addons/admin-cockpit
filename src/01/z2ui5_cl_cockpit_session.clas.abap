@@ -599,6 +599,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! The value of an XML attribute - name="value" - in the first element
+    "! that has it, its entities resolved. Empty when none has it.
+    CLASS-METHODS xml_attribute
+      IMPORTING
+        xml           TYPE string
+        name          TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
+
     "! A text as UTF-8 - through whichever converter the release has, by
     "! name: the modern one is missing on 7.02, the classic one is not
     "! released in ABAP Cloud. Empty when neither is there.
@@ -834,13 +843,6 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CLASS-METHODS duration_text
       IMPORTING
         seconds       TYPE i
-      RETURNING
-        VALUE(result) TYPE string.
-
-    CLASS-METHODS attribute
-      IMPORTING
-        attributes    TYPE string
-        name          TYPE string
       RETURNING
         VALUE(result) TYPE string.
 
@@ -2867,8 +2869,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ELSE.
           ls_open-name = lv_tag.
         ENDIF.
-        ls_open-href = attribute( attributes = lv_attributes
-                                  name       = `href` ).
+        ls_open-href = xml_attribute( xml  = lv_attributes
+                                      name = `href` ).
         IF ls_open-href IS NOT INITIAL.
           IF substring( val = ls_open-href
                         len = 1 ) = `#`.
@@ -2892,8 +2894,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           ls_open-kind = `V`.
         ELSEIF <parent>-kind = `S` AND <parent>-name = `asx:heap`.
           ls_open-kind = `E`.
-          DATA(lv_id) = attribute( attributes = lv_attributes
-                                   name       = `id` ).
+          DATA(lv_id) = xml_attribute( xml  = lv_attributes
+                                       name = `id` ).
           DATA(lv_label) = ls_open-name.
           IF lv_label CS `:`.
             lv_label = substring_after( val = lv_label
@@ -3238,19 +3240,21 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD attribute.
+  METHOD xml_attribute.
 
-    DATA(lv_off) = find( val = attributes
-                         sub = | { name }="| ).
+    DATA(lv_key) = | { name }="|.
+    DATA(lv_off) = find( val = xml
+                         sub = lv_key ).
     IF lv_off < 0.
       RETURN.
     ENDIF.
-    result = substring( val = attributes
-                        off = lv_off + strlen( name ) + 3 ).
+    result = substring( val = xml
+                        off = lv_off + strlen( lv_key ) ).
     IF result CS `"`.
       result = substring_before( val = result
                                  sub = `"` ).
     ENDIF.
+    result = decode( result ).
 
   ENDMETHOD.
 
