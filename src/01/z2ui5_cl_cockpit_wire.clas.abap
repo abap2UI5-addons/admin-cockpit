@@ -96,9 +96,12 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         title     TYPE string,
         xmlns     TYPE string,
         content   TYPE string,
-        " the popup the step's response opened, as a second content
+        " the popup the step's response opened, as a second content - with
+        " the namespaces of its own view, declared on the element it is shown
+        " in: content_defused checked it against those
         popup     TYPE string,
         popup_title TYPE string,
+        popup_xmlns TYPE string,
         " the control of the event passed in is marked - class ckPressed
         marked    TYPE abap_bool,
       END OF ty_s_screen.
@@ -396,6 +399,15 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE ty_s_inputs.
 
+    "! get_messages and get_input_errors from one read of the recordings -
+    "! the Errors tab asks for both. Never raises.
+    CLASS-METHODS get_trouble
+      IMPORTING
+        days     TYPE i
+      EXPORTING
+        messages TYPE ty_s_messages
+        inputs   TYPE ty_s_inputs.
+
     "! A recorded popup taken apart for showing it inline: what its Dialog
     "! or Popover holds, and its buttons. Its outer element goes, a popup
     "! cannot be shown inside another one.
@@ -457,6 +469,22 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! Whether a member is named like a password (c_secret_names, case
+    "! ignored) - its value is never stored, and never shown.
+    CLASS-METHODS check_secret
+      IMPORTING
+        name          TYPE clike
+      RETURNING
+        VALUE(result) TYPE abap_bool.
+
+    "! The model members bound to a password input of a view the response
+    "! displays - Input type="Password" - by their last name.
+    CLASS-METHODS secret_names_of
+      IMPORTING
+        response      TYPE string
+      RETURNING
+        VALUE(result) TYPE string_table.
+
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -477,15 +505,75 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     " (case ignored)
     CONSTANTS c_secret_names TYPE string VALUE `[A-Z0-9_]*(PASSW|KENNWORT|PWD|SECRET)[A-Z0-9_]*`.
 
+    TYPES ty_t_row TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
+
+    TYPES:
+      "! A recording as the message and input statistics read it.
+      BEGIN OF ty_s_read,
+        app           TYPE c LENGTH 30,
+        uname         TYPE c LENGTH 12,
+        user_key      TYPE c LENGTH 64,
+        timestampl    TYPE timestampl,
+        draft_id      TYPE c LENGTH 32,
+        draft_id_prev TYPE c LENGTH 32,
+        http_status   TYPE i,
+        req_body      TYPE string,
+        res_body      TYPE string,
+      END OF ty_s_read.
+    TYPES ty_t_read TYPE STANDARD TABLE OF ty_s_read WITH EMPTY KEY.
+
+    "! The newest recordings of the last days, at most c_max_read.
+    "! @parameter check_request | with the request bodies - else they stay empty
+    CLASS-METHODS read_recent
+      IMPORTING
+        days          TYPE i
+        check_request TYPE abap_bool
+      RETURNING
+        VALUE(result) TYPE ty_t_read
+      RAISING
+        cx_static_check.
+
+    "! What the responses showed - get_messages over rows read already.
+    CLASS-METHODS messages_from
+      IMPORTING
+        it_row        TYPE ty_t_read
+      RETURNING
+        VALUE(result) TYPE ty_s_messages.
+
+    "! The inputs before errors - get_input_errors over rows read already.
+    CLASS-METHODS inputs_from
+      IMPORTING
+        it_row        TYPE ty_t_read
+      RETURNING
+        VALUE(result) TYPE ty_s_inputs.
+
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_pending WITH EMPTY KEY.
 
-    "! The model members bound to a password input of a view the response
-    "! displays - Input type="Password" - by their last name.
-    CLASS-METHODS secret_names_of
+    "! The secret members of the screen a request comes from. Its password
+    "! inputs are in the view of an earlier response - the one that wrote
+    "! the draft the request starts from (secret_names_of), or, when that
+    "! one displayed no view, the members it masked itself, carried forward.
+    "! @parameter draft_id_prev | the draft the request starts from - the key
+    "!                            of that recording (row_of)
+    "! @parameter it_before     | rows of the same write, not in the table yet
+    CLASS-METHODS secret_names_before
       IMPORTING
-        response      TYPE string
+        draft_id_prev TYPE clike
+        it_before     TYPE ty_t_row OPTIONAL
       RETURNING
         VALUE(result) TYPE string_table.
+
+    "! The key of a recording: the draft it wrote, so the next roundtrip of
+    "! the session finds it by key (secret_names_before) - a UUID when it
+    "! wrote none or the draft has a recording already.
+    CLASS-METHODS id_of
+      IMPORTING
+        draft_id      TYPE clike
+        it_before     TYPE ty_t_row OPTIONAL
+      RETURNING
+        VALUE(result) TYPE z2ui5_t_28-id
+      RAISING
+        cx_static_check.
 
     "! A body with the values of secret members replaced by "***": every
     "! member named like a password (c_secret_names) and every member of
@@ -517,11 +605,47 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! xml without the elements of every prefix not kept, each with all it
     "! contains - an element of the default namespace has the prefix ``.
-    "! @parameter it_keep | the prefixes kept, each with its colon - m:
+    "! @parameter it_keep   | the prefixes kept, each with its colon - m:
+    "! @parameter it_strict | kept prefixes of which only the controls in
+    "!                       it_allow stay, and every aggregation (a name
+    "!                       starting in lower case)
+    "! @parameter it_allow  | the controls kept of a strict prefix - core:Icon
     CLASS-METHODS elements_dropped
       IMPORTING
         xml           TYPE string
         it_keep       TYPE string_table
+        it_strict     TYPE string_table OPTIONAL
+        it_allow      TYPE string_table OPTIONAL
+      RETURNING
+        VALUE(result) TYPE string.
+
+    TYPES:
+      BEGIN OF ty_s_bound,
+        path  TYPE string,
+        value TYPE string,
+      END OF ty_s_bound.
+    TYPES ty_t_bound TYPE HASHED TABLE OF ty_s_bound WITH UNIQUE KEY path.
+
+    "! text with every binding {open}NAME} whose path prefix &amp;&amp; NAME has a
+    "! value in it_bound replaced by that value, which is escaped already -
+    "! one pass over the text, the other bindings stay as they are.
+    "! @parameter open   | what a binding starts with - {/ for the absolute ones
+    "! @parameter prefix | put in front of NAME - the row of a template
+    CLASS-METHODS bindings_replaced
+      IMPORTING
+        text          TYPE string
+        open          TYPE string
+        prefix        TYPE string
+        it_bound      TYPE ty_t_bound
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! xml without every attribute of that name - with the blank before it.
+    "! @parameter name | the attribute with its prefix - core:require
+    CLASS-METHODS attribute_dropped
+      IMPORTING
+        xml           TYPE string
+        name          TYPE string
       RETURNING
         VALUE(result) TYPE string.
 
@@ -547,6 +671,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! of the bodies (roundtrip_of), the user as the privacy setting allows,
     "! the values of password fields masked.
     "! @parameter timestampl | when it ran - now when initial
+    "! @parameter it_before  | rows of the same write, not in the table yet
     CLASS-METHODS row_of
       IMPORTING
         request       TYPE string
@@ -555,6 +680,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_sticky  TYPE abap_bool
         ms_total      TYPE i DEFAULT 0
         timestampl    TYPE timestampl OPTIONAL
+        it_before     TYPE ty_t_row OPTIONAL
       RETURNING
         VALUE(result) TYPE z2ui5_t_28
       RAISING
@@ -858,6 +984,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD record_bodies.
 
     DATA ls_row TYPE z2ui5_t_28.
+    DATA lt_row TYPE ty_t_row.
 
     TRY.
         DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
@@ -897,12 +1024,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                            http_status  = ls_buffered-http_status
                            check_sticky = ls_buffered-check_sticky
                            ms_total     = ls_buffered-ms_total
-                           timestampl   = ls_buffered-timestampl ).
+                           timestampl   = ls_buffered-timestampl
+                           it_before    = lt_row ).
           IF ls_row-app = lv_own.
             CONTINUE.
           ENDIF.
-          INSERT z2ui5_t_28 FROM @ls_row.
+          APPEND ls_row TO lt_row.
         ENDLOOP.
+        " a key taken in the meantime costs that one recording, not all
+        INSERT z2ui5_t_28 FROM TABLE @lt_row ACCEPTING DUPLICATE KEYS.
         COMMIT WORK.
       CATCH cx_root.
         IF check_sticky = abap_false.
@@ -919,7 +1049,6 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     DATA lt_secret TYPE string_table.
 
-    result-id           = cl_system_uuid=>create_uuid_c32_static( ).
     result-timestampl   = timestampl.
     IF result-timestampl IS INITIAL.
       result-timestampl = z2ui5_cl_cockpit_setup=>now( ).
@@ -948,9 +1077,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     IF result-app IS INITIAL AND result-draft_id_prev IS NOT INITIAL.
       result-app = to_upper( z2ui5_cl_cockpit_session=>get_app_of_draft( result-draft_id_prev ) ).
     ENDIF.
+    result-id = id_of( draft_id  = result-draft_id
+                       it_before = it_before ).
 
-    " what was typed into a password field is never stored
+    " what was typed into a password field is never stored. The field is in
+    " the view of the screen the user typed on - an earlier response: abap2UI5
+    " sends a view only when the app renders one, so this response may have none
     lt_secret = secret_names_of( response ).
+    APPEND LINES OF secret_names_before( draft_id_prev = result-draft_id_prev
+                                         it_before     = it_before ) TO lt_secret.
     result-req_body = masked( body    = request
                               it_name = lt_secret ).
     result-res_body = masked( body    = response
@@ -963,6 +1098,71 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-res_body = substring( val = result-res_body
                                    len = c_max_body ).
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD check_secret.
+
+    FIND FIRST OCCURRENCE OF REGEX c_secret_names IN name IGNORING CASE.
+    result = xsdbool( sy-subrc = 0 ).
+
+  ENDMETHOD.
+
+  METHOD id_of.
+
+    DATA lv_taken TYPE z2ui5_t_28-id.
+
+    IF draft_id IS NOT INITIAL AND strlen( draft_id ) <= 32.
+      result = draft_id.
+      IF NOT line_exists( it_before[ id = result ] ).    "#EC CI_SORTSEQ
+        SELECT SINGLE id FROM z2ui5_t_28
+          WHERE id = @result
+          INTO @lv_taken.
+        IF sy-subrc <> 0.
+          RETURN.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    result = cl_system_uuid=>create_uuid_c32_static( ).
+
+  ENDMETHOD.
+
+  METHOD secret_names_before.
+
+    DATA lv_id TYPE z2ui5_t_28-id.
+    DATA ls_before TYPE z2ui5_t_28.
+    DATA lt_match TYPE match_result_tab.
+
+    IF draft_id_prev IS INITIAL OR strlen( draft_id_prev ) > 32.
+      RETURN.
+    ENDIF.
+    lv_id = draft_id_prev.
+    ls_before = VALUE #( it_before[ id = lv_id ] OPTIONAL ). "#EC CI_SORTSEQ
+    IF ls_before IS INITIAL.
+      SELECT SINGLE req_body, res_body FROM z2ui5_t_28
+        WHERE id = @lv_id
+        INTO CORRESPONDING FIELDS OF @ls_before.
+      IF sy-subrc <> 0.
+        RETURN.
+      ENDIF.
+    ENDIF.
+
+    result = secret_names_of( ls_before-res_body ).
+    " "NAME":"***" - masked there, so secret here too: a response without a
+    " view still sends the model, and the request carries what was typed
+    FIND ALL OCCURRENCES OF REGEX `"[A-Za-z0-9_]+":"\*\*\*"` IN ls_before-req_body RESULTS lt_match.
+    LOOP AT lt_match INTO DATA(ls_match).
+      APPEND substring( val = ls_before-req_body
+                        off = ls_match-offset + 1
+                        len = ls_match-length - 8 ) TO result.
+    ENDLOOP.
+    FIND ALL OCCURRENCES OF REGEX `"[A-Za-z0-9_]+":"\*\*\*"` IN ls_before-res_body RESULTS lt_match.
+    LOOP AT lt_match INTO ls_match.
+      APPEND substring( val = ls_before-res_body
+                        off = ls_match-offset + 1
+                        len = ls_match-length - 8 ) TO result.
+    ENDLOOP.
+    " a name twice costs one more search in masked( ), nothing else
 
   ENDMETHOD.
 
@@ -1097,7 +1297,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     TRY.
         SELECT SINGLE * FROM z2ui5_t_28
           WHERE id = @lv_id
-          INTO @ls_row.
+          INTO CORRESPONDING FIELDS OF @ls_row.
         IF sy-subrc <> 0.
           result-error = `The recording is gone - deleted by its retention.`.
           RETURN.
@@ -1130,16 +1330,57 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD get_messages.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        app           TYPE c LENGTH 30,
-        uname         TYPE c LENGTH 12,
-        user_key      TYPE c LENGTH 64,
-        timestampl    TYPE timestampl,
-        draft_id      TYPE c LENGTH 32,
-        draft_id_prev TYPE c LENGTH 32,
-        res_body      TYPE string,
-      END OF ty_s_row.
+    TRY.
+        result = messages_from( read_recent( days          = days
+                                             check_request = abap_false ) ).
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD get_trouble.
+
+    CLEAR messages.
+    CLEAR inputs.
+    TRY.
+        DATA(lt_row) = read_recent( days          = days
+                                    check_request = abap_true ).
+      CATCH cx_root INTO DATA(lx).
+        messages-error = lx->get_text( ).
+        inputs-error   = messages-error.
+        RETURN.
+    ENDTRY.
+    messages = messages_from( lt_row ).
+    inputs   = inputs_from( lt_row ).
+
+  ENDMETHOD.
+
+  METHOD read_recent.
+
+    DATA lv_from TYPE c LENGTH 8.
+
+    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
+    IF check_request = abap_true.
+      SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, http_status, req_body, res_body
+        FROM z2ui5_t_28
+        WHERE utc_day >= @lv_from
+        ORDER BY timestampl DESCENDING
+        INTO CORRESPONDING FIELDS OF TABLE @result
+        UP TO @c_max_read ROWS.
+    ELSE.
+      SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, http_status, res_body
+        FROM z2ui5_t_28
+        WHERE utc_day >= @lv_from
+        ORDER BY timestampl DESCENDING
+        INTO CORRESPONDING FIELDS OF TABLE @result
+        UP TO @c_max_read ROWS.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD messages_from.
+
     TYPES:
       BEGIN OF ty_s_user,
         app  TYPE string,
@@ -1148,25 +1389,12 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         text TYPE string,
         user TYPE string,
       END OF ty_s_user.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
     DATA lt_users TYPE HASHED TABLE OF ty_s_user WITH UNIQUE KEY app kind type text user.
-    DATA lv_from TYPE c LENGTH 8.
 
-    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
-    TRY.
-        SELECT app, uname, user_key, timestampl, draft_id, draft_id_prev, res_body FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
-          ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @c_max_read ROWS.
-      CATCH cx_root INTO DATA(lx).
-        result-error = lx->get_text( ).
-        RETURN.
-    ENDTRY.
-    result-records = lines( lt_rows ).
+    result-records = lines( it_row ).
     result-check_capped = xsdbool( result-records >= c_max_read ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
+    LOOP AT it_row INTO DATA(ls_row).
       DATA(lv_user) = COND string( WHEN ls_row-uname IS NOT INITIAL THEN ls_row-uname ELSE ls_row-user_key ).
       LOOP AT shown_of( ls_row-res_body ) INTO DATA(ls_shown).
         IF ls_shown-kind = cs_kind-view.
@@ -1541,6 +1769,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     DATA lv_pos TYPE i.
     DATA lv_out TYPE string.
+    " the model by path, every value escaped once - and the rows that have one
+    DATA lt_bound TYPE ty_t_bound.
+    DATA lt_row TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
 
     " the root element: <mvc:View xmlns="sap.m" xmlns:mvc="..." ...>
     DATA(lv_start) = find( val = xml
@@ -1599,6 +1830,21 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA(lv_content) = substring( val = xml
                                   off = lv_root_end + 1
                                   len = lv_last - lv_root_end - 1 ).
+
+    LOOP AT it_model INTO DATA(ls_model).
+      INSERT VALUE #( path  = ls_model-path
+                      value = xml_escape( ls_model-value ) ) INTO TABLE lt_bound.
+      " every path a value lies below: LIST/1/COL is below LIST/1 and LIST
+      DATA(lv_slash) = find( val = ls_model-path
+                             sub = `/` ).
+      WHILE lv_slash > 0.
+        INSERT substring( val = ls_model-path
+                          len = lv_slash ) INTO TABLE lt_row.
+        lv_slash = find( val = ls_model-path
+                         sub = `/`
+                         off = lv_slash + 1 ).
+      ENDWHILE.
+    ENDLOOP.
 
     IF event IS NOT INITIAL.
       result-marked = mark_pressed( EXPORTING event = event
@@ -1660,31 +1906,17 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       CLEAR lv_out.
       DO 50 TIMES.
         DATA(lv_row) = sy-index.
-        " keys and patterns in variables - no template there on 7.02
+        " keys in variables - no template there on 7.02
         DATA(lv_prefix) = |{ lv_list }/{ lv_row }/|.
         DATA(lv_row_path) = |{ lv_list }/{ lv_row }|.
-        DATA(lv_pattern) = |{ lv_prefix }*|.
-        IF NOT line_exists( it_model[ path = lv_row_path ] ).
-          DATA(lv_found) = abap_false.
-          LOOP AT it_model INTO DATA(ls_model) WHERE path CP lv_pattern. "#EC CI_SORTSEQ
-            lv_found = abap_true.
-            EXIT.
-          ENDLOOP.
-          IF lv_found = abap_false.
-            EXIT.
-          ENDIF.
+        IF NOT line_exists( lt_bound[ path = lv_row_path ] ) AND NOT line_exists( lt_row[ table_line = lv_row_path ] ).
+          EXIT.
         ENDIF.
         " the relative bindings of the template, {COL}, from this row
-        DATA(lv_copy) = lv_template.
-        LOOP AT it_model INTO ls_model WHERE path CP lv_pattern. "#EC CI_SORTSEQ
-          DATA(lv_col) = substring( val = ls_model-path
-                                    off = strlen( lv_prefix ) ).
-          lv_copy = replace( val  = lv_copy
-                             sub  = |\{{ lv_col }\}|
-                             with = xml_escape( ls_model-value )
-                             occ  = 0 ).
-        ENDLOOP.
-        lv_out = lv_out && lv_copy.
+        lv_out = lv_out && bindings_replaced( text     = lv_template
+                                              open     = `{`
+                                              prefix   = lv_prefix
+                                              it_bound = lt_bound ).
       ENDDO.
       lv_content = substring( val = lv_content
                               len = lv_items ) &&
@@ -1698,13 +1930,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDDO.
 
     " the absolute bindings {/PATH} by their value
-    LOOP AT it_model INTO ls_model.
-      " replace( ) - see xml_escape, the value carries \{ and maybe a $
-      lv_content = replace( val  = lv_content
-                            sub  = |\{/{ ls_model-path }\}|
-                            with = xml_escape( ls_model-value )
-                            occ  = 0 ).
-    ENDLOOP.
+    lv_content = bindings_replaced( text     = lv_content
+                                    open     = `{/`
+                                    prefix   = ``
+                                    it_bound = lt_bound ).
 
     result-content = content_defused( xml     = xml
                                       content = lv_content ).
@@ -1716,6 +1945,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lt_html TYPE string_table.
     DATA lt_keep TYPE string_table.
     DATA lt_lib TYPE string_table.
+    DATA lt_strict TYPE string_table.
+    DATA lt_allow TYPE string_table.
+    DATA lt_control TYPE string_table.
     DATA lt_ok TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lt_bad TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lv_prefix TYPE string.
@@ -1839,6 +2071,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         IF lv_uri = `sap.ui.core`.
           INSERT lv_prefix INTO TABLE lt_html.
         ENDIF.
+        IF lv_uri = `sap.ui.core` OR lv_uri = `sap.ui.core.mvc`.
+          INSERT lv_prefix INTO TABLE lt_strict.
+        ENDIF.
       ELSE.
         INSERT lv_prefix INTO TABLE lt_bad.
       ENDIF.
@@ -1849,8 +2084,34 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         INSERT lv_prefix INTO TABLE lt_keep.
       ENDIF.
     ENDLOOP.
-    result = elements_dropped( xml     = result
-                               it_keep = lt_keep ).
+
+    " sap.ui.core and sap.ui.core.mvc also hold what loads and runs code - a
+    " Fragment, a ComponentContainer, an ExtensionPoint, a nested view by
+    " viewName: of them only the controls that show what they are told stay
+    lt_control = VALUE #( ( `Icon` )
+                          ( `Item` )
+                          ( `ListItem` )
+                          ( `SeparatorItem` )
+                          ( `HTML` )
+                          ( `CustomData` )
+                          ( `Title` )
+                          ( `InvisibleText` )
+                          ( `VariantLayoutData` ) ).
+    LOOP AT lt_html INTO lv_prefix.
+      LOOP AT lt_control INTO DATA(lv_control).
+        APPEND |{ lv_prefix }{ lv_control }| TO lt_allow.
+      ENDLOOP.
+    ENDLOOP.
+    result = elements_dropped( xml       = result
+                               it_keep   = lt_keep
+                               it_strict = lt_strict
+                               it_allow  = lt_allow ).
+
+    " core:require loads modules - wherever it stands
+    LOOP AT lt_html INTO lv_prefix WHERE table_line IS NOT INITIAL.
+      result = attribute_dropped( xml  = result
+                                  name = |{ lv_prefix }require| ).
+    ENDLOOP.
 
     " every HTML control: its own sanitizeContent goes, true comes in
     LOOP AT lt_html INTO lv_prefix.
@@ -1913,6 +2174,117 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         lv_pos = lv_after + 1.
       ENDDO.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD bindings_replaced.
+
+    DATA lv_pos TYPE i.
+    DATA lv_from TYPE i.
+
+    DATA(lv_len) = strlen( text ).
+    DO.
+      DATA(lv_at) = find( val = text
+                          sub = open
+                          off = lv_pos ).
+      IF lv_at < 0.
+        EXIT.
+      ENDIF.
+      DATA(lv_name_at) = lv_at + strlen( open ).
+      DATA(lv_close) = find( val = text
+                             sub = `}`
+                             off = lv_name_at ).
+      IF lv_close < 0.
+        EXIT.
+      ENDIF.
+      " the value, by its path - substrings and keys in variables, none in
+      " an expression: the 7.02 downport
+      DATA(lv_path) = prefix && substring( val = text
+                                           off = lv_name_at
+                                           len = lv_close - lv_name_at ).
+      READ TABLE it_bound INTO DATA(ls_bound) WITH TABLE KEY path = lv_path.
+      IF sy-subrc = 0.
+        result = result && substring( val = text
+                                      off = lv_from
+                                      len = lv_at - lv_from ) && ls_bound-value.
+        lv_from = lv_close + 1.
+        lv_pos = lv_close + 1.
+      ELSE.
+        lv_pos = lv_at + 1.
+      ENDIF.
+      IF lv_pos >= lv_len.
+        EXIT.
+      ENDIF.
+    ENDDO.
+    result = result && substring( val = text
+                                  off = lv_from ).
+
+  ENDMETHOD.
+
+  METHOD attribute_dropped.
+
+    DATA lv_pos TYPE i.
+    DATA lv_ws TYPE string.
+
+    result = xml.
+    lv_ws = | \t\n\r|.
+    DO.
+      DATA(lv_at) = find( val = result
+                          sub = name
+                          off = lv_pos ).
+      IF lv_at < 0.
+        EXIT.
+      ENDIF.
+      lv_pos = lv_at + 1.
+      IF lv_at = 0.
+        CONTINUE.
+      ENDIF.
+      IF find( val = lv_ws
+               sub = substring( val = result
+                                off = lv_at - 1
+                                len = 1 ) ) < 0.
+        CONTINUE.
+      ENDIF.
+      " the =, blanks allowed around it, and the quoted value
+      DATA(lv_end) = lv_at + strlen( name ).
+      WHILE lv_end < strlen( result ) AND find( val = lv_ws
+                                                sub = substring( val = result
+                                                                 off = lv_end
+                                                                 len = 1 ) ) >= 0.
+        lv_end = lv_end + 1.
+      ENDWHILE.
+      IF lv_end >= strlen( result ) OR substring( val = result
+                                                  off = lv_end
+                                                  len = 1 ) <> `=`.
+        CONTINUE.
+      ENDIF.
+      lv_end = lv_end + 1.
+      WHILE lv_end < strlen( result ) AND find( val = lv_ws
+                                                sub = substring( val = result
+                                                                 off = lv_end
+                                                                 len = 1 ) ) >= 0.
+        lv_end = lv_end + 1.
+      ENDWHILE.
+      IF lv_end >= strlen( result ).
+        EXIT.
+      ENDIF.
+      DATA(lv_delim) = substring( val = result
+                                  off = lv_end
+                                  len = 1 ).
+      IF lv_delim <> `"` AND lv_delim <> `'`.
+        CONTINUE.
+      ENDIF.
+      DATA(lv_close) = find( val = result
+                             sub = lv_delim
+                             off = lv_end + 1 ).
+      IF lv_close < 0.
+        EXIT.
+      ENDIF.
+      result = substring( val = result
+                          len = lv_at - 1 ) && substring( val = result
+                                                          off = lv_close + 1 ).
+      lv_pos = lv_at - 1.
+    ENDDO.
 
   ENDMETHOD.
 
@@ -2069,7 +2441,19 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                len = lv_colon + 1 ).
       ENDIF.
       IF line_exists( it_keep[ table_line = lv_prefix ] ).            "#EC CI_SORTSEQ
-        CONTINUE.
+        IF NOT line_exists( it_strict[ table_line = lv_prefix ] ).    "#EC CI_SORTSEQ
+          CONTINUE.
+        ENDIF.
+        " an aggregation, or a control of the strict prefix that is allowed
+        DATA(lv_local) = substring( val = lv_name
+                                    off = strlen( lv_prefix ) ).
+        IF lv_local IS NOT INITIAL.
+          IF substring( val = lv_local
+                        len = 1 ) CA `abcdefghijklmnopqrstuvwxyz`
+              OR line_exists( it_allow[ table_line = lv_name ] ).      "#EC CI_SORTSEQ
+            CONTINUE.
+          ENDIF.
+        ENDIF.
       ENDIF.
 
       " left out with all it contains
@@ -2107,6 +2491,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lt_model TYPE SORTED TABLE OF ty_s_model WITH UNIQUE KEY path.
     DATA lt_values TYPE z2ui5_cl_cockpit_session=>ty_t_value.
     DATA ls_row TYPE ty_s_row.
+    DATA lt_row TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
+    DATA lt_range TYPE z2ui5_cl_cockpit_session=>ty_r_draft_id.
     DATA lv_id TYPE c LENGTH 32.
     DATA lv_main TYPE string.
     DATA lv_popup TYPE string.
@@ -2119,13 +2505,24 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     ENDIF.
 
     TRY.
+        " the recordings in one read - at most 30, one IN list
         LOOP AT it_id INTO DATA(lv_rec) FROM lv_first.
+          IF lv_rec IS NOT INITIAL.
+            APPEND VALUE #( sign   = `I`
+                            option = `EQ`
+                            low    = lv_rec ) TO lt_range.
+          ENDIF.
+        ENDLOOP.
+        IF lt_range IS NOT INITIAL.
+          SELECT id, req_body, res_body FROM z2ui5_t_28
+            WHERE id IN @lt_range
+            INTO CORRESPONDING FIELDS OF TABLE @lt_row.
+        ENDIF.
+
+        LOOP AT it_id INTO lv_rec FROM lv_first.
           DATA(lv_index) = sy-tabix.
           lv_id = lv_rec.
-          CLEAR ls_row.
-          SELECT SINGLE id, req_body, res_body FROM z2ui5_t_28
-            WHERE id = @lv_id
-            INTO CORRESPONDING FIELDS OF @ls_row.
+          READ TABLE lt_row INTO ls_row WITH TABLE KEY id = lv_id.
           IF sy-subrc <> 0.
             CONTINUE.
           ENDIF.
@@ -2203,16 +2600,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-marked      = ls_popup-marked.
       result-popup       = ls_popup-content.
       result-popup_title = ls_popup-title.
-      " a prefix declared twice on one element breaks the XML
-      SPLIT ls_popup-xmlns AT ` xmlns` INTO TABLE DATA(lt_ns).
-      LOOP AT lt_ns INTO DATA(lv_ns) WHERE table_line IS NOT INITIAL.
-        DATA(lv_declared) = | xmlns{ substring_before( val = lv_ns
-                                                       sub = `=` ) }=|.
-        IF find( val = result-xmlns
-                 sub = lv_declared ) < 0.
-          result-xmlns = |{ result-xmlns } xmlns{ lv_ns }|.
-        ENDIF.
-      ENDLOOP.
+      " not merged into the main view's: a prefix both declare would resolve
+      " the popup's elements against the main view's uri
+      result-popup_xmlns = ls_popup-xmlns.
     ENDIF.
 
   ENDMETHOD.
@@ -2317,32 +2707,22 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD get_input_errors.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        app         TYPE c LENGTH 30,
-        http_status TYPE i,
-        req_body    TYPE string,
-        res_body    TYPE string,
-      END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_exchange TYPE ty_t_exchange.
-    DATA lv_from TYPE c LENGTH 8.
-
-    lv_from = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
     TRY.
-        SELECT app, http_status, req_body, res_body FROM z2ui5_t_28
-          WHERE utc_day >= @lv_from
-          ORDER BY timestampl DESCENDING
-          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-          UP TO @c_max_read ROWS.
+        result = inputs_from( read_recent( days          = days
+                                           check_request = abap_true ) ).
       CATCH cx_root INTO DATA(lx).
         result-error = lx->get_text( ).
-        RETURN.
     ENDTRY.
-    result-records = lines( lt_rows ).
-    result-check_capped = xsdbool( result-records >= c_max_read ).
 
-    LOOP AT lt_rows INTO DATA(ls_row).
+  ENDMETHOD.
+
+  METHOD inputs_from.
+
+    DATA lt_exchange TYPE ty_t_exchange.
+
+    result-records = lines( it_row ).
+    result-check_capped = xsdbool( result-records >= c_max_read ).
+    LOOP AT it_row INTO DATA(ls_row).
       APPEND VALUE #( app         = ls_row-app
                       request     = ls_row-req_body
                       response    = ls_row-res_body

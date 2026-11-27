@@ -269,6 +269,9 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         t_step       TYPE ty_t_step,
         " the business objects of the session, in the order they appear
         t_business   TYPE ty_t_business,
+        " the members bound to a password input in a recorded view of the
+        " session, upper case - their values are shown as *** (flatten)
+        t_secret     TYPE string_table,
       END OF ty_s_steps.
 
     TYPES:
@@ -349,6 +352,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       BEGIN OF ty_s_flows,
         error   TYPE string,
         drafts  TYPE i,
+        " only the newest c_max_nodes drafts were read
+        check_capped TYPE abap_bool,
         t_flow  TYPE ty_t_flow,
       END OF ty_s_flows.
 
@@ -408,6 +413,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! @parameter check_all     | also the objects of the framework itself
     "! @parameter check_changes | only the fields that changed
     "! @parameter search        | only the fields whose path or value contains it
+    "! @parameter it_secret     | members shown as *** besides those named like a
+    "!                            password - get_steps( )-t_secret
     CLASS-METHODS get_view
       IMPORTING
         id            TYPE clike
@@ -415,6 +422,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_all     TYPE abap_bool DEFAULT abap_false
         check_changes TYPE abap_bool DEFAULT abap_false
         search        TYPE clike OPTIONAL
+        it_secret     TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_s_view.
 
@@ -436,11 +444,13 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! @parameter it_step   | the steps of the session, as get_steps returns them
     "! @parameter path      | the field, as flatten names it
     "! @parameter check_all | also the objects of the framework itself
+    "! @parameter it_secret | members shown as *** - get_steps( )-t_secret
     CLASS-METHODS get_history
       IMPORTING
         it_step       TYPE ty_t_step
         path          TYPE string
         check_all     TYPE abap_bool DEFAULT abap_false
+        it_secret     TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_t_history.
 
@@ -641,11 +651,16 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! The fields of a serialized draft (asXML of CALL TRANSFORMATION id):
     "! every leaf of the object graph as path and value, a reference as an
     "! arrow to the class it points to. Without check_all only the objects
-    "! that are not the framework's and the data they reference.
+    "! that are not the framework's and the data they reference. The value of
+    "! a member named like a password (z2ui5_cl_cockpit_wire=&gt;check_secret)
+    "! or listed in it_secret is *** - a field bound to a password input is
+    "! an attribute of the app, in every draft.
+    "! @parameter it_secret | more members to mask, upper case
     CLASS-METHODS flatten
       IMPORTING
         xml           TYPE string
         check_all     TYPE abap_bool DEFAULT abap_false
+        it_secret     TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_t_value.
 
@@ -750,6 +765,19 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RAISING
         cx_static_check.
 
+    "! A page of the drafts of it_node with their serialized state, at most
+    "! 50 - in the order of it_node, so a scan over read_nodes( ) reads the
+    "! newest drafts first. A draft gone since is left out.
+    "! @parameter page | the page, from 1 - empty once past the last draft
+    CLASS-METHODS read_nodes_data
+      IMPORTING
+        it_node       TYPE ty_t_node
+        page          TYPE i
+      RETURNING
+        VALUE(result) TYPE ty_t_page
+      RAISING
+        cx_static_check.
+
     "! Only the newest c_max_steps steps, numbered from 1 again - the step
     "! numbers are the lines of the table (follows and the viewer read the
     "! step they name by its line). A step that continues one left out
@@ -790,9 +818,13 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! What the recorder has for the steps: per step what the user pressed
     "! and typed - read against the screen the step continues - and what the
     "! response showed.
+    "! @parameter et_secret | the members bound to a password input in the
+    "!                       recorded views, upper case
     CLASS-METHODS fill_wire
+      EXPORTING
+        et_secret TYPE string_table
       CHANGING
-        ct_step TYPE ty_t_step.
+        ct_step   TYPE ty_t_step.
 
     "! The user's part of a roundtrip as one line: the control pressed and
     "! the fields typed, named after the controls of the screen.
@@ -812,8 +844,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       CHANGING
         cs_step TYPE ty_s_step.
 
-    "! Drafts of an app, in the order of their ids - at most c_max_scan
-    "! drafts are read to find them.
+    "! Drafts of an app, the newest first - at most c_max_scan drafts are
+    "! read to find them.
     "! @parameter max_hits  | the most drafts returned
     "! @parameter it_skip   | drafts not to return
     CLASS-METHODS scan_app
@@ -857,6 +889,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         val           TYPE string
       RETURNING
         VALUE(result) TYPE string.
+
+    "! Whether the field of a path is secret: its last member named like a
+    "! password, or one of it_secret.
+    CLASS-METHODS check_secret
+      IMPORTING
+        path          TYPE string
+        it_secret     TYPE string_table
+      RETURNING
+        VALUE(result) TYPE abap_bool.
 
 ENDCLASS.
 
@@ -999,6 +1040,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     " the framework keeps only the newest drafts of a session by default
     DATA(lv_pruned) = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ).
+    DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
     " the app of a session is in its newest draft - read for as many
     " sessions as are listed, and a few more when a filter skips some
     DATA(lv_reads) = 0.
@@ -1025,6 +1067,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       ENDTRY.
       IF ls_session-app IS INITIAL.
         ls_session-app = `(unknown)`.
+      ENDIF.
+      " the cockpit's own sessions hold copies of other users' data - the
+      " recorder leaves them out too
+      IF ls_session-app = lv_own.
+        result-sessions = result-sessions - 1.
+        CONTINUE.
       ENDIF.
       IF ls_agg-id_prev IS NOT INITIAL.
         ls_session-note = COND #( WHEN lv_pruned = abap_true THEN `earlier steps pruned or expired`
@@ -1071,7 +1119,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         " the monitor's log is an extra - the steps stand without it
     ENDTRY.
     TRY.
-        fill_wire( CHANGING ct_step = result-t_step ).
+        fill_wire( IMPORTING et_secret = result-t_secret
+                   CHANGING  ct_step   = result-t_step ).
       CATCH cx_root ##NO_HANDLER.
         " so are the recordings
     ENDTRY.
@@ -1118,10 +1167,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     result-app = app_of( lv_new ).
     DATA(lt_new) = flatten( xml       = lv_new
-                            check_all = check_all ).
+                            check_all = check_all
+                            it_secret = it_secret ).
     IF id_prev IS NOT INITIAL.
       lt_old = flatten( xml       = lv_old
-                        check_all = check_all ).
+                        check_all = check_all
+                        it_secret = it_secret ).
     ENDIF.
     DATA(lt_field) = diff( it_new      = lt_new
                            it_old      = lt_old
@@ -1198,7 +1249,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       TRY.
           DATA(lv_xml) = read_data( ls_step-id ).
           IF lv_prev IS NOT INITIAL.
-            lt_old = flatten( read_data( lv_prev ) ).
+            lt_old = flatten( xml       = read_data( lv_prev )
+                              it_secret = ls_steps-t_secret ).
           ENDIF.
         CATCH cx_root INTO DATA(lx).
           APPEND |   not readable: { lx->get_text( ) }| TO lt_lines.
@@ -1209,7 +1261,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lt_field) = diff( it_new      = flatten( lv_xml )
+      DATA(lt_field) = diff( it_new      = flatten( xml       = lv_xml
+                                                 it_secret = ls_steps-t_secret )
                              it_old      = lt_old
                              check_first = xsdbool( lv_prev IS INITIAL ) ).
       DATA(lv_changes) = 0.
@@ -1258,7 +1311,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                              value = `(not there)`
                                              state = `None` ).
       LOOP AT flatten( xml       = lv_xml
-                       check_all = check_all ) INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
+                       check_all = check_all
+                       it_secret = it_secret ) INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
         ls_history-value = ls_value-value.
         EXIT.
       ENDLOOP.
@@ -1284,7 +1338,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lt_rows TYPE ty_t_page.
     DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
     DATA lt_node TYPE ty_t_node.
-    DATA lv_last TYPE c LENGTH 32.
     DATA lv_search TYPE string.
 
     lv_search = condense( search ).
@@ -1309,21 +1362,31 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the serialized text escapes <, > and &, so a term with one of them
     " is only found in the decoded fields - every draft is taken apart then
     DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
+    " the cockpit's own drafts hold copies of what it showed - other users' data
+    DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
+    " the newest drafts first - read_nodes( ) stops at c_max_nodes
+    IF lines( lt_node ) >= c_max_nodes.
+      result-check_capped = abap_true.
+    ENDIF.
     DO.
+      IF ( sy-index - 1 ) * 50 >= lines( lt_node ).
+        EXIT.
+      ENDIF.
       TRY.
-          lt_rows = read_page( lv_last ).
+          lt_rows = read_nodes_data( it_node = lt_node
+                                     page    = sy-index ).
         CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
       ENDTRY.
-      IF lt_rows IS INITIAL.
-        EXIT.
-      ENDIF.
 
       LOOP AT lt_rows INTO DATA(ls_row).
-        lv_last = ls_row-id.
         result-drafts = result-drafts + 1.
         IF lv_prefilter = abap_true AND ls_row-data NS lv_search.
+          CONTINUE.
+        ENDIF.
+        DATA(lv_app) = app_of( ls_row-data ).
+        IF lv_app = lv_own.
           CONTINUE.
         ENDIF.
         DATA(lv_matched) = abap_false.
@@ -1343,7 +1406,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                           id      = ls_row-id
                           time    = z2ui5_cl_cockpit_setup=>ts_text( ls_meta-timestampl )
                           user    = user_text( ls_meta-uname )
-                          app     = app_of( ls_row-data )
+                          app     = lv_app
                           path    = ls_value-path
                           value   = cut( ls_value-value ) ) TO result-t_hit.
           CLEAR ls_meta.
@@ -1353,11 +1416,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           result-matched = result-matched + 1.
         ENDIF.
       ENDLOOP.
-
-      IF result-drafts >= c_max_nodes.
-        result-check_capped = abap_true.
-        EXIT.
-      ENDIF.
     ENDDO.
 
   ENDMETHOD.
@@ -1370,20 +1428,28 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lt_ids TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
     DATA lt_failed TYPE ty_t_id.
     DATA lv_oldest TYPE timestampl.
-    DATA lv_last TYPE c LENGTH 32.
+    DATA lt_node TYPE ty_t_node.
 
+    " the newest drafts, by time - their ids are UUIDs, in no order of time
+    TRY.
+        lt_node = read_nodes( ).
+      CATCH cx_root INTO DATA(lx).
+        result-error = lx->get_text( ).
+        RETURN.
+    ENDTRY.
+    result-check_capped = xsdbool( lines( lt_node ) >= c_max_nodes ).
     DO.
+      IF ( sy-index - 1 ) * 50 >= lines( lt_node ).
+        EXIT.
+      ENDIF.
       TRY.
-          lt_rows = read_page( lv_last ).
-        CATCH cx_root INTO DATA(lx).
+          lt_rows = read_nodes_data( it_node = lt_node
+                                     page    = sy-index ).
+        CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
       ENDTRY.
-      IF lt_rows IS INITIAL.
-        EXIT.
-      ENDIF.
       LOOP AT lt_rows INTO DATA(ls_row).
-        lv_last = ls_row-id.
         APPEND VALUE #( id         = ls_row-id
                         id_prev    = ls_row-id_prev
                         timestampl = ls_row-timestampl
@@ -1392,9 +1458,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           lv_oldest = ls_row-timestampl.
         ENDIF.
       ENDLOOP.
-      IF lines( lt_link ) >= c_max_nodes.
-        EXIT.
-      ENDIF.
     ENDDO.
 
     " the drafts a failed roundtrip started from - a session ending there
@@ -2023,20 +2086,21 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     DATA lt_rows TYPE ty_t_page.
     DATA lt_skip TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
-    DATA lv_last TYPE c LENGTH 32.
     DATA lv_scanned TYPE i.
 
     DATA(lv_app) = to_upper( condense( app ) ).
     LOOP AT it_skip INTO DATA(lv_skip).
       INSERT lv_skip INTO TABLE lt_skip.
     ENDLOOP.
+    " the newest drafts first - their ids are UUIDs, in no order of time
+    DATA(lt_node) = read_nodes( ).
     DO.
-      lt_rows = read_page( lv_last ).
-      IF lt_rows IS INITIAL.
+      IF ( sy-index - 1 ) * 50 >= lines( lt_node ).
         RETURN.
       ENDIF.
+      lt_rows = read_nodes_data( it_node = lt_node
+                                 page    = sy-index ).
       LOOP AT lt_rows INTO DATA(ls_row).
-        lv_last = ls_row-id.
         lv_scanned = lv_scanned + 1.
         DATA(lv_id) = CONV string( ls_row-id ).
         IF line_exists( lt_skip[ table_line = lv_id ] ).
@@ -2641,6 +2705,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_request TYPE string.
     DATA lv_response TYPE string.
 
+    CLEAR et_secret.
     LOOP AT ct_step INTO DATA(ls_step).
       APPEND ls_step-id TO lt_id.
     ENDLOOP.
@@ -2695,6 +2760,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ENDLOOP.
         LOOP AT z2ui5_cl_cockpit_wire=>views_of( lv_response ) INTO DATA(ls_view) WHERE n = `MAIN`. "#EC CI_SORTSEQ
           lv_screen = ls_view-v.
+        ENDLOOP.
+        LOOP AT z2ui5_cl_cockpit_wire=>secret_names_of( lv_response ) INTO DATA(lv_secret).
+          lv_secret = to_upper( lv_secret ).
+          IF NOT line_exists( et_secret[ table_line = lv_secret ] ).
+            APPEND lv_secret TO et_secret.
+          ENDIF.
         ENDLOOP.
       ENDIF.
       INSERT VALUE #( step = <step>-step
@@ -2997,6 +3068,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         READ TABLE lt_entry INTO ls_entry WITH TABLE KEY id = ls_leaf-href.
         ls_leaf-value = COND #( WHEN sy-subrc = 0 THEN |-> { ls_entry-label }|
                                 ELSE |-> #{ ls_leaf-href }| ).
+      ELSEIF ls_leaf-value IS NOT INITIAL AND check_secret( path      = ls_leaf-path
+                                                            it_secret = it_secret ) = abap_true.
+        ls_leaf-value = `***`.
       ENDIF.
       APPEND VALUE #( path  = ls_leaf-path
                       value = ls_leaf-value ) TO result.
@@ -3169,6 +3243,40 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD read_nodes_data.
+
+    DATA lv_tab TYPE string.
+    DATA lt_range TYPE ty_r_draft_id.
+    DATA lt_order TYPE HASHED TABLE OF ty_s_page_row WITH UNIQUE KEY id.
+
+    DATA(lv_from) = ( page - 1 ) * 50 + 1.
+    IF page < 1 OR lv_from > lines( it_node ).
+      RETURN.
+    ENDIF.
+    LOOP AT it_node INTO DATA(ls_node) FROM lv_from TO lv_from + 49.
+      IF ls_node-id IS NOT INITIAL.
+        APPEND VALUE #( sign   = `I`
+                        option = `EQ`
+                        low    = ls_node-id ) TO lt_range.
+      ENDIF.
+    ENDLOOP.
+    IF lt_range IS INITIAL.
+      RETURN.
+    ENDIF.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
+    SELECT id, id_prev, timestampl, data FROM (lv_tab)
+      WHERE id IN @lt_range
+      INTO CORRESPONDING FIELDS OF TABLE @lt_order.
+    " back in the order of it_node
+    LOOP AT it_node INTO ls_node FROM lv_from TO lv_from + 49.
+      READ TABLE lt_order INTO DATA(ls_row) WITH TABLE KEY id = ls_node-id.
+      IF sy-subrc = 0.
+        APPEND ls_row TO result.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
   METHOD read_page.
 
     DATA lv_tab TYPE string.
@@ -3260,6 +3368,32 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     result = xsdbool( label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` )
                       OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` )
                       OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ) ).
+
+  ENDMETHOD.
+
+  METHOD check_secret.
+
+    DATA(lv_name) = path.
+    DATA(lv_dash) = find( val = lv_name
+                          sub = `-`
+                          occ = -1 ).
+    IF lv_dash >= 0.
+      lv_name = substring( val = lv_name
+                           off = lv_dash + 1 ).
+    ENDIF.
+    " a row of a table of values: T_PWD[2]
+    DATA(lv_bracket) = find( val = lv_name
+                             sub = `[` ).
+    IF lv_bracket > 0.
+      lv_name = substring( val = lv_name
+                           len = lv_bracket ).
+    ENDIF.
+    IF z2ui5_cl_cockpit_wire=>check_secret( lv_name ) = abap_true.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    lv_name = to_upper( lv_name ).
+    result = xsdbool( line_exists( it_secret[ table_line = lv_name ] ) ).
 
   ENDMETHOD.
 

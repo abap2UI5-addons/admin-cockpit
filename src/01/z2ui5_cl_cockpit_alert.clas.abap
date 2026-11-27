@@ -298,6 +298,7 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
     DATA lt_window TYPE z2ui5_cl_cockpit_stats=>ty_t_window.
     DATA lt_now TYPE ty_t_alert.
     DATA ls_row TYPE z2ui5_t_23.
+    DATA lt_row TYPE STANDARD TABLE OF z2ui5_t_23 WITH EMPTY KEY.
     DATA lv_zero TYPE timestampl.
 
     " not check( ), which swallows a failure: an evaluation that fails must
@@ -341,9 +342,12 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       ls_row-cnt       = ls_alert-roundtrips.
       ls_row-text      = ls_alert-text.
       ls_row-note      = notify( ls_alert ).
-      INSERT z2ui5_t_23 FROM @ls_row.
+      APPEND ls_row TO lt_row.
       result-raised = result-raised + 1.
     ENDLOOP.
+    IF lt_row IS NOT INITIAL.
+      INSERT z2ui5_t_23 FROM TABLE @lt_row.
+    ENDIF.
 
     LOOP AT lt_cleared INTO DATA(ls_open).
       DATA(ls_clear) = VALUE ty_s_alert( event      = z2ui5_if_cockpit_notify=>cs_event-cleared
@@ -394,7 +398,7 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
     TRY.
         SELECT * FROM z2ui5_t_23
           ORDER BY raised DESCENDING
-          INTO TABLE @lt_rows
+          INTO CORRESPONDING FIELDS OF TABLE @lt_rows
           UP TO @max_rows ROWS.                         "#EC CI_NOWHERE
       CATCH cx_root ##NO_HANDLER.
     ENDTRY.

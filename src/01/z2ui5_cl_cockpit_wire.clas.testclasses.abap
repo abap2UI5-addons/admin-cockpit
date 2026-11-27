@@ -273,6 +273,22 @@ CLASS ltcl_wire IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = `<m:Text text="kept"/>`
                                         act = ls_screen-content ).
 
+    " sap.ui.core and sap.ui.core.mvc: only the controls that show what they
+    " are told - no fragment, component or nested view, no core:require
+    lv_xml = `<mvc:View xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:core="sap.ui.core">` &&
+             `<VBox core:require="{H:'x/Handler'}" id="b"><core:Icon src="a"/>` &&
+             `<core:Fragment fragmentName="x.y" type="JS"/><core:ComponentContainer name="x.comp"/>` &&
+             `<mvc:XMLView viewName="x.V"><Text text="in"/></mvc:XMLView>` &&
+             `<core:Item key="k"><core:customData><core:CustomData key="c"/></core:customData></core:Item>` &&
+             `<Text text='core:require' core:require = 'x'/></VBox></mvc:View>`.
+    ls_screen = z2ui5_cl_cockpit_wire=>screen_of( xml      = lv_xml
+                                                 it_model = VALUE #( ) ).
+    cl_abap_unit_assert=>assert_equals(
+        exp = `<VBox id="b"><core:Icon src="a"/>` &&
+              `<core:Item key="k"><core:customData><core:CustomData key="c"/></core:customData></core:Item>` &&
+              `<Text text='core:require'/></VBox>`
+        act = ls_screen-content ).
+
   ENDMETHOD.
 
   METHOD roundtrip_from_bodies.
@@ -610,6 +626,7 @@ CLASS ltcl_wire_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SH
     METHODS detail_taken_apart FOR TESTING.
     METHODS messages_counted FOR TESTING.
     METHODS sticky_waits FOR TESTING.
+    METHODS password_of_earlier_screen FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -721,6 +738,64 @@ CLASS ltcl_wire_db IMPLEMENTATION.
                                           response     = `{}`
                                           check_sticky = abap_true ).
     cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_wire=>gt_buffer ).
+
+  ENDMETHOD.
+
+  METHOD password_of_earlier_screen.
+
+    " response 1 displays the login screen with a password input
+    DATA(ls_row) = z2ui5_cl_cockpit_wire=>row_of(
+        request      = `{"S_FRONT":{"ID":"ZZCKUTPW0","EVENT":"START"}}`
+        response     = `{"S_FRONT":{"ID":"ZZCKUTPW1","APP":"ZZ_COCKPIT_UNIT_TEST","PROTOCOL":2,"S_ACTION":{"T_SYSTEM":` &&
+                       `[["VIEW_SLOTS","display","MAIN","<mvc:View><Input type=\"Password\" value=\"{/XX/MV_PIN}\"/>` &&
+                       `</mvc:View>"]]}},"MODEL":{"XX":{"MV_PIN":""}}}`
+        http_status  = 200
+        check_sticky = abap_false ).
+    " keyed by the draft it wrote - the next roundtrip starts from it
+    cl_abap_unit_assert=>assert_equals( exp = `ZZCKUTPW1`
+                                        act = ls_row-id ).
+    INSERT z2ui5_t_28 FROM @ls_row.
+
+    " request 2 carries the PIN; its response is an error box, no view
+    ls_row = z2ui5_cl_cockpit_wire=>row_of(
+        request      = `{"S_FRONT":{"ID":"ZZCKUTPW1","EVENT":"LOGIN"},"XX":{"MV_PIN":"4711"}}`
+        response     = `{"S_FRONT":{"ID":"ZZCKUTPW2","APP":"ZZ_COCKPIT_UNIT_TEST","PROTOCOL":2,"S_ACTION":` &&
+                       `{"T_CUSTOM":[["MESSAGE_BOX","error","Wrong PIN"]]}},"MODEL":{"XX":{"MV_PIN":"4711"}}}`
+        http_status  = 200
+        check_sticky = abap_false ).
+    cl_abap_unit_assert=>assert_char_np( exp = `*4711*`
+                                         act = ls_row-req_body ).
+    cl_abap_unit_assert=>assert_char_np( exp = `*4711*`
+                                         act = ls_row-res_body ).
+    INSERT z2ui5_t_28 FROM @ls_row.
+
+    " request 3 types it again - the screen it comes from showed no view,
+    " the masking is carried forward from the recording before
+    DATA(lt_before) = VALUE z2ui5_cl_cockpit_wire=>ty_t_row( ).
+    ls_row = z2ui5_cl_cockpit_wire=>row_of(
+        request      = `{"S_FRONT":{"ID":"ZZCKUTPW2","EVENT":"LOGIN"},"XX":{"MV_PIN":"0815"}}`
+        response     = `{"S_FRONT":{"ID":"ZZCKUTPW3","APP":"ZZ_COCKPIT_UNIT_TEST","PROTOCOL":2}}`
+        http_status  = 200
+        check_sticky = abap_false
+        it_before    = lt_before ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*"MV_PIN":"***"*`
+                                         act = ls_row-req_body ).
+    APPEND ls_row TO lt_before.
+
+    " a roundtrip that wrote no new draft gets a key of its own
+    ls_row = z2ui5_cl_cockpit_wire=>row_of(
+        request      = `{"S_FRONT":{"ID":"ZZCKUTPW3","EVENT":"LOGIN"},"XX":{"MV_PIN":"1234"}}`
+        response     = `{"S_FRONT":{"ID":"ZZCKUTPW3","APP":"ZZ_COCKPIT_UNIT_TEST","PROTOCOL":2}}`
+        http_status  = 200
+        check_sticky = abap_false
+        it_before    = lt_before ).
+    cl_abap_unit_assert=>assert_differs( exp = `ZZCKUTPW3`
+                                         act = ls_row-id ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*"MV_PIN":"***"*`
+                                         act = ls_row-req_body ).
+
+    cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_wire=>check_secret( `MS_LOGIN-Password` ) ).
+    cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_wire=>check_secret( `MV_PIN` ) ).
 
   ENDMETHOD.
 

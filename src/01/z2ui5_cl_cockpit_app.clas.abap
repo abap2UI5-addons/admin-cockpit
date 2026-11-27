@@ -130,11 +130,19 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PROTECTED SECTION.
     DATA client     TYPE REF TO z2ui5_if_client.
+    " whether the user may change - the copy every decision reads. The public
+    " s_head-can_change only feeds the view: a bound attribute comes back from
+    " the browser, so a display-only user could set it to true there
+    DATA change_allowed TYPE abap_bool.
     " the app the process variants are of - empty for all apps
     DATA variants_app TYPE string.
     DATA detail_app TYPE string.
     DATA s_occ      TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
     DATA s_session  TYPE z2ui5_cl_cockpit_session=>ty_s_session.
+    " the members of the open session bound to a password input - masked
+    DATA t_secret   TYPE string_table.
+    " the messages users saw as read, before wire_message_search filters them
+    DATA t_wire_message_all TYPE z2ui5_cl_cockpit_wire=>ty_t_message.
     DATA step_index TYPE i.
     " the step every other one is compared with, 0 for the step it continues
     DATA step_base  TYPE i.
@@ -185,6 +193,14 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
         draft  TYPE clike OPTIONAL
         user   TYPE clike OPTIONAL
         search TYPE clike OPTIONAL.
+
+    "! Forget the open session - its steps, fields and recordings are other
+    "! users' data, not kept in the cockpit's own drafts once it is closed.
+    METHODS session_clear.
+
+    "! The messages users saw that match wire_message_search - from
+    "! t_wire_message_all, nothing is read again.
+    METHODS messages_filter.
 
     "! Whether the app state of the open session grows from step to step,
     "! and which tables - into growth_text.
@@ -245,6 +261,9 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       view_no_auth( ).
       RETURN.
     ENDIF.
+
+    " undo whatever the browser wrote into the bound copy
+    s_head-can_change = change_allowed.
 
     IF client->check_on_init( ).
       model_init( ).
@@ -2937,7 +2956,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     dialog->ele( `endButton`
         )->tag( `Button`
             )->a( n = `text`  v = `Close`
-            )->a( n = `press` v = client->follow_up_action( z2ui5_if_client=>cs_event-popup_close ) ).
+            )->a( n = `press` v = client->_event( `SESSION_CLOSE` ) ).
 
     client->popup_display( popup->stringify( ) ).
 
@@ -3028,7 +3047,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         z2ui5_cl_cockpit_wire=>popup_parts( EXPORTING popup   = ls_screen-popup
                                             IMPORTING content = lv_popup
                                                       buttons = lv_buttons ).
-        lv_xml = |{ lv_xml }<ckm:Panel headerText="{ z2ui5_cl_cockpit_wire=>xml_escape(
+        " the popup's namespaces on the panel around it, as content_defused checked them
+        lv_xml = |{ lv_xml }<ckm:Panel{ ls_screen-popup_xmlns } headerText="{ z2ui5_cl_cockpit_wire=>xml_escape(
                                                          |Popup on top: { ls_screen-popup_title }| ) }"| &&
                  | class="sapUiSmallMargin"><ckm:content>{ lv_popup }|.
         IF lv_buttons IS NOT INITIAL.
@@ -3368,6 +3388,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 ENDIF.
 
                 t_steps = ls_steps-t_step.
+                t_secret = ls_steps-t_secret.
                 s_session = VALUE #( s_sessions-t_session[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
                 IF s_session IS INITIAL.
                   s_session = VALUE #( id    = id
@@ -3418,6 +3439,30 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   step_info = |Only the newest { z2ui5_cl_cockpit_session=>c_max_steps } steps are shown. { step_info }|.
     ENDIF.
     popup_session( ).
+
+  ENDMETHOD.
+
+  METHOD messages_filter.
+
+    s_wire_messages-t_message = t_wire_message_all.
+    IF wire_message_search IS NOT INITIAL.
+      DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
+                                                   OR app CS wire_message_search ).
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD session_clear.
+
+    CLEAR t_steps.
+    CLEAR t_secret.
+    CLEAR s_step.
+    CLEAR s_wire.
+    CLEAR story_text.
+    CLEAR t_history.
+    CLEAR history_shown.
+    CLEAR step_index.
+    CLEAR step_base.
 
   ENDMETHOD.
 
@@ -3518,7 +3563,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                                 check_all     = step_all
                                                 check_changes = xsdbool( step_changes = abap_true
                                                                          AND lv_prev IS NOT INITIAL )
-                                                search        = step_search ).
+                                                search        = step_search
+                                                it_secret     = t_secret ).
 
     step_text = |Step { step_index } of { lines( t_steps ) } - { ls_step-time } UTC|.
     step_can_back = xsdbool( step_index > 1 ).
@@ -3643,14 +3689,14 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     s_occ = VALUE #( t_occurrences[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
     error_text = z2ui5_cl_cockpit_stats=>get_error_text( s_occ-id ).
     CLEAR repro_enabled.
-    session_enabled = xsdbool( s_head-can_change = abap_true
+    session_enabled = xsdbool( change_allowed = abap_true
                                AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
 
     IF z2ui5_cl_cockpit_repro=>check_available( ) = abap_false.
       repro_hint = `Reproduce needs the headless frontend (github.com/abap2UI5/headless-frontend).`.
       RETURN.
     ENDIF.
-    IF s_head-can_change = abap_false.
+    IF change_allowed = abap_false.
       repro_hint = `Reproduce re-runs app logic - administrators only.`.
       RETURN.
     ENDIF.
@@ -3676,6 +3722,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
   METHOD on_event.
 
     DATA lv_flows TYPE string.
+    DATA lv_newest TYPE string.
 
     TRY.
         CASE client->get_event( ).
@@ -3879,7 +3926,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `SESSION_BACK`.
+            session_clear( ).
             popup_error( ).
+
+          WHEN `SESSION_CLOSE`.
+            session_clear( ).
+            client->popup_destroy( ).
 
           WHEN `SESSION_EXPORT`.
             IF check_change( ) = abap_true.
@@ -3933,7 +3985,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             flows_shown = abap_true.
             " built ahead of the COND: inside it the 7.02 downport writes the
             " whole concatenation on one line, longer than 255 characters
-            lv_flows = |How users move between apps, from { s_flows-drafts } drafts - "(start)" is | &&
+            IF s_flows-check_capped = abap_true.
+              lv_newest = ` (the newest)`.
+            ENDIF.
+            lv_flows = |How users move between apps, from { s_flows-drafts } drafts{ lv_newest } - "(start)" is | &&
                        |where a session began, "(end)" where a session without a step for 30 minutes | &&
                        |stopped, "(end after an error)" where it stopped right after a failed roundtrip|.
             flows_text = COND #( WHEN s_flows-error IS NOT INITIAL
@@ -3987,7 +4042,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `MESSAGES_SEARCH`.
-            load_tab( ).
+            messages_filter( ).
 
           WHEN `APP_SESSIONS`.
             IF check_change( ) = abap_true.
@@ -4019,6 +4074,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 WHEN `WIRE_FAILED`.
                   popup_wire( abap_true ).
                 WHEN OTHERS.
+                  " the bodies and the story are other users' data - not kept
+                  " in the cockpit's own drafts once their popup is closed
+                  CLEAR s_wire.
+                  CLEAR story_text.
                   popup_session( ).
               ENDCASE.
             ENDIF.
@@ -4034,7 +4093,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   DATA(lv_path) = client->get_event_arg( ).
                   t_history = z2ui5_cl_cockpit_session=>get_history( it_step   = t_steps
                                                                      path      = lv_path
-                                                                     check_all = step_all ).
+                                                                     check_all = step_all
+                                                                     it_secret = t_secret ).
                   DATA(lv_changes) = 0.
                   LOOP AT t_history TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
                     lv_changes = lv_changes + 1.
@@ -4074,7 +4134,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                 THEN `ABAP Cloud` ELSE `Standard ABAP` ).
     s_head-user       = sy-uname.
     s_head-auth_text  = |Administrators - access: { z2ui5_cl_cockpit_auth=>get_mode_text( ) }|.
-    s_head-can_change = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
+    change_allowed    = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
+    s_head-can_change = change_allowed.
     s_monitor         = z2ui5_cl_cockpit_stats=>get_monitor( ).
 
   ENDMETHOD.
@@ -4105,9 +4166,13 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       WHEN `ERRORS`.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
         " the texts users saw - administrators only, they hold business data
-        wire_messages_shown = s_head-can_change.
+        wire_messages_shown = change_allowed.
+        CLEAR t_wire_message_all.
         IF wire_messages_shown = abap_true.
-          s_wire_messages = z2ui5_cl_cockpit_wire=>get_messages( lv_days ).
+          " both from one read of the recordings
+          z2ui5_cl_cockpit_wire=>get_trouble( EXPORTING days     = lv_days
+                                              IMPORTING messages = s_wire_messages
+                                                        inputs   = s_wire_inputs ).
           wire_messages_text = COND #(
               WHEN s_wire_messages-error IS NOT INITIAL
               THEN |Messages users saw - the recordings could not be read: { s_wire_messages-error }|
@@ -4118,11 +4183,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ELSE |Messages users saw - message boxes, toasts and popups of { s_wire_messages-records } recorded | &&
                    |roundtrips{ COND #( WHEN s_wire_messages-check_capped = abap_true THEN ` (the newest)` ) } - | &&
                    |select one for the session where it was shown last| ).
-          IF wire_message_search IS NOT INITIAL.
-            DELETE s_wire_messages-t_message WHERE NOT ( text CS wire_message_search
-                                                         OR app CS wire_message_search ).
-          ENDIF.
-          s_wire_inputs = z2ui5_cl_cockpit_wire=>get_input_errors( lv_days ).
+          t_wire_message_all = s_wire_messages-t_message.
+          messages_filter( ).
           " built ahead of the COND: inside it the 7.02 downport writes the
           " whole concatenation on one line, longer than 255 characters
           IF s_wire_inputs-check_capped = abap_true.
@@ -4142,7 +4204,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       WHEN `DRAFTS`.
         s_drafts = z2ui5_cl_cockpit_draft=>get_info( ).
         drafts_failed = xsdbool( s_drafts-check_readable = abap_false ).
-        IF sessions_shown = abap_true AND s_head-can_change = abap_true.
+        IF sessions_shown = abap_true AND change_allowed = abap_true.
           sessions_load( ).
         ENDIF.
       WHEN `SECURITY`.
@@ -4151,7 +4213,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         t_addons  = z2ui5_cl_cockpit_inst=>get_addons( ).
       WHEN `LIVE`.
         s_live = z2ui5_cl_cockpit_stats=>get_live( ).
-        IF s_head-can_change = abap_true.
+        IF change_allowed = abap_true.
           s_live_sessions = z2ui5_cl_cockpit_session=>get_sessions( max_sessions   = 50
                                                                     active_minutes = 5 ).
         ENDIF.
