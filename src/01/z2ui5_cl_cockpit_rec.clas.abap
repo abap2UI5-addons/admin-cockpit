@@ -401,7 +401,8 @@ CLASS z2ui5_cl_cockpit_rec IMPLEMENTATION.
     ls_act-app       = lv_app.
     ls_act-last_seen = lv_now.
     ls_act-event     = is_rt-event.
-    ls_act-cnt       = 1.
+    " column CNT stays empty: the row is replaced per roundtrip and the Live
+    " tab counts rows (users), never roundtrips - the column is unused
     MODIFY z2ui5_t_20 FROM @ls_act.
 
   ENDMETHOD.

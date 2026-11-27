@@ -203,7 +203,7 @@ which decides by the settings what is persisted:
 |---|---|---|
 | `Z2UI5_T_22` | every recorded roundtrip, updated in place, lock-free | per UTC day, hour, app and event: count, app starts, errors, slow ones, sum and max of the total and of each phase, request/response KB, largest response and model, browser time, and a latency histogram of nine buckets (the p95 is interpolated from it) |
 | `Z2UI5_T_27` | once per user, day and app | the user key (see privacy) - distinct users per day |
-| `Z2UI5_T_20` | every recorded roundtrip | user key and app with the last-seen time - the Live tab |
+| `Z2UI5_T_20` | every recorded roundtrip | user key and app with the last-seen time and the last event - the Live tab (column `CNT` is unused and stays empty) |
 | `Z2UI5_T_25` | errors and slow roundtrips only | one raw row: timings per phase, sizes, draft ids, exception class, first line and full chain |
 | `Z2UI5_T_26` | settings | name/value |
 | `Z2UI5_T_21` | administrators | user names |
