@@ -23,6 +23,8 @@ CLASS ltcl_alert DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT
     METHODS diff_keeps_open FOR TESTING.
     METHODS diff_clears_gone FOR TESTING.
     METHODS quiet_window_keeps_open FOR TESTING.
+    METHODS idle_app_closed FOR TESTING.
+    METHODS rule_off_closed FOR TESTING.
 
     METHODS settings
       RETURNING
@@ -132,11 +134,12 @@ CLASS ltcl_alert IMPLEMENTATION.
 
   METHOD errors_mode_has_no_rate.
 
-    " mode ERRORS records failed roundtrips only - 100 % says nothing
+    " mode ERRORS records failed roundtrips only - 100 % says nothing, and
+    " the p95 is that of the failures
     DATA(ls_set) = settings( ).
     ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
     DATA(lt_alert) = z2ui5_cl_cockpit_alert=>evaluate(
-        it_window = VALUE #( ( app = c_app roundtrips = 30 errors = 30 p95_ms = 100 ) )
+        it_window = VALUE #( ( app = c_app roundtrips = 30 errors = 30 p95_ms = 9000 ) )
         is_set    = ls_set ).
 
     cl_abap_unit_assert=>assert_initial( lt_alert ).
@@ -263,6 +266,64 @@ CLASS ltcl_alert IMPLEMENTATION.
                                                 is_set    = ls_set ).
     cl_abap_unit_assert=>assert_equals( exp = 3
                                         act = lines( lt_judged ) ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_alert=>cs_closing-rule_off
+                                        act = lt_judged[ 1 ]-closing ).
+    cl_abap_unit_assert=>assert_initial( lt_judged[ 3 ]-closing ).
+
+  ENDMETHOD.
+
+  METHOD idle_app_closed.
+
+    " an app without any roundtrip for days (removed, renamed, unused): its
+    " alert is closed without a verdict - a quiet window of an app that is
+    " still used keeps its alert open
+    DATA(lt_open) = VALUE z2ui5_cl_cockpit_alert=>ty_t_open(
+        ( id = `A1` rule_id = z2ui5_if_cockpit_notify=>cs_rule-p95 app = c_app measured = `3000 ms` threshold = `2000 ms` )
+        ( id = `A2` rule_id = z2ui5_if_cockpit_notify=>cs_rule-p95 app = c_other ) ).
+    DATA(lt_window) = VALUE z2ui5_cl_cockpit_stats=>ty_t_window(
+        ( app = `` roundtrips = 5 )
+        ( app = c_other roundtrips = 5 ) ).
+
+    DATA(lt_judged) = z2ui5_cl_cockpit_alert=>judged( it_open   = lt_open
+                                                      it_window = lt_window
+                                                      is_set    = settings( )
+                                                      it_idle   = VALUE #( ( c_app ) ( c_other ) ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( lt_judged ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `A1`
+                                        act = CONV string( lt_judged[ 1 ]-id ) ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_alert=>cs_closing-idle
+                                        act = lt_judged[ 1 ]-closing ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `p95 response time*closed without a verdict - no roundtrip for 7 days*3000 ms*`
+                                         act = z2ui5_cl_cockpit_alert=>clear_text( is_open = lt_judged[ 1 ]
+                                                                                   raised  = `2099-01-01 10:00:00` ) ).
+
+  ENDMETHOD.
+
+  METHOD rule_off_closed.
+
+    " a rule switched off - or the p95 in mode ERRORS - is no recovery: the
+    " text of the cleared alert says so instead of "below again"
+    DATA(ls_set) = settings( ).
+    ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
+    DATA(lt_judged) = z2ui5_cl_cockpit_alert=>judged(
+        it_open   = VALUE #( ( id = `A1` rule_id = z2ui5_if_cockpit_notify=>cs_rule-p95 app = c_app threshold = `2000 ms` ) )
+        it_window = VALUE #( ( app = c_app roundtrips = 50 ) )
+        is_set    = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_alert=>cs_closing-rule_off
+                                        act = lt_judged[ 1 ]-closing ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*closed without a verdict - the rule is switched off*`
+                                         act = z2ui5_cl_cockpit_alert=>clear_text( is_open = lt_judged[ 1 ]
+                                                                                   raised  = `x` ) ).
+
+    " judged by the window: below the threshold again
+    lt_judged = z2ui5_cl_cockpit_alert=>judged(
+        it_open   = VALUE #( ( id = `A1` rule_id = z2ui5_if_cockpit_notify=>cs_rule-p95 app = c_app threshold = `2000 ms` ) )
+        it_window = VALUE #( ( app = c_app roundtrips = 50 ) )
+        is_set    = settings( ) ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*is below 2000 ms again*`
+                                         act = z2ui5_cl_cockpit_alert=>clear_text( is_open = lt_judged[ 1 ]
+                                                                                   raised  = `x` ) ).
 
   ENDMETHOD.
 

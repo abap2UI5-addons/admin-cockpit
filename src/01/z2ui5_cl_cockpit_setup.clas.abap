@@ -138,6 +138,12 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! Forget the buffered settings (after a save, and in tests).
     CLASS-METHODS reset_buffer.
 
+    "! Delete the pseudonym salt of every day before today - the daily purge
+    "! does (z2ui5_cl_cockpit_job=&gt;purge_own), so a day's pseudonyms can no
+    "! longer be recomputed from a name once the day is over, whether or not
+    "! a later day records anything. No commit.
+    CLASS-METHODS delete_old_salts.
+
     "! Run this roll area with the given settings instead of the stored
     "! ones, until reset_buffer( ) - for unit tests, and for a forwarding
     "! monitor that wants other settings than the cockpit's.
@@ -583,6 +589,18 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     gv_salt_day = day.
     gv_salt     = lv_value.
     result      = gv_salt.
+
+  ENDMETHOD.
+
+  METHOD delete_old_salts.
+
+    DATA(lv_name) = CONV ty_s_row-name( |SALT_{ day_of( now( ) ) }| ).
+    DELETE FROM z2ui5_t_26
+      WHERE name LIKE 'SALT_%'
+        AND name < @lv_name.
+    IF gv_salt_day < day_of( now( ) ).
+      CLEAR: gv_salt_day, gv_salt.
+    ENDIF.
 
   ENDMETHOD.
 

@@ -7,9 +7,10 @@
 "! run( ) - called by the housekeeping job z2ui5_cl_cockpit_job=&gt;run( ) -
 "! keeps the history in Z2UI5_T_23: an alert is raised by the first run
 "! that finds the threshold exceeded and cleared by the first run that no
-"! longer finds it with enough roundtrips to judge, and each of the two is
-"! handed to the customer class implementing z2ui5_if_cockpit_notify, if
-"! there is one.
+"! longer finds it with enough roundtrips to judge - or, without a verdict,
+"! once its rule is switched off or its app has had no roundtrip for
+"! c_idle_days days -, and each of the two is handed to the customer class
+"! implementing z2ui5_if_cockpit_notify, if there is one.
 "!
 "! Reads only the cockpit's own tables: without the monitor (package 02)
 "! there are no figures and nothing is ever raised.
@@ -99,6 +100,19 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
     " without the prefix - z2ui5_cl_cockpit_inst=>obj_name( ) puts it in front
     CONSTANTS c_notify_intf TYPE string VALUE `IF_COCKPIT_NOTIFY`.
 
+    "! Days without any roundtrip of its app after which an open alert is
+    "! closed without a verdict - the app was removed, renamed or is no
+    "! longer used, and no window would ever judge it again.
+    CONSTANTS c_idle_days TYPE i VALUE 7.
+
+    CONSTANTS:
+      "! Why judged( ) hands an open alert on although the window cannot
+      "! judge it: its rule is off, or its app idle.
+      BEGIN OF cs_closing,
+        rule_off TYPE string VALUE `RULE_OFF`,
+        idle     TYPE string VALUE `IDLE`,
+      END OF cs_closing.
+
     TYPES:
       BEGIN OF ty_s_open,
         id        TYPE c LENGTH 32,
@@ -109,6 +123,8 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
         threshold TYPE c LENGTH 30,
         cnt       TYPE i,
         note      TYPE c LENGTH 255,
+        " set by judged( ) - cs_closing, empty when the window judges it
+        closing   TYPE string,
       END OF ty_s_open.
     TYPES ty_t_open TYPE STANDARD TABLE OF ty_s_open WITH EMPTY KEY.
 
@@ -117,8 +133,9 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The alert rules over the window figures - pure. An app below the
     "! minimum of roundtrips raises nothing; the line over all apps raises
-    "! a rule only when no single app raises it already. The error rate is
-    "! no rule in mode ERRORS, which records failed roundtrips only.
+    "! a rule only when no single app raises it already. Neither the error
+    "! rate nor the p95 is a rule in mode ERRORS, which records failed
+    "! roundtrips only (every rate 100 %, the p95 that of the failures).
     CLASS-METHODS evaluate
       IMPORTING
         it_window     TYPE z2ui5_cl_cockpit_stats=>ty_t_window
@@ -128,15 +145,36 @@ CLASS z2ui5_cl_cockpit_alert DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The open alerts the window can judge - pure. The alert of an app (or
     "! of all apps) with fewer roundtrips in the window than the minimum is
-    "! left out and stays open: a quiet hour is no recovery. The alert of a
-    "! rule that is switched off is judged - and cleared.
+    "! left out and stays open: a quiet hour is no recovery - unless its app
+    "! is in it_idle (closing IDLE). The alert of a rule that is switched off,
+    "! or not evaluated in the mode, is handed on too (closing RULE_OFF);
+    "! diff( ) then clears both.
+    "! @parameter it_idle | apps (empty: all apps) without any roundtrip for c_idle_days days
     CLASS-METHODS judged
       IMPORTING
         it_open       TYPE ty_t_open
         it_window     TYPE z2ui5_cl_cockpit_stats=>ty_t_window
         is_set        TYPE z2ui5_cl_cockpit_setup=>ty_s_settings
+        it_idle       TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_t_open.
+
+    "! The apps of the open alerts without any roundtrip for c_idle_days
+    "! days - empty for the alert over all apps when no app had one.
+    CLASS-METHODS idle_apps
+      IMPORTING
+        it_open       TYPE ty_t_open
+      RETURNING
+        VALUE(result) TYPE string_table.
+
+    "! The text of a cleared alert - pure: below the threshold again, or
+    "! closed without a verdict (cs_closing).
+    CLASS-METHODS clear_text
+      IMPORTING
+        is_open       TYPE ty_s_open
+        raised        TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! What changed since the last run - pure: the alerts of it_now without
     "! an open row are raised, the open rows without an alert are cleared.
@@ -214,7 +252,9 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
         ENDIF.
       ENDIF.
 
-      IF is_set-alert_p95_ms > 0 AND ls_win-p95_ms >= is_set-alert_p95_ms.
+      " ERRORS: the p95 of the failed roundtrips only - no response time
+      IF is_set-alert_p95_ms > 0 AND is_set-mode <> z2ui5_cl_cockpit_setup=>cs_mode-errors
+          AND ls_win-p95_ms >= is_set-alert_p95_ms.
         APPEND VALUE #( rule       = z2ui5_if_cockpit_notify=>cs_rule-p95
                         app        = ls_win-app
                         value      = |{ ls_win-p95_ms } ms|
@@ -244,8 +284,11 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
         WHEN z2ui5_if_cockpit_notify=>cs_rule-error_rate
         THEN xsdbool( is_set-alert_err_pct > 0 AND is_set-mode <> z2ui5_cl_cockpit_setup=>cs_mode-errors )
         WHEN z2ui5_if_cockpit_notify=>cs_rule-p95
-        THEN xsdbool( is_set-alert_p95_ms > 0 ) ).
-      IF lv_active = abap_true.
+        THEN xsdbool( is_set-alert_p95_ms > 0 AND is_set-mode <> z2ui5_cl_cockpit_setup=>cs_mode-errors ) ).
+      CLEAR ls_open-closing.
+      IF lv_active = abap_false.
+        ls_open-closing = cs_closing-rule_off.
+      ELSE.
         DATA(lv_roundtrips) = 0.
         LOOP AT it_window INTO DATA(ls_win).
           IF CONV ty_s_open-app( ls_win-app ) = ls_open-app.
@@ -254,7 +297,11 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
           ENDIF.
         ENDLOOP.
         IF lv_roundtrips < is_set-alert_min_cnt.
-          CONTINUE.
+          DATA(lv_app) = CONV string( ls_open-app ).
+          IF lv_roundtrips > 0 OR NOT line_exists( it_idle[ table_line = lv_app ] ). "#EC CI_SORTSEQ
+            CONTINUE.
+          ENDIF.
+          ls_open-closing = cs_closing-idle.
         ENDIF.
       ENDIF.
       APPEND ls_open TO result.
@@ -316,7 +363,8 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
     diff( EXPORTING it_open    = judged( it_open   = lt_open
                                          it_window = lt_window
-                                         is_set    = ls_set )
+                                         is_set    = ls_set
+                                         it_idle   = idle_apps( lt_open ) )
                     it_now     = lt_now
           IMPORTING et_raised  = lt_raised
                     et_cleared = lt_cleared ).
@@ -358,8 +406,8 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
                                          roundtrips = ls_open-cnt
                                          raised     = z2ui5_cl_cockpit_setup=>ts_text( ls_open-raised )
                                          system     = lv_system ).
-      ls_clear-text = |{ rule_text( ls_open-rule_id ) } { app_text( ls_open-app ) } is below | &&
-                      |{ ls_open-threshold } again (raised { ls_clear-raised } UTC at { ls_open-measured })|.
+      ls_clear-text = clear_text( is_open = ls_open
+                                  raised  = ls_clear-raised ).
       DATA(lv_note) = CONV ty_s_open-note( |{ ls_open-note }; cleared: { notify( ls_clear ) }| ).
       UPDATE z2ui5_t_23
         SET cleared = @lv_now,
@@ -370,6 +418,53 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
 
     result-message = |alerts: { result-raised } raised, { result-cleared } cleared, | &&
                      |{ lines( lt_now ) } threshold(s) exceeded now|.
+
+  ENDMETHOD.
+
+  METHOD idle_apps.
+
+    " host variables named like no column (the 7.02 downport drops the @)
+    DATA lv_day TYPE c LENGTH 8.
+    DATA lv_app TYPE ty_s_open-app.
+    DATA lv_seen TYPE abap_bool.
+
+    lv_day = z2ui5_cl_cockpit_setup=>day_minus( c_idle_days ).
+    LOOP AT it_open INTO DATA(ls_open).
+      lv_app = ls_open-app.
+      CLEAR lv_seen.
+      TRY.
+          IF lv_app IS INITIAL.
+            SELECT SINGLE @abap_true FROM z2ui5_t_22
+              WHERE utc_day >= @lv_day
+              INTO @lv_seen. "#EC CI_NOORDER
+          ELSE.
+            SELECT SINGLE @abap_true FROM z2ui5_t_22
+              WHERE app = @lv_app
+                AND utc_day >= @lv_day
+              INTO @lv_seen. "#EC CI_NOORDER
+          ENDIF.
+        CATCH cx_root.
+          " cannot tell - keep it open
+          lv_seen = abap_true.
+      ENDTRY.
+      IF lv_seen = abap_false.
+        INSERT CONV string( lv_app ) INTO TABLE result.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD clear_text.
+
+    result = SWITCH #( is_open-closing
+      WHEN cs_closing-rule_off
+      THEN |{ rule_text( is_open-rule_id ) } { app_text( is_open-app ) } closed without a verdict - the rule is switched off | &&
+           |or not evaluated in this recording mode (raised { raised } UTC at { is_open-measured })|
+      WHEN cs_closing-idle
+      THEN |{ rule_text( is_open-rule_id ) } { app_text( is_open-app ) } closed without a verdict - no roundtrip for | &&
+           |{ c_idle_days } days (raised { raised } UTC at { is_open-measured })|
+      ELSE |{ rule_text( is_open-rule_id ) } { app_text( is_open-app ) } is below | &&
+           |{ is_open-threshold } again (raised { raised } UTC at { is_open-measured })| ).
 
   ENDMETHOD.
 
@@ -446,8 +541,8 @@ CLASS z2ui5_cl_cockpit_alert IMPLEMENTATION.
       result-text       = |{ lines( it_now ) } alert threshold(s) exceeded in { lv_window }.|.
     ENDIF.
 
-    IF ls_set-alert_err_pct > 0 AND ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
-      result-text = result-text && ` The error rate is not evaluated: mode ERRORS records failed roundtrips only.`.
+    IF ( ls_set-alert_err_pct > 0 OR ls_set-alert_p95_ms > 0 ) AND ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
+      result-text = result-text && ` Neither the error rate nor the p95 is evaluated: mode ERRORS records failed roundtrips only.`.
     ENDIF.
     result-text = result-text && | Alerts are kept and sent by the housekeeping job z2ui5_cl_cockpit_job=>run( )| &&
                   COND string( WHEN result-notifier IS INITIAL

@@ -203,12 +203,12 @@ which decides by the settings what is persisted:
 |---|---|---|
 | `Z2UI5_T_22` | every recorded roundtrip, updated in place, lock-free | per UTC day, hour, app and event: count, app starts, errors, slow ones, sum and max of the total and of each phase, request/response KB, largest response and model, browser time, and a latency histogram of nine buckets (the p95 is interpolated from it) |
 | `Z2UI5_T_27` | once per user, day and app | the user key (see privacy) - distinct users per day |
-| `Z2UI5_T_20` | every recorded roundtrip | user key and app with the last-seen time - the Live tab |
+| `Z2UI5_T_20` | every recorded roundtrip | user key and app with the last-seen time and the last event - the Live tab (column `CNT` is unused and stays empty) |
 | `Z2UI5_T_25` | errors and slow roundtrips only | one raw row: timings per phase, sizes, draft ids, exception class, first line and full chain |
 | `Z2UI5_T_26` | settings | name/value |
 | `Z2UI5_T_21` | administrators | user names |
 | `Z2UI5_T_24` | every change made in the cockpit | change log: time, user, action, details - kept as long as the aggregates |
-| `Z2UI5_T_23` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - kept as long as the aggregates |
+| `Z2UI5_T_23` | by the housekeeping job, per raised or cleared alert | alert history: rule, app, value, threshold, raised and cleared, what the notification answered - a cleared alert kept as long as the aggregates, an open one until it is cleared |
 
 **Lock-free and overflow-safe.** A roundtrip is added to the row of its hour
 with one `UPDATE ... SET cnt = cnt + 1, ms_sum = ms_sum + n, ...` - atomic on
@@ -244,9 +244,13 @@ ABAP only.
 (settings and the daily salt are read once per roll area). Mode `SAMPLE`
 records errors fully and only a share of the rest - decided on the
 milliseconds of the start time - weighted so counts stay estimates of the
-totals; `ERRORS` records failed roundtrips only (no error rate then - the
-Overview shows none, and the error-rate alert and hint are not evaluated); `OFF` stops
-recording without uninstalling. The own tables purge themselves once per day
+totals - but the users per day and per app count only the users of the
+recorded roundtrips, and an app with few roundtrips can show up as unused;
+`ERRORS` records failed roundtrips only (no error rate, no user count, no
+unused apps then - the Overview shows none, the p95 is that of the failures,
+and the error-rate and p95 alerts and the hint are not evaluated); `OFF` stops
+recording without uninstalling. The line above the figures says what the
+mode leaves out. The own tables purge themselves once per day
 on the first recorded roundtrip that is not sticky: that roundtrip claims the
 UTC day (`LAST_PURGE` moves forward in one conditional `UPDATE`, committed on
 its own), so exactly one work process purges and no other waits for it.
@@ -282,10 +286,22 @@ to the default (except where `0` switches something off).
 **Privacy mode is on by default: no user names are stored.**
 
 - `HASH` (default) - users are counted under a SHA-256 pseudonym of a random
-  salt and the user name. The salt is created per UTC day and the previous
-  day's salt is deleted, so a pseudonym can neither be traced back to a name
-  nor linked to the same user on another day - not even by an administrator
-  with database access. Hence "users per day", never "users per month".
+  salt and the user name. The salt is created per UTC day and deleted once
+  the day is over - by the next day's first recorded roundtrip, by the daily
+  purge and by the housekeeping job, whichever comes first (with recording
+  `OFF` and no job scheduled, it stays until one of them runs). From then
+  on a pseudonym can neither be traced back to a name nor linked to the
+  same user on another day - not even by an administrator with database
+  access. Hence "users per day", never "users per month". **While the day
+  runs**, whoever can read table `Z2UI5_T_26` can recompute that day's
+  pseudonyms from a list of user names.
+- **Draft ids link back to users** while the draft exists: the raw log
+  (`Z2UI5_T_25`, errors and slow roundtrips) and the recorder
+  (`Z2UI5_T_28`) keep the draft ids of a roundtrip, and abap2UI5's draft
+  table carries the user name of every draft until the draft expires and is
+  deleted (4 hours by default). For that long an administrator with
+  database access can link those rows - and the pseudonym in them - to a
+  user.
 - `NONE` - users are not counted at all; Live shows apps, not users.
 - `NAME` - user names are stored (raw log, user and activity tables) and shown
   in the error details.
@@ -732,8 +748,9 @@ before it (default: 1, so 60 to 120 minutes), per app and over all apps:
 - the line over all apps raises a rule only when no single app raises it
   already - it is there for the many small apps that stay below the minimum
   one by one, and one broken app is not reported twice;
-- in mode `ERRORS` the error rate is no rule - only failed roundtrips are
-  recorded, so every rate would be 100 %.
+- in mode `ERRORS` neither rule is evaluated - only failed roundtrips are
+  recorded, so every rate would be 100 % and the p95 would be that of the
+  failures.
 
 The Overview tab evaluates the rules live: what is exceeded right now, and the
 history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
@@ -743,7 +760,11 @@ so a broken app costs one notification when it breaks and one when it is fine
 again, not one per run. An app with fewer roundtrips in the window than the
 minimum cannot be judged: its alert stays open until there are enough again
 (a quiet night is no recovery), and a run whose evaluation fails changes
-nothing. Schedule the job every 15 minutes (see
+nothing. Two cases close an alert *without a verdict*, with a notification
+that says so (never "below the threshold again"): its rule is switched off
+(or not evaluated in the recording mode), or its app has had no roundtrip
+at all for 7 days (removed, renamed, no longer used). An open alert is never
+purged; a cleared one is kept as long as the aggregates. Schedule the job every 15 minutes (see
 [Housekeeping and background jobs](#housekeeping-and-background-jobs)); without
 it the Overview still shows what is exceeded, but nothing is kept or sent.
 
@@ -791,7 +812,10 @@ framework computes - 4 hours by default, or what your user exit sets) through
 the framework's own draft store, and purges the cockpit's rows past their
 retention. For a job, call `z2ui5_cl_cockpit_job=>run( )` - it also evaluates
 the [alerts](#alerts), so schedule it every 15 minutes when you want to be
-notified:
+notified. Its three parts - the own tables, the drafts, the alerts - fail
+on their own: a purge that fails (a lock timeout, a half-imported table) is
+rolled back and named in the job's message, and the drafts and the alerts
+still run:
 
 - **Standard ABAP** - a two-line report, scheduled in SM36:
 
