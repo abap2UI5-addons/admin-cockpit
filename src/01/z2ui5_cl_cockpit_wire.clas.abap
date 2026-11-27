@@ -1297,7 +1297,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     TRY.
         SELECT SINGLE * FROM z2ui5_t_28
           WHERE id = @lv_id
-          INTO @ls_row.
+          INTO CORRESPONDING FIELDS OF @ls_row.
         IF sy-subrc <> 0.
           result-error = `The recording is gone - deleted by its retention.`.
           RETURN.

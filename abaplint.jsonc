@@ -130,6 +130,21 @@
       "skipSharedMemory": true,
       "skipTestclasses": true
     },
+    // a database statement in a loop - except for the deliberate ones of
+    // these files: the IN lists of 50 draft ids each (session fill_steps and
+    // fill_monitor, wire get_records), the lock-free UPDATE / INSERT / UPDATE
+    // of an hour row (rec, AGENTS.md "Lock-free aggregation") and the UPDATE
+    // per cleared alert, each with its own note (alert run). abaplint has no
+    // pseudo comment for this rule, so a file is the finest exclusion
+    "db_operation_in_loop": {
+      "exclude": [
+        "/src/01/z2ui5_cl_cockpit_alert\\.clas\\.abap$",
+        "/src/01/z2ui5_cl_cockpit_rec\\.clas\\.abap$",
+        "/src/01/z2ui5_cl_cockpit_session\\.clas\\.abap$",
+        "/src/01/z2ui5_cl_cockpit_wire\\.clas\\.abap$"
+      ],
+      "severity": "Error"
+    },
     "description_empty": true,
     "dynpro_checks": true,
     "easy_to_find_messages": true,
@@ -282,6 +297,7 @@
       "severity": "Error"
     },
     "rfc_error_handling": true,
+    "select_performance": true,
     "select_single_full_key": true,
     "selection_screen_naming": true,
     "short_case": true,

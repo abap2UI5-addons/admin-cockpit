@@ -791,10 +791,10 @@ CLASS ltcl_session_db IMPLEMENTATION.
                         ( id = `ZZCKUT2` id_prev = `ZZCKUT1` timestampl = `20991231100005.0` data = order( `4711` ) )
                         ( id = `ZZCKUT3` id_prev = `ZZCKUT2` timestampl = `20991231100105.0` data = order( `4712` ) ) ).
     lv_tab = c_table.
-    LOOP AT lt_draft INTO DATA(ls_draft).
-      ls_draft-mandt = sy-mandt.
-      INSERT (lv_tab) FROM @ls_draft.
+    LOOP AT lt_draft ASSIGNING FIELD-SYMBOL(<draft>).
+      <draft>-mandt = sy-mandt.
     ENDLOOP.
+    INSERT (lv_tab) FROM TABLE @lt_draft.
 
     " what the monitor logged: the slow roundtrip that wrote step 3, and a
     " failed one that started from step 2

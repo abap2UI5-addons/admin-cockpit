@@ -116,7 +116,7 @@ CLASS ltcl_rec IMPLEMENTATION.
       WHERE utc_day = @lv_day
         AND app     = @lv_app
         AND event   = @lv_event
-      INTO @result. "#EC CI_NOORDER
+      INTO CORRESPONDING FIELDS OF @result. "#EC CI_NOORDER
     IF sy-subrc <> 0.
       CLEAR result.
     ENDIF.
@@ -130,7 +130,7 @@ CLASS ltcl_rec IMPLEMENTATION.
     SELECT * FROM z2ui5_t_25
       WHERE app = @lv_app
       ORDER BY timestampl
-      INTO TABLE @result.
+      INTO CORRESPONDING FIELDS OF TABLE @result.
 
   ENDMETHOD.
 
