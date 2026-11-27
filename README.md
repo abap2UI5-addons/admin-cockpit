@@ -169,7 +169,7 @@ of the installation with the same name.
 | **Errors** | Grouped by app, event, exception class and first line, with count and first/last seen; the detail shows every occurrence, the full exception chain, the draft id and the user (pseudonymized by default), and **what the user did afterwards** - continued from the same screen, stopped there, still open (from the drafts) - **Analyze failures**: the values the failing cases share and other states of the app rarely have, and the business objects they concern - **Open session**: the user's steps up to the error (see [Sessions](#sessions---step-through-what-a-user-did)) - and **Reproduce**: re-run the failed event on its draft (see [Reproduce an error](#reproduce-an-error)) | monitor (Reproduce: headless-frontend) |
 | **Performance** | The slowest roundtrips with their phase breakdown (load / main / render, plus the browser's own measure), and runtime hints: model larger than 1 MB, large responses, slow p95, growing app state, dominant phases, expired drafts nobody deletes | monitor |
 | **Drafts & Housekeeping** | Rows, age, owners and expiry of the abap2UI5 draft table, size per app on demand; the **sessions** in it - step through what a user did, roundtrip by roundtrip (see [Sessions](#sessions---step-through-what-a-user-did)); **find a value** (an order number, a customer) in all drafts; the **navigation** between apps; delete expired drafts (with confirmation), purge the cockpit's own log by retention - the same as a class for a background job | - |
-| **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access. Every check with status, why it matters and how to fix it | - |
+| **Installation & Security** | abap2UI5 version, platform, user exit, UI5 bootstrap and theme, the installed addons - and a **security traffic light**: CSRF origin check, hidden error details, CSP without `'unsafe-eval'`/`'unsafe-inline'`, security headers, reachable developer addons, the cockpit's own access, how many drafts of a session the framework keeps. Every check with status, why it matters and how to fix it | - |
 | **Live** | Who is active now: drafts written in the last 5 minutes, apps in use from the monitor, the **sessions active right now** - open one to see what the user is doing - and a pointer to the lock-manager addon's monitor when it is installed | (monitor) |
 | **Agents** | What AI agents did through the [agent addon](https://github.com/abap2UI5-addons/abap-agent-runtime)'s MCP endpoint: calls per day, per app and per MCP client, refusals by policy and by validation, the last calls, endpoint enabled yes/no (see [Agents](#agents)) | agent addon |
 | **Settings** | Monitor mode, slow threshold, retention, privacy mode, alert thresholds with a test notification, administrators, and the change log (claims, administrators, settings, deletions, reproductions, opened and exported sessions, draft searches, failure analyses, test notifications) | - |
@@ -244,9 +244,12 @@ ABAP only.
 (settings and the daily salt are read once per roll area). Mode `SAMPLE`
 records errors fully and only a share of the rest - decided on the
 milliseconds of the start time - weighted so counts stay estimates of the
-totals; `ERRORS` records failed roundtrips only; `OFF` stops
+totals; `ERRORS` records failed roundtrips only (no error rate then - the
+Overview shows none, and the error-rate alert and hint are not evaluated); `OFF` stops
 recording without uninstalling. The own tables purge themselves once per day
-on the first recorded roundtrip.
+on the first recorded roundtrip that is not sticky: that roundtrip claims the
+UTC day (`LAST_PURGE` moves forward in one conditional `UPDATE`, committed on
+its own), so exactly one work process purges and no other waits for it.
 
 **Only one monitor is called.** If your installation has a monitor of its own
 that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
@@ -257,7 +260,7 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 | Setting | Default | |
 |---|---|---|
 | Mode | `ALL` | `ALL`, `SAMPLE`, `ERRORS`, `OFF` |
-| Sample share | 10 % | `SAMPLE` only |
+| Sample share | 10 % | `SAMPLE` only; 1, 2, 4, 5, 10, 20, 25, 50 or 100 - another value is rounded down to one of them, so each sample counts a whole number of times |
 | Slow roundtrip from | 2000 ms | lands in the raw log with its phases |
 | Retention log, users, activity | 30 days | |
 | Retention aggregates | 400 days | |
@@ -269,6 +272,10 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 | Alert: only with at least | 20 roundtrips | per app, and over all apps |
 | Alert: window | running UTC hour plus 1 | `0` to `23` hours before the running one |
 | Recorder retention | 2 days | `0` stops the [recorder](#recorder---replay-what-the-user-saw) |
+
+A day setting takes at most 36,500 days and a size threshold at most
+2,097,151 KB; a larger value is cut to that, a value of `0` or below falls back
+to the default (except where `0` switches something off).
 
 ## Privacy and the works council
 
@@ -328,7 +335,9 @@ top of `main( )`:
 
    `action` is `DISPLAY` (open the cockpit) or `CHANGE` (delete drafts, purge
    logs, change settings and administrators, reproduce errors). A class that
-   cannot be created denies.
+   cannot be created denies, and so does a cockpit that cannot look up the
+   implementers of the interface (the framework's class lookup failed): it
+   lets nobody in and offers no claim until the lookup works again.
 2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_21`).
    Only the users on it get in; everybody else sees "No authorization".
 3. **As long as that list is empty, the cockpit shows only the claim
@@ -371,7 +380,8 @@ view XML the roundtrip displayed.
 
 **It re-runs the app logic for real.** Whatever the event writes, posts or
 sends happens again - as the administrator, with the administrator's
-authorizations, and committed if the app commits. The cockpit therefore asks
+authorizations, and committed if the app commits (when the event raises
+again, what it wrote and did not commit is rolled back). The cockpit therefore asks
 first, offers it to administrators only (`CHANGE`) and writes every replay to
 the change log before it starts. Limits, all shown in the dialog:
 
@@ -392,8 +402,13 @@ activates without it and simply does not offer the button.
 Every POST roundtrip of abap2UI5 saves the app as it is afterwards into a new
 draft and names the draft it started from (`ID_PREV`), across app navigations
 too. Followed backwards, the drafts of one browser session form a chain - the
-**session**. The Drafts & Housekeeping tab lists the sessions in the draft
-table (**Show sessions**, newest activity first, searchable by app or user):
+**session**. abap2UI5 prunes these chains by default: it keeps only the
+newest drafts of a session (`draft_keep_per_chain`, 2 out of the box), so the
+viewer, the steps before an error and *what the user did afterwards* see only
+those - an outcome of an older step is *unknown*. For the whole history set `cs_config-draft_keep_per_chain = 0` in
+`set_config_http_post` of your user exit (the draft table then grows until the
+drafts expire); the traffic light shows the setting. The Drafts & Housekeeping
+tab lists the sessions in the draft table (**Show sessions**, newest activity first, searchable by app or user):
 user, app, number of steps, **failed roundtrips** the monitor logged in the
 session (*With errors only* keeps just those), first and last step, duration.
 The same list, limited to the last 5 minutes, is on the **Live** tab - who is
@@ -405,7 +420,7 @@ Open one and the viewer shows it **step by step**:
 - **First / Back / Next / Last**, or select any step in the list - time,
   seconds since the step before, app, size, and notes such as *navigated to
   ZCL_...*, *continues step 3* (browser back or a second window) or *the steps
-  before it expired*;
+  before it expired* (*are gone (pruned or expired)* while the framework prunes);
 - how many **fields changed** in the step - a step that changed nothing is
   marked *no field changed*, and when that happens twice or more in a row the
   viewer warns: the user pressed something again and again without effect (a
@@ -663,6 +678,13 @@ everything a screen shows. Recordings are read by administrators only and only
 inside a session that is already written to the change log; the user is
 stored under the pseudonym unless user tracking is `NAME`. Keep the retention
 short and agree it with your works council like the rest of the monitoring.
+What is typed into a password field is not stored: the value of every member
+bound to an `Input` of type `Password` in the view of a response, and of every
+member named like a password (`PASSW...`, `KENNWORT`, `PWD`, `SECRET`, case
+ignored), is replaced by `***` in both bodies before they are written. A field
+of another kind is masked only when its name says so - name secret fields
+accordingly. The cockpit's own roundtrips are not recorded: its screens show the
+recordings, sessions and figures of other users.
 
 ## Agents
 
@@ -696,14 +718,19 @@ before it (default: 1, so 60 to 120 minutes), per app and over all apps:
   raises nothing - three failures out of four are no alert;
 - the line over all apps raises a rule only when no single app raises it
   already - it is there for the many small apps that stay below the minimum
-  one by one, and one broken app is not reported twice.
+  one by one, and one broken app is not reported twice;
+- in mode `ERRORS` the error rate is no rule - only failed roundtrips are
+  recorded, so every rate would be 100 %.
 
 The Overview tab evaluates the rules live: what is exceeded right now, and the
 history. The **housekeeping job** `z2ui5_cl_cockpit_job=>run( )` keeps that
 history in `Z2UI5_T_23`: an alert is *raised* by the first run that finds
 the threshold exceeded and *cleared* by the first run that no longer finds it -
 so a broken app costs one notification when it breaks and one when it is fine
-again, not one per run. Schedule the job every 15 minutes (see
+again, not one per run. An app with fewer roundtrips in the window than the
+minimum cannot be judged: its alert stays open until there are enough again
+(a quiet night is no recovery), and a run whose evaluation fails changes
+nothing. Schedule the job every 15 minutes (see
 [Housekeeping and background jobs](#housekeeping-and-background-jobs)); without
 it the Overview still shows what is exceeded, but nothing is kept or sent.
 

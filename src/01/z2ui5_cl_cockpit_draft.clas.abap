@@ -71,8 +71,8 @@ CLASS z2ui5_cl_cockpit_draft DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! Reads the serialized state of up to max_rows drafts and reports size
     "! per app. The app is taken from the serialized object graph - an
-    "! estimate, see app_of_draft. Reads every owner's drafts, reports sizes
-    "! and class names only, never content.
+    "! estimate, see z2ui5_cl_cockpit_session=&gt;app_of. Reads every owner's
+    "! drafts, reports sizes and class names only, never content.
     CLASS-METHODS analyze
       IMPORTING
         max_rows      TYPE i DEFAULT 20000
@@ -99,6 +99,8 @@ CLASS z2ui5_cl_cockpit_draft DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! The app class of a serialized draft - the first global class in the
     "! asXML object graph that is not part of the framework itself.
+    "! Deprecated - z2ui5_cl_cockpit_session=&gt;app_of( ) answers the same;
+    "! kept for callers of its own.
     CLASS-METHODS app_of_draft
       IMPORTING
         data          TYPE string
@@ -197,26 +199,13 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
 
   METHOD analyze.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        id   TYPE c LENGTH 32,
-        data TYPE string,
-      END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE z2ui5_cl_cockpit_session=>ty_t_page.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
     DATA lt_app TYPE SORTED TABLE OF ty_s_app WITH UNIQUE KEY app.
     DATA lv_bytes_total TYPE p LENGTH 16 DECIMALS 0.
 
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( c_table ).
-
     DO.
-      CLEAR lt_rows.
-      SELECT id, data FROM (lv_tab)
-        WHERE id > @lv_last
-        ORDER BY id
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-        UP TO 200 ROWS.
+      lt_rows = z2ui5_cl_cockpit_session=>read_page( lv_last ).
       IF lt_rows IS INITIAL.
         EXIT.
       ENDIF.
@@ -224,7 +213,7 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
       LOOP AT lt_rows INTO DATA(ls_row).
         DATA(lv_len) = strlen( ls_row-data ).
         lv_bytes_total = lv_bytes_total + lv_len.
-        DATA(lv_app) = app_of_draft( ls_row-data ).
+        DATA(lv_app) = z2ui5_cl_cockpit_session=>app_of( ls_row-data ).
         IF lv_app IS INITIAL.
           lv_app = `(unknown)`.
         ENDIF.
@@ -260,54 +249,7 @@ CLASS z2ui5_cl_cockpit_draft IMPLEMENTATION.
 
   METHOD app_of_draft.
 
-    " asXML writes every object of the graph as an element in the namespace
-    " of global classes - <x:CLASSNAME xmlns:x="...classes/global" id="o2">.
-    " The framework's own container comes first; the app is the first class
-    " that is not the framework's.
-    CONSTANTS lc_marker TYPE string VALUE `/classes/global"`.
-    DATA lv_offset TYPE i.
-
-    DO 20 TIMES.
-      DATA(lv_rest) = substring( val = data
-                                 off = lv_offset ).
-      DATA(lv_hit) = find( val = lv_rest
-                           sub = lc_marker ).
-      IF lv_hit < 0.
-        RETURN.
-      ENDIF.
-      DATA(lv_head) = substring( val = lv_rest
-                                 len = lv_hit ).
-      lv_offset = lv_offset + lv_hit + strlen( lc_marker ).
-
-      DATA(lv_open) = find( val  = lv_head
-                            sub  = `<`
-                            occ  = -1 ).
-      IF lv_open < 0.
-        CONTINUE.
-      ENDIF.
-      DATA(lv_tag) = substring( val = lv_head
-                                off = lv_open + 1 ).
-      lv_tag = substring_before( val = lv_tag
-                                 sub = ` ` ).
-      IF lv_tag CS `:`.
-        lv_tag = substring_after( val = lv_tag
-                                  sub = `:` ).
-      ENDIF.
-      " a namespace slash is written as _- in an XML name
-      REPLACE ALL OCCURRENCES OF `_-` IN lv_tag WITH `/`.
-      lv_tag = to_upper( lv_tag ).
-
-      " the framework's classes behind the installation's prefix - a rename
-      " rewrites references, never a literal
-      IF lv_tag IS INITIAL
-          OR lv_tag CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` )
-          OR lv_tag CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` )
-          OR lv_tag CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ).
-        CONTINUE.
-      ENDIF.
-      result = lv_tag.
-      RETURN.
-    ENDDO.
+    result = z2ui5_cl_cockpit_session=>app_of( data ).
 
   ENDMETHOD.
 

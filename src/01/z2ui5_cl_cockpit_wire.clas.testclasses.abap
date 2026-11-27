@@ -20,6 +20,7 @@ CLASS ltcl_wire DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     METHODS input_of_request FOR TESTING.
     METHODS views_of_response FOR TESTING.
     METHODS row_of_bodies FOR TESTING RAISING cx_static_check.
+    METHODS passwords_masked FOR TESTING.
     METHODS no_json FOR TESTING.
     METHODS control_pressed FOR TESTING.
     METHODS control_of_field FOR TESTING.
@@ -140,6 +141,36 @@ CLASS ltcl_wire IMPLEMENTATION.
                                         act = ls_row-res_body ).
     cl_abap_unit_assert=>assert_equals( exp = sy-uname
                                         act = ls_row-uname ).
+
+  ENDMETHOD.
+
+  METHOD passwords_masked.
+
+    " the view of the response has a password input bound to MV_PIN; the
+    " request carries a member named like a password
+    DATA(lv_response) = `{"S_FRONT":{"ID":"X","APP":"ZCL_LOGIN","PROTOCOL":2,"S_ACTION":{"T_SYSTEM":[["VIEW_SLOTS",` &&
+                        `"display","MAIN","<mvc:View><Input type=\"Password\" value=\"{/XX/MV_PIN}\"/>` &&
+                        `<Input value=\"{/XX/MV_USER}\"/></mvc:View>"]]}},"MODEL":{"XX":{"MV_PIN":"4711",` &&
+                        `"MV_USER":"ALICE"}}}`.
+    DATA(lv_request) = `{"S_FRONT":{"ID":"X","EVENT":"LOGIN"},"XX":{"MV_USER":"ALICE",` &&
+                       `"MS_LOGIN":{"Password":"se\"cret","PWD_OLD":12345}}}`.
+
+    DATA(lt_name) = z2ui5_cl_cockpit_wire=>secret_names_of( lv_response ).
+    cl_abap_unit_assert=>assert_equals( exp = VALUE string_table( ( `MV_PIN` ) )
+                                        act = lt_name ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = `{"S_FRONT":{"ID":"X","EVENT":"LOGIN"},"XX":{"MV_USER":"ALICE",` &&
+              `"MS_LOGIN":{"Password":"***","PWD_OLD":"***"}}}`
+        act = z2ui5_cl_cockpit_wire=>masked( body    = lv_request
+                                            it_name = lt_name ) ).
+    DATA(lv_masked) = z2ui5_cl_cockpit_wire=>masked( body    = lv_response
+                                                    it_name = lt_name ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*"MV_PIN":"***","MV_USER":"ALICE"*`
+                                         act = lv_masked ).
+    " the view itself is left as it was
+    cl_abap_unit_assert=>assert_char_cp( exp = `*type=\"Password\" value=\"{/XX/MV_PIN}\"*`
+                                         act = lv_masked ).
 
   ENDMETHOD.
 

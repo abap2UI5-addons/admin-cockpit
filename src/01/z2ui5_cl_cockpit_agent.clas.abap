@@ -349,7 +349,7 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
       lv_date = z2ui5_cl_cockpit_setup=>day_minus( 0 ).
     ENDIF.
     DO days TIMES.
-      APPEND VALUE #( day = |{ lv_date(4) }-{ lv_date+4(2) }-{ lv_date+6(2) }| ) TO result-t_day.
+      APPEND VALUE #( day = z2ui5_cl_cockpit_setup=>day_text( lv_date ) ) TO result-t_day.
       lv_date = lv_date - 1.
     ENDDO.
 
@@ -365,8 +365,7 @@ CLASS z2ui5_cl_cockpit_agent IMPLEMENTATION.
       ENDCASE.
       INSERT CONV string( ls_row-uname ) INTO TABLE lt_users.
 
-      DATA(lv_day) = z2ui5_cl_cockpit_setup=>day_of( ls_row-timestampl ).
-      DATA(lv_day_text) = |{ lv_day(4) }-{ lv_day+4(2) }-{ lv_day+6(2) }|.
+      DATA(lv_day_text) = z2ui5_cl_cockpit_setup=>day_text( z2ui5_cl_cockpit_setup=>day_of( ls_row-timestampl ) ).
       READ TABLE result-t_day ASSIGNING FIELD-SYMBOL(<day>) WITH KEY day = lv_day_text. "#EC CI_SORTSEQ
       IF sy-subrc = 0.
         <day>-calls = <day>-calls + 1.

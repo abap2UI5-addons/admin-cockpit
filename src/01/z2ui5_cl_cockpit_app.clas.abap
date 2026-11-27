@@ -1877,7 +1877,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->end(
 
             )->tag( `Label`
-                )->a( n = `text` v = `Sample share (%)`
+                )->a( n = `text` v = `Sample share (%: 1, 2, 4, 5, 10, 20, 25, 50, 100)`
             )->tag( `Input`
                 )->a( n = `value`   v = client->_bind( s_set-sample_pct )
                 )->a( n = `type`    v = `Number`
@@ -3182,7 +3182,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     DATA(lv_session) = z2ui5_cl_cockpit_session=>get_session_of( draft ).
     IF lv_session IS INITIAL.
-      client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
+      client->message_toast_display( `The drafts of this session are gone - expired or pruned.` ).
       RETURN.
     ENDIF.
     session_from_error = abap_false.
@@ -3363,7 +3363,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   RETURN.
                 ENDIF.
                 IF ls_steps-t_step IS INITIAL.
-                  client->message_toast_display( `The drafts of this session are gone - expired and deleted.` ).
+                  client->message_toast_display( `The drafts of this session are gone - expired or pruned.` ).
                   RETURN.
                 ENDIF.
 
@@ -3599,7 +3599,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     error_outcome = |After this error: { lv_continued } continued from the same screen, { lv_stopped } stopped | &&
                     |there (gave up, or started over in a new session), { lv_open } still open, { lv_unknown } | &&
-                    |unknown (the draft has expired - the drafts tell only for the last hours).|.
+                    |unknown (the draft is gone - drafts expire after hours, and abap2UI5 keeps only the newest | &&
+                    |drafts of a session unless draft_keep_per_chain is 0).|.
 
   ENDMETHOD.
 
@@ -3816,9 +3817,29 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ENDIF.
               DATA(lv_removed) = client->get_event_arg( ).
               z2ui5_cl_cockpit_setup=>remove_admin( lv_removed ).
+              " counted once more after the DELETE (it sees its own work)...
+              IF z2ui5_cl_cockpit_setup=>get_admins( ) IS INITIAL.
+                ROLLBACK WORK.                           "#EC CI_ROLLBACK
+                client->message_box_display( text = `The last administrator cannot be removed - the next ` &&
+                                                    `user to open the cockpit could claim it.`
+                                             type = `warning` ).
+                load_tab( ).
+                RETURN.
+              ENDIF.
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-remove
                                           text   = |{ lv_removed } removed| ).
               COMMIT WORK.
+              " ... and after the COMMIT: two administrators removing each
+              " other at the same moment each still saw the other one - the
+              " one who commits last finds nobody left and stays
+              IF z2ui5_cl_cockpit_setup=>get_admins( ) IS INITIAL.
+                z2ui5_cl_cockpit_setup=>add_admin( sy-uname ).
+                z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-add
+                                            text   = |{ sy-uname } kept as the last administrator| ).
+                COMMIT WORK.
+                client->message_box_display( text = |No administrator was left - { sy-uname } stays one.|
+                                             type = `warning` ).
+              ENDIF.
               load_head( ).
               load_tab( ).
             ENDIF.
@@ -3848,7 +3869,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 lv_session = z2ui5_cl_cockpit_session=>get_session_of( lv_draft ).
               ENDIF.
               IF lv_session IS INITIAL.
-                client->message_toast_display( `The drafts of this occurrence are gone - expired and deleted.` ).
+                client->message_toast_display( `The drafts of this occurrence are gone - expired or pruned.` ).
               ELSE.
                 session_from_error = abap_true.
                 session_open( id    = lv_session

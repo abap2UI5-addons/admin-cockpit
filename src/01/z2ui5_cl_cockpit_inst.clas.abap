@@ -121,6 +121,14 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post.
 
+    "! How many drafts of a session the framework keeps (draft_keep_per_chain
+    "! of the roundtrip configuration): 0 keeps every draft until it expires
+    "! - and is the answer of a release without the setting or of a
+    "! configuration that cannot be read.
+    CLASS-METHODS get_draft_keep
+      RETURNING
+        VALUE(result) TYPE i.
+
     "! The user exit class the framework found, empty when none.
     CLASS-METHODS get_user_exit_class
       RETURNING
@@ -153,7 +161,20 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
 
-    "! The script-src directive of a CSP meta tag or header value.
+    "! The same, raising when the lookup fails - for a caller that must
+    "! tell "none" from "unknown" (an access decision).
+    CLASS-METHODS read_implementers
+      IMPORTING
+        intf          TYPE clike
+      RETURNING
+        VALUE(result) TYPE z2ui5_cl_cockpit_setup=>ty_t_names
+      RAISING
+        cx_static_check.
+
+    "! A directive of one Content Security Policy - a meta tag or a header
+    "! value - with its name, between blanks: " script-src 'self' ". The
+    "! name matches exactly (script-src is not script-src-elem), the first
+    "! occurrence counts, as in the browser. Empty when the policy has none.
     CLASS-METHODS csp_directive
       IMPORTING
         csp           TYPE string
@@ -166,6 +187,22 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
   PRIVATE SECTION.
 
     CLASS-DATA gv_prefix TYPE string.
+
+    "! draft_keep_per_chain of a roundtrip configuration, read by name: the
+    "! released abap2UI5 the cockpit builds on has no such component.
+    CLASS-METHODS draft_keep_of
+      IMPORTING
+        is_post       TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post
+      RETURNING
+        VALUE(result) TYPE i.
+
+    "! The roundtrip configuration the framework computes - raises when
+    "! the framework's exit cannot be reached, like get_config_get( ).
+    CLASS-METHODS config_post
+      RETURNING
+        VALUE(result) TYPE z2ui5_if_ui5_exit=>ty_s_http_config_post
+      RAISING
+        cx_static_check.
 
     "! RTTI lookup of a class or type: found, or why it could not be loaded
     "! (error stays empty when it does not exist).
@@ -226,7 +263,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     IF result-user_exit IS INITIAL.
       result-user_exit = `(none - framework defaults)`.
     ENDIF.
-    result-draft_expiry = |{ get_config_post( )-draft_exp_time_in_hours } hours|.
+    TRY.
+        result-draft_expiry = |{ config_post( )-draft_exp_time_in_hours } hours|.
+      CATCH cx_root.
+        result-draft_expiry = `(unknown - the framework configuration is not readable)`.
+    ENDTRY.
 
     TRY.
         DATA(ls_get) = get_config_get( ).
@@ -247,9 +288,10 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
     DATA ls_get TYPE z2ui5_if_ui5_exit=>ty_s_http_config.
     TRY.
+        " both raise - an initial configuration would pass checks it fails
         ls_get = get_config_get( ).
         result = evaluate_config( is_get  = ls_get
-                                  is_post = get_config_post( ) ).
+                                  is_post = config_post( ) ).
       CATCH cx_root INTO DATA(lx).
         add_check( EXPORTING id     = `CONFIG`
                              status = cs_status-error
@@ -399,18 +441,42 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                                     `extend the default instead.`
                  CHANGING  checks = result ).
     ELSE.
-      DATA(lv_all) = to_lower( |{ lv_csp } { lv_csp_header }| ).
-      DATA(lv_script) = csp_directive( csp       = lv_all
-                                       directive = `script-src` ).
-      IF lv_script IS INITIAL.
-        lv_script = csp_directive( csp       = lv_all
-                                   directive = `default-src` ).
-      ENDIF.
+      " a page with two policies (meta tag and header) runs a script only
+      " when both allow it; a policy without script-src and default-src
+      " allows every script
+      DATA(lt_policy) = VALUE string_table( ( lv_csp ) ( lv_csp_header ) ).
+      DATA(lv_eval) = abap_true.
+      DATA(lv_inline) = abap_true.
+      DATA(lv_wild) = abap_true.
+      LOOP AT lt_policy INTO DATA(lv_policy).
+        IF lv_policy IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        DATA(lv_script) = csp_directive( csp       = lv_policy
+                                         directive = `script-src` ).
+        IF lv_script IS INITIAL.
+          lv_script = csp_directive( csp       = lv_policy
+                                     directive = `default-src` ).
+        ENDIF.
+        IF lv_script IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        IF lv_script NS `'unsafe-eval'`.
+          lv_eval = abap_false.
+        ENDIF.
+        IF lv_script NS `'unsafe-inline'`.
+          lv_inline = abap_false.
+        ENDIF.
+        IF lv_script NS ` * ` AND lv_script NS ` https: ` AND lv_script NS ` http: `
+            AND lv_script NS `cdn.jsdelivr.net` AND lv_script NS `cdnjs.cloudflare.com`.
+          lv_wild = abap_false.
+        ENDIF.
+      ENDLOOP.
 
       add_check( EXPORTING id     = `CSP_EVAL`
-                           status = COND #( WHEN lv_script CS `'unsafe-eval'` THEN cs_status-warn ELSE cs_status-ok )
+                           status = COND #( WHEN lv_eval = abap_true THEN cs_status-warn ELSE cs_status-ok )
                            title  = `CSP without 'unsafe-eval'`
-                           value  = COND #( WHEN lv_script CS `'unsafe-eval'` THEN `contains 'unsafe-eval'` ELSE `ok` )
+                           value  = COND #( WHEN lv_eval = abap_true THEN `allows 'unsafe-eval'` ELSE `ok` )
                            text   = `'unsafe-eval' lets strings become code. Only UI5 1.71-1.82 popups with ` &&
                                     `unloaded binding types need it ('wasm-unsafe-eval' is fine).`
                            fix    = `Remove 'unsafe-eval' from script-src in set_config_http_get of your user exit, ` &&
@@ -418,17 +484,15 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                  CHANGING  checks = result ).
 
       add_check( EXPORTING id     = `CSP_INLINE`
-                           status = COND #( WHEN lv_script CS `'unsafe-inline'` THEN cs_status-error ELSE cs_status-ok )
+                           status = COND #( WHEN lv_inline = abap_true THEN cs_status-error ELSE cs_status-ok )
                            title  = `CSP without 'unsafe-inline' for scripts`
-                           value  = COND #( WHEN lv_script CS `'unsafe-inline'` THEN `contains 'unsafe-inline'` ELSE `ok` )
+                           value  = COND #( WHEN lv_inline = abap_true THEN `allows 'unsafe-inline'` ELSE `ok` )
                            text   = `With 'unsafe-inline' in script-src every injected inline script runs; ` &&
                                     `the framework then also stops adding the hash of its own inline script.`
                            fix    = `Remove 'unsafe-inline' from script-src in your user exit ` &&
                                     `(style-src may keep it - UI5 needs it there).`
                  CHANGING  checks = result ).
 
-      DATA(lv_wild) = xsdbool( lv_script CS ` * ` OR lv_script CS ` https: ` OR lv_script CS ` http: `
-                               OR lv_script CS `cdn.jsdelivr.net` OR lv_script CS `cdnjs.cloudflare.com` ).
       add_check( EXPORTING id     = `CSP_HOSTS`
                            status = COND #( WHEN lv_wild = abap_true THEN cs_status-warn ELSE cs_status-ok )
                            title  = `Script hosts limited`
@@ -493,6 +557,22 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
                          text   = `Drafts hold the serialized app state of every user. A long expiry keeps ` &&
                                   `business data in the draft table and lets it grow.`
                          fix    = `Set cs_config-draft_exp_time_in_hours in set_config_http_post (default 4).`
+               CHANGING  checks = result ).
+
+    " the drafts are the sessions' history - abap2UI5 prunes them by default
+    DATA(lv_keep) = draft_keep_of( ls_post ).
+    add_check( EXPORTING id     = `SESSIONS`
+                         status = COND #( WHEN lv_keep > 0 THEN cs_status-info ELSE cs_status-ok )
+                         title  = `Session history in the drafts`
+                         value  = COND #( WHEN lv_keep > 0 THEN |newest { lv_keep } drafts per session|
+                                          ELSE `every draft until it expires` )
+                         text   = `The session viewer, the steps before an error and what users did afterwards ` &&
+                                  `read the drafts. abap2UI5 keeps only the newest drafts of a session by default ` &&
+                                  `(draft_keep_per_chain) - the steps before them are gone.`
+                         fix    = COND #( WHEN lv_keep > 0
+                                          THEN `For the whole history: cs_config-draft_keep_per_chain = 0 in ` &&
+                                               `set_config_http_post of your user exit - the draft table then grows ` &&
+                                               `until the drafts expire.` )
                CHANGING  checks = result ).
 
     LOOP AT result ASSIGNING FIELD-SYMBOL(<check>).
@@ -660,10 +740,36 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
   METHOD get_config_post.
 
     TRY.
-        get_exit( )->set_config_http_post( CHANGING cs_config = result ).
+        result = config_post( ).
       CATCH cx_root.
         CLEAR result.
     ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD get_draft_keep.
+
+    TRY.
+        result = draft_keep_of( config_post( ) ).
+      CATCH cx_root.
+        result = 0.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD draft_keep_of.
+
+    FIELD-SYMBOLS <keep> TYPE any.
+    ASSIGN COMPONENT `DRAFT_KEEP_PER_CHAIN` OF STRUCTURE is_post TO <keep>.
+    IF <keep> IS ASSIGNED AND <keep> > 0.
+      result = <keep>.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD config_post.
+
+    get_exit( )->set_config_http_post( CHANGING cs_config = result ).
 
   ENDMETHOD.
 
@@ -726,6 +832,16 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_implementers.
 
+    TRY.
+        result = read_implementers( intf ).
+      CATCH cx_root.
+        CLEAR result.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD read_implementers.
+
     TYPES:
       BEGIN OF ty_s_class,
         classname   TYPE string,
@@ -734,15 +850,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     DATA lt_classes TYPE STANDARD TABLE OF ty_s_class WITH EMPTY KEY.
 
     DATA(lv_class) = obj_name( `CL_UI5_UTIL_CONTEXT` ).
-    TRY.
-        CALL METHOD (lv_class)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
-          EXPORTING
-            val    = intf
-          RECEIVING
-            result = lt_classes.
-      CATCH cx_root.
-        RETURN.
-    ENDTRY.
+    CALL METHOD (lv_class)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
+      EXPORTING
+        val    = intf
+      RECEIVING
+        result = lt_classes.
 
     LOOP AT lt_classes INTO DATA(ls_class).
       APPEND to_upper( ls_class-classname ) TO result.
@@ -754,22 +866,36 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD csp_directive.
 
-    DATA(lv_off) = find( val = csp
-                         sub = directive ).
-    IF lv_off < 0.
-      RETURN.
+    DATA lt_part TYPE string_table.
+    DATA lv_name TYPE string.
+
+    " a meta tag: the policy is its content
+    DATA(lv_policy) = csp.
+    DATA(lv_content) = find( val  = csp
+                             sub  = `content="`
+                             case = abap_false ).
+    IF lv_content >= 0.
+      lv_policy = substring( val = csp
+                             off = lv_content + strlen( `content="` ) ).
+      IF lv_policy CS `"`.
+        lv_policy = substring_before( val = lv_policy
+                                      sub = `"` ).
+      ENDIF.
     ENDIF.
-    result = substring( val = csp
-                        off = lv_off ).
-    IF result CS `;`.
-      result = substring_before( val = result
-                                 sub = `;` ).
-    ENDIF.
-    IF result CS `"`.
-      result = substring_before( val = result
-                                 sub = `"` ).
-    ENDIF.
-    result = | { result } |.
+
+    SPLIT lv_policy AT `;` INTO TABLE lt_part.
+    LOOP AT lt_part INTO DATA(lv_part).
+      lv_part = condense( lv_part ).
+      lv_name = lv_part.
+      IF lv_name CS ` `.
+        lv_name = substring_before( val = lv_name
+                                    sub = ` ` ).
+      ENDIF.
+      IF to_lower( lv_name ) = to_lower( directive ).
+        result = | { lv_part } |.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
 
   ENDMETHOD.
 

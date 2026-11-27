@@ -16,11 +16,13 @@ CLASS ltcl_alert DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT
     METHODS p95_raised FOR TESTING.
     METHODS below_minimum_raises_nothing FOR TESTING.
     METHODS zero_switches_rule_off FOR TESTING.
+    METHODS errors_mode_has_no_rate FOR TESTING.
     METHODS all_apps_only_without_app FOR TESTING.
     METHODS all_apps_when_apps_are_small FOR TESTING.
     METHODS diff_raises_new FOR TESTING.
     METHODS diff_keeps_open FOR TESTING.
     METHODS diff_clears_gone FOR TESTING.
+    METHODS quiet_window_keeps_open FOR TESTING.
 
     METHODS settings
       RETURNING
@@ -128,6 +130,19 @@ CLASS ltcl_alert IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD errors_mode_has_no_rate.
+
+    " mode ERRORS records failed roundtrips only - 100 % says nothing
+    DATA(ls_set) = settings( ).
+    ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
+    DATA(lt_alert) = z2ui5_cl_cockpit_alert=>evaluate(
+        it_window = VALUE #( ( app = c_app roundtrips = 30 errors = 30 p95_ms = 100 ) )
+        is_set    = ls_set ).
+
+    cl_abap_unit_assert=>assert_initial( lt_alert ).
+
+  ENDMETHOD.
+
   METHOD all_apps_only_without_app.
 
     " one app explains the error rate over all apps - one alert, for the app;
@@ -218,6 +233,36 @@ CLASS ltcl_alert IMPLEMENTATION.
                                         act = lines( lt_cleared ) ).
     cl_abap_unit_assert=>assert_equals( exp = `A1`
                                         act = CONV string( lt_cleared[ 1 ]-id ) ).
+
+  ENDMETHOD.
+
+  METHOD quiet_window_keeps_open.
+
+    " too few roundtrips to tell: the alert stays open - unless its rule is off
+    DATA(lt_open) = VALUE z2ui5_cl_cockpit_alert=>ty_t_open(
+        ( id = `A1` rule_id = z2ui5_if_cockpit_notify=>cs_rule-p95 app = c_app )
+        ( id = `A2` rule_id = z2ui5_if_cockpit_notify=>cs_rule-p95 app = c_other )
+        ( id = `A3` rule_id = z2ui5_if_cockpit_notify=>cs_rule-error_rate app = `` ) ).
+    DATA(lt_window) = VALUE z2ui5_cl_cockpit_stats=>ty_t_window(
+        ( app = `` roundtrips = 35 )
+        ( app = c_app roundtrips = 5 )
+        ( app = c_other roundtrips = 30 ) ).
+
+    DATA(lt_judged) = z2ui5_cl_cockpit_alert=>judged( it_open   = lt_open
+                                                      it_window = lt_window
+                                                      is_set    = settings( ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( lt_judged ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `A2`
+                                        act = CONV string( lt_judged[ 1 ]-id ) ).
+
+    DATA(ls_set) = settings( ).
+    ls_set-alert_p95_ms = 0.
+    lt_judged = z2ui5_cl_cockpit_alert=>judged( it_open   = lt_open
+                                                it_window = lt_window
+                                                is_set    = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 3
+                                        act = lines( lt_judged ) ).
 
   ENDMETHOD.
 

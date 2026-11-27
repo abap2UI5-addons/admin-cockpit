@@ -461,7 +461,41 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
 
-    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
+    TYPES:
+      "! A roundtrip of a sticky session, as it came - the row is built once
+      "! the LUW may be written (the pseudonym's salt is a write of its own).
+      BEGIN OF ty_s_pending,
+        request      TYPE string,
+        response     TYPE string,
+        http_status  TYPE i,
+        check_sticky TYPE abap_bool,
+        ms_total     TYPE i,
+        timestampl   TYPE timestampl,
+      END OF ty_s_pending.
+
+    " member names whose values are never stored: a password, a secret
+    " (case ignored)
+    CONSTANTS c_secret_names TYPE string VALUE `[A-Z0-9_]*(PASSW|KENNWORT|PWD|SECRET)[A-Z0-9_]*`.
+
+    CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_pending WITH EMPTY KEY.
+
+    "! The model members bound to a password input of a view the response
+    "! displays - Input type="Password" - by their last name.
+    CLASS-METHODS secret_names_of
+      IMPORTING
+        response      TYPE string
+      RETURNING
+        VALUE(result) TYPE string_table.
+
+    "! A body with the values of secret members replaced by "***": every
+    "! member named like a password (c_secret_names) and every member of
+    "! it_name. Strings and numbers - objects and arrays stay.
+    CLASS-METHODS masked
+      IMPORTING
+        body          TYPE string
+        it_name       TYPE string_table
+      RETURNING
+        VALUE(result) TYPE string.
 
     "! The content of a copy without what runs in the browser by itself: a
     "! sap.ui.core.HTML renders its content with the scripts and on...
@@ -510,7 +544,9 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         cx_static_check.
 
     "! The table row of a recorded roundtrip - ids, app and event taken out
-    "! of the bodies, the user as the privacy setting allows.
+    "! of the bodies (roundtrip_of), the user as the privacy setting allows,
+    "! the values of password fields masked.
+    "! @parameter timestampl | when it ran - now when initial
     CLASS-METHODS row_of
       IMPORTING
         request       TYPE string
@@ -518,6 +554,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         http_status   TYPE i
         check_sticky  TYPE abap_bool
         ms_total      TYPE i DEFAULT 0
+        timestampl    TYPE timestampl OPTIONAL
       RETURNING
         VALUE(result) TYPE z2ui5_t_28
       RAISING
@@ -533,19 +570,14 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
-    "! The value of an XML attribute in the first element that has it.
+    "! The value of an XML attribute in the first element that has it -
+    "! z2ui5_cl_cockpit_session=&gt;xml_attribute( ).
     CLASS-METHODS xml_attribute
       IMPORTING
         xml           TYPE string
         name          TYPE string
       RETURNING
         VALUE(result) TYPE string.
-
-    CLASS-METHODS to_utf8
-      IMPORTING
-        val           TYPE string
-      RETURNING
-        VALUE(result) TYPE xstring.
 
 ENDCLASS.
 
@@ -688,6 +720,10 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       ENDTRY.
       UNASSIGN <any>.
       ASSIGN server->(`STATEFUL`) TO <any>.
+      IF <any> IS NOT ASSIGNED.
+        " the attribute of if_http_server, where the class has no alias for it
+        ASSIGN server->(`IF_HTTP_SERVER~STATEFUL`) TO <any>.
+      ENDIF.
       IF <any> IS ASSIGNED.
         check_sticky = xsdbool( <any> = 1 ).
       ENDIF.
@@ -829,31 +865,43 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
           RETURN.
         ENDIF.
 
-        ls_row = row_of( request      = request
-                         response     = response
-                         http_status  = http_status
-                         check_sticky = check_sticky
-                         ms_total     = ms_total ).
+        DATA(ls_pending) = VALUE ty_s_pending( request      = request
+                                               response     = response
+                                               http_status  = http_status
+                                               check_sticky = check_sticky
+                                               ms_total     = ms_total
+                                               timestampl   = z2ui5_cl_cockpit_setup=>now( ) ).
 
         " a sticky app owns the LUW - its uncommitted work and locks must not
-        " be committed by the recorder: the recording waits for a roundtrip
-        " that is not sticky
+        " be committed by the recorder, and nothing is written into it, not
+        " even the salt of a pseudonym: the bodies wait as they came for a
+        " roundtrip that is not sticky
         IF check_sticky = abap_true.
           IF lines( gt_buffer ) < c_buffer_max.
-            APPEND ls_row TO gt_buffer.
+            APPEND ls_pending TO gt_buffer.
           ENDIF.
           RETURN.
         ENDIF.
 
-        IF ls_set-last_purge <> ls_row-utc_day.
-          z2ui5_cl_cockpit_setup=>set_last_purge( ls_row-utc_day ).
-          z2ui5_cl_cockpit_job=>purge_own( ).
-        ENDIF.
+        z2ui5_cl_cockpit_job=>purge_daily( ).
+
+        " the cockpit's own screens are not recorded: they show recordings,
+        " sessions and figures of other users - a copy of them per roundtrip
+        DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
         DATA(lt_buffer) = gt_buffer.
         CLEAR gt_buffer.
-        APPEND ls_row TO lt_buffer.
+        APPEND ls_pending TO lt_buffer.
         LOOP AT lt_buffer INTO DATA(ls_buffered).
-          INSERT z2ui5_t_28 FROM @ls_buffered.
+          ls_row = row_of( request      = ls_buffered-request
+                           response     = ls_buffered-response
+                           http_status  = ls_buffered-http_status
+                           check_sticky = ls_buffered-check_sticky
+                           ms_total     = ls_buffered-ms_total
+                           timestampl   = ls_buffered-timestampl ).
+          IF ls_row-app = lv_own.
+            CONTINUE.
+          ENDIF.
+          INSERT z2ui5_t_28 FROM @ls_row.
         ENDLOOP.
         COMMIT WORK.
       CATCH cx_root.
@@ -869,10 +917,13 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD row_of.
 
-    DATA lv_root TYPE string.
+    DATA lt_secret TYPE string_table.
 
     result-id           = cl_system_uuid=>create_uuid_c32_static( ).
-    result-timestampl   = z2ui5_cl_cockpit_setup=>now( ).
+    result-timestampl   = timestampl.
+    IF result-timestampl IS INITIAL.
+      result-timestampl = z2ui5_cl_cockpit_setup=>now( ).
+    ENDIF.
     result-utc_day      = z2ui5_cl_cockpit_setup=>day_of( result-timestampl ).
     result-http_status  = http_status.
     result-ms_total     = ms_total.
@@ -883,39 +934,27 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-uname = sy-uname.
     ENDIF.
 
-    " the request is small: taken apart for the draft it started from and
-    " its event; the request of a first start has no draft
-    TRY.
-        DATA(lt_request) = json_flatten( request ).
-        lv_root = COND #( WHEN line_exists( lt_request[ path = `value/S_FRONT/ID` ] ) THEN `value/` ).
-        " the keys in variables - a template is no key operand on 7.02
-        DATA(lv_id_path) = |{ lv_root }S_FRONT/ID|.
-        DATA(lv_event_path) = |{ lv_root }S_FRONT/EVENT|.
-        result-draft_id_prev = VALUE #( lt_request[ path = lv_id_path ]-value OPTIONAL ).
-        result-event         = VALUE #( lt_request[ path = lv_event_path ]-value OPTIONAL ).
-      CATCH cx_root ##NO_HANDLER.
-        " no JSON - recorded as it came
-    ENDTRY.
-
-    " the response can be large - its id and app stand first in S_FRONT,
-    " before PROTOCOL and the actions, and are found by text
-    DATA(lv_protocol) = find( val = response
-                              sub = `"PROTOCOL":` ).
-    IF lv_protocol > 0.
-      result-draft_id = member_before( json   = response
-                                       name   = `ID`
-                                       before = lv_protocol ).
-      result-app      = to_upper( member_before( json   = response
-                                                 name   = `APP`
-                                                 before = lv_protocol ) ).
-    ENDIF.
+    " the draft it started from and its event out of the request, the
+    " draft it wrote and the app out of the response - as for the statistics
+    DATA(ls_roundtrip) = roundtrip_of( request      = request
+                                       response     = response
+                                       http_status  = http_status
+                                       check_sticky = check_sticky ).
+    result-draft_id_prev = ls_roundtrip-draft_id_prev.
+    result-event         = ls_roundtrip-event.
+    result-draft_id      = ls_roundtrip-draft_id.
+    result-app           = ls_roundtrip-app.
     " a failure names no app - the draft it started from does
     IF result-app IS INITIAL AND result-draft_id_prev IS NOT INITIAL.
       result-app = to_upper( z2ui5_cl_cockpit_session=>get_app_of_draft( result-draft_id_prev ) ).
     ENDIF.
 
-    result-req_body = request.
-    result-res_body = response.
+    " what was typed into a password field is never stored
+    lt_secret = secret_names_of( response ).
+    result-req_body = masked( body    = request
+                              it_name = lt_secret ).
+    result-res_body = masked( body    = response
+                              it_name = lt_secret ).
     IF strlen( result-req_body ) > c_max_body.
       result-req_body = substring( val = result-req_body
                                    len = c_max_body ).
@@ -927,10 +966,65 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD secret_names_of.
+
+    DATA lt_match TYPE match_result_tab.
+    DATA lv_kind TYPE string.
+    DATA lv_name TYPE string.
+
+    " a view in a response is a JSON string - its quotes are escaped
+    IF response NS `"Password\"`.
+      RETURN.
+    ENDIF.
+    FIND ALL OCCURRENCES OF REGEX `<[^<>]* type=\\"Password\\"[^<>]*>` IN response
+      IGNORING CASE RESULTS lt_match.
+    LOOP AT lt_match INTO DATA(ls_match).
+      DATA(lv_element) = substring( val = response
+                                    off = ls_match-offset
+                                    len = ls_match-length ).
+      " value="{/XX/NAME}" or value="{path:'/XX/NAME', ...}" - the last name
+      CLEAR lv_name.
+      FIND FIRST OCCURRENCE OF REGEX ` value=\\"\{(path:')?([^}'\\]*)` IN lv_element
+        SUBMATCHES lv_kind lv_name.
+      DATA(lv_slash) = find( val = lv_name
+                             sub = `/`
+                             occ = -1 ).
+      IF lv_slash >= 0.
+        lv_name = substring( val = lv_name
+                             off = lv_slash + 1 ).
+      ENDIF.
+      " a name only - it goes into a pattern
+      IF lv_name IS NOT INITIAL AND to_upper( lv_name ) CO `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_`.
+        APPEND lv_name TO result.
+      ENDIF.
+    ENDLOOP.
+    SORT result BY table_line.
+    DELETE ADJACENT DUPLICATES FROM result COMPARING table_line.
+
+  ENDMETHOD.
+
+  METHOD masked.
+
+    " "NAME":"value" or "NAME":123 - the value becomes "***"
+    CONSTANTS lc_value TYPE string VALUE `":\s*("([^"\\]|\\.)*"|-?[0-9][0-9.eE+-]*)`.
+
+    result = body.
+    IF result CS `PASSW` OR result CS `KENNWORT` OR result CS `PWD` OR result CS `SECRET`.
+      REPLACE ALL OCCURRENCES OF REGEX |"({ c_secret_names }){ lc_value }| IN result
+        WITH `"$1":"***"` IGNORING CASE.
+    ENDIF.
+    LOOP AT it_name INTO DATA(lv_name).
+      IF result NS |"{ lv_name }":|.
+        CONTINUE.
+      ENDIF.
+      REPLACE ALL OCCURRENCES OF REGEX |"({ lv_name }){ lc_value }| IN result
+        WITH `"$1":"***"`.
+    ENDLOOP.
+
+  ENDMETHOD.
+
   METHOD get_records.
 
-    TYPES ty_id TYPE c LENGTH 32.
-    TYPES ty_r_id TYPE RANGE OF ty_id.
     TYPES:
       BEGIN OF ty_s_row,
         id            TYPE c LENGTH 32,
@@ -943,29 +1037,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         ms_total      TYPE i,
       END OF ty_s_row.
     DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
-    DATA lt_range TYPE ty_r_id.
-    DATA lv_done TYPE i.
 
     TRY.
-        LOOP AT it_id INTO DATA(lv_id).
-          lv_done = lv_done + 1.
-          IF lv_id IS NOT INITIAL.
-            APPEND VALUE #( sign   = `I`
-                            option = `EQ`
-                            low    = lv_id ) TO lt_range.
-          ENDIF.
-          IF lines( lt_range ) < 50 AND lv_done < lines( it_id ).
-            CONTINUE.
-          ENDIF.
-          IF lt_range IS INITIAL.
-            CONTINUE.
-          ENDIF.
+        DATA(lt_ranges) = z2ui5_cl_cockpit_session=>id_ranges( it_id ).
+        LOOP AT lt_ranges INTO DATA(lt_range).
           SELECT id, timestampl, app, event, draft_id, draft_id_prev, http_status, ms_total
             FROM z2ui5_t_28
             WHERE draft_id IN @lt_range
                OR draft_id_prev IN @lt_range
             APPENDING CORRESPONDING FIELDS OF TABLE @lt_rows.
-          CLEAR lt_range.
         ENDLOOP.
       CATCH cx_root.
         RETURN.
@@ -1162,7 +1242,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     IF json IS INITIAL.
       RETURN.
     ENDIF.
-    DATA(lo_reader) = cl_sxml_string_reader=>create( to_utf8( json ) ).
+    DATA(lo_reader) = cl_sxml_string_reader=>create( z2ui5_cl_cockpit_session=>to_utf8( json ) ).
 
     DO.
       DATA(lo_node) = lo_reader->read_next_node( ).
@@ -2706,55 +2786,8 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD xml_attribute.
 
-    DATA(lv_key) = | { name }="|.
-    DATA(lv_off) = find( val = xml
-                         sub = lv_key ).
-    IF lv_off < 0.
-      RETURN.
-    ENDIF.
-    result = substring( val = xml
-                        off = lv_off + strlen( lv_key ) ).
-    IF result CS `"`.
-      result = substring_before( val = result
-                                 sub = `"` ).
-    ENDIF.
-    result = z2ui5_cl_cockpit_session=>decode( result ).
-
-  ENDMETHOD.
-
-  METHOD to_utf8.
-
-    DATA lo_conv TYPE REF TO object.
-    DATA lv_class TYPE c LENGTH 30.
-
-    " by name, as in z2ui5_cl_cockpit_session=>to_base64
-    TRY.
-        lv_class = `CL_ABAP_CONV_CODEPAGE`.
-        CALL METHOD (lv_class)=>create_out
-          RECEIVING
-            instance = lo_conv.
-        CALL METHOD lo_conv->(`IF_ABAP_CONV_OUT~CONVERT`)
-          EXPORTING
-            source = val
-          RECEIVING
-            result = result.
-      CATCH cx_root.
-        TRY.
-            lv_class = `CL_ABAP_CONV_OUT_CE`.
-            CALL METHOD (lv_class)=>create
-              EXPORTING
-                encoding = `UTF-8`
-              RECEIVING
-                conv     = lo_conv.
-            CALL METHOD lo_conv->(`CONVERT`)
-              EXPORTING
-                data   = val
-              IMPORTING
-                buffer = result.
-          CATCH cx_root.
-            CLEAR result.
-        ENDTRY.
-    ENDTRY.
+    result = z2ui5_cl_cockpit_session=>xml_attribute( xml  = xml
+                                                      name = name ).
 
   ENDMETHOD.
 

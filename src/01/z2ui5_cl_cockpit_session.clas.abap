@@ -42,7 +42,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         continued TYPE string VALUE `continued`,
         stopped   TYPE string VALUE `stopped here`,
         open      TYPE string VALUE `still open`,
-        unknown   TYPE string VALUE `unknown - draft expired`,
+        unknown   TYPE string VALUE `unknown - draft gone`,
       END OF cs_outcome.
 
     CONSTANTS:
@@ -61,6 +61,16 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         timestampl TYPE timestampl,
       END OF ty_s_node.
     TYPES ty_t_node TYPE STANDARD TABLE OF ty_s_node WITH EMPTY KEY.
+
+    TYPES:
+      "! A draft with its serialized state - a line of read_page( ).
+      BEGIN OF ty_s_page_row,
+        id         TYPE c LENGTH 32,
+        id_prev    TYPE c LENGTH 32,
+        timestampl TYPE timestampl,
+        data       TYPE string,
+      END OF ty_s_page_row.
+    TYPES ty_t_page TYPE STANDARD TABLE OF ty_s_page_row WITH EMPTY KEY.
 
     TYPES:
       "! The session a draft belongs to: the first draft of its chain.
@@ -189,6 +199,10 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_t_message TYPE STANDARD TABLE OF ty_s_message WITH EMPTY KEY.
 
     TYPES ty_t_id TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+
+    TYPES ty_draft_id TYPE c LENGTH 32.
+    TYPES ty_r_draft_id TYPE RANGE OF ty_draft_id.
+    TYPES ty_t_id_range TYPE STANDARD TABLE OF ty_r_draft_id WITH EMPTY KEY.
 
     TYPES:
       "! A field of one sample - a draft - for common_of.
@@ -585,6 +599,24 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! The value of an XML attribute - name="value" - in the first element
+    "! that has it, its entities resolved. Empty when none has it.
+    CLASS-METHODS xml_attribute
+      IMPORTING
+        xml           TYPE string
+        name          TYPE string
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! A text as UTF-8 - through whichever converter the release has, by
+    "! name: the modern one is missing on 7.02, the classic one is not
+    "! released in ABAP Cloud. Empty when neither is there.
+    CLASS-METHODS to_utf8
+      IMPORTING
+        val           TYPE string
+      RETURNING
+        VALUE(result) TYPE xstring.
+
     "! The session of every draft - the first draft of its chain. A chain
     "! ends at a draft without predecessor or whose predecessor is gone.
     CLASS-METHODS roots_of
@@ -594,11 +626,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         VALUE(result) TYPE ty_t_root.
 
     "! The steps of one session, oldest first, without app and size.
+    "! @parameter pruned | the framework prunes the drafts of a session
+    "!                    (z2ui5_cl_cockpit_inst=&gt;get_draft_keep) - a gap is
+    "!                    not only an expiry then
     CLASS-METHODS steps_of
       IMPORTING
         it_node       TYPE ty_t_node
         it_root       TYPE ty_t_root
         id            TYPE clike
+        pruned        TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE ty_t_step.
 
@@ -622,6 +658,28 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_first   TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(result) TYPE ty_t_field.
+
+    "! Draft ids as range tables of at most 50 ids each, in their order -
+    "! the IN lists of the SELECTs that read many drafts or their logs and
+    "! recordings. Empty ids are left out (they would match every start).
+    CLASS-METHODS id_ranges
+      IMPORTING
+        it_id         TYPE ty_t_id
+      RETURNING
+        VALUE(result) TYPE ty_t_id_range.
+
+    "! The next drafts of the draft table after a key, in key order, 200 at
+    "! a time - the page of a scan that reads every draft with its state.
+    "! Empty after the last one; raises when the table cannot be read.
+    "! @parameter after | the id of the last draft of the page before, empty
+    "!                   for the first page
+    CLASS-METHODS read_page
+      IMPORTING
+        after         TYPE clike
+      RETURNING
+        VALUE(result) TYPE ty_t_page
+      RAISING
+        cx_static_check.
 
     "! The app of a serialized draft: the first object of the heap that is
     "! not the framework's. Reads only the heap entries - an object is the
@@ -691,6 +749,14 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         VALUE(result) TYPE ty_t_node
       RAISING
         cx_static_check.
+
+    "! Only the newest c_max_steps steps, numbered from 1 again - the step
+    "! numbers are the lines of the table (follows and the viewer read the
+    "! step they name by its line). A step that continues one left out
+    "! says so; check_capped tells that steps were left out.
+    CLASS-METHODS trim_steps
+      CHANGING
+        cs_steps TYPE ty_s_steps.
 
     "! The serialized state of a draft, empty when it is gone.
     CLASS-METHODS read_data
@@ -777,13 +843,6 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CLASS-METHODS duration_text
       IMPORTING
         seconds       TYPE i
-      RETURNING
-        VALUE(result) TYPE string.
-
-    CLASS-METHODS attribute
-      IMPORTING
-        attributes    TYPE string
-        name          TYPE string
       RETURNING
         VALUE(result) TYPE string.
 
@@ -938,6 +997,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     SORT lt_sorted BY last DESCENDING root ASCENDING.
     result-sessions = lines( lt_sorted ).
 
+    " the framework keeps only the newest drafts of a session by default
+    DATA(lv_pruned) = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ).
     " the app of a session is in its newest draft - read for as many
     " sessions as are listed, and a few more when a filter skips some
     DATA(lv_reads) = 0.
@@ -966,7 +1027,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ls_session-app = `(unknown)`.
       ENDIF.
       IF ls_agg-id_prev IS NOT INITIAL.
-        ls_session-note = `earlier steps expired`.
+        ls_session-note = COND #( WHEN lv_pruned = abap_true THEN `earlier steps pruned or expired`
+                                  ELSE `earlier steps expired` ).
       ENDIF.
       CLEAR lt_signal.
       LOOP AT lt_wire INTO DATA(ls_wire) WHERE root = ls_agg-root.
@@ -995,12 +1057,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         lt_node = read_nodes( ).
         result-t_step = steps_of( it_node = lt_node
                                   it_root = roots_of( lt_node )
-                                  id      = id ).
-        DATA(lv_over) = lines( result-t_step ) - c_max_steps.
-        IF lv_over > 0.
-          result-check_capped = abap_true.
-          DELETE result-t_step TO lv_over.
-        ENDIF.
+                                  id      = id
+                                  pruned  = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ) ).
+        trim_steps( CHANGING cs_steps = result ).
         fill_steps( CHANGING cs_steps = result ).
       CATCH cx_root INTO DATA(lx).
         result-error = lx->get_text( ).
@@ -1053,7 +1112,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         RETURN.
     ENDTRY.
     IF lv_new IS INITIAL.
-      result-error = `The draft of this step is gone - expired and deleted since the session was opened.`.
+      result-error = `The draft of this step is gone - expired or pruned since the session was opened.`.
       RETURN.
     ENDIF.
 
@@ -1217,21 +1276,15 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
   METHOD search_drafts.
 
     TYPES:
-      BEGIN OF ty_s_row,
-        id   TYPE c LENGTH 32,
-        data TYPE string,
-      END OF ty_s_row.
-    TYPES:
       BEGIN OF ty_s_meta,
         id         TYPE c LENGTH 32,
         uname      TYPE c LENGTH 32,
         timestampl TYPE timestampl,
       END OF ty_s_meta.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE ty_t_page.
     DATA lt_meta TYPE HASHED TABLE OF ty_s_meta WITH UNIQUE KEY id.
     DATA lt_node TYPE ty_t_node.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
     DATA lv_search TYPE string.
 
     lv_search = condense( search ).
@@ -1256,15 +1309,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     " the serialized text escapes <, > and &, so a term with one of them
     " is only found in the decoded fields - every draft is taken apart then
     DATA(lv_prefilter) = xsdbool( lv_search NA `<>&"'` ).
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
-      CLEAR lt_rows.
       TRY.
-          SELECT id, data FROM (lv_tab)
-            WHERE id > @lv_last
-            ORDER BY id
-            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-            UP TO 200 ROWS.
+          lt_rows = read_page( lv_last ).
         CATCH cx_root INTO lx.
           result-error = lx->get_text( ).
           RETURN.
@@ -1317,31 +1364,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD get_flows.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        id         TYPE c LENGTH 32,
-        id_prev    TYPE c LENGTH 32,
-        timestampl TYPE timestampl,
-        data       TYPE string,
-      END OF ty_s_row.
     TYPES ty_id TYPE c LENGTH 32.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE ty_t_page.
     DATA lt_link TYPE ty_t_link.
     DATA lt_ids TYPE STANDARD TABLE OF ty_id WITH EMPTY KEY.
     DATA lt_failed TYPE ty_t_id.
     DATA lv_oldest TYPE timestampl.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
 
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
-      CLEAR lt_rows.
       TRY.
-          SELECT id, id_prev, timestampl, data FROM (lv_tab)
-            WHERE id > @lv_last
-            ORDER BY id
-            INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-            UP TO 200 ROWS.
+          lt_rows = read_page( lv_last ).
         CATCH cx_root INTO DATA(lx).
           result-error = lx->get_text( ).
           RETURN.
@@ -1988,29 +2021,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD scan_app.
 
-    TYPES:
-      BEGIN OF ty_s_row,
-        id   TYPE c LENGTH 32,
-        data TYPE string,
-      END OF ty_s_row.
-    DATA lt_rows TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+    DATA lt_rows TYPE ty_t_page.
     DATA lt_skip TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lv_last TYPE c LENGTH 32.
-    DATA lv_tab TYPE string.
     DATA lv_scanned TYPE i.
 
     DATA(lv_app) = to_upper( condense( app ) ).
     LOOP AT it_skip INTO DATA(lv_skip).
       INSERT lv_skip INTO TABLE lt_skip.
     ENDLOOP.
-    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     DO.
-      CLEAR lt_rows.
-      SELECT id, data FROM (lv_tab)
-        WHERE id > @lv_last
-        ORDER BY id
-        INTO CORRESPONDING FIELDS OF TABLE @lt_rows
-        UP TO 200 ROWS.
+      lt_rows = read_page( lv_last ).
       IF lt_rows IS INITIAL.
         RETURN.
       ENDIF.
@@ -2036,23 +2057,11 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD to_base64.
+  METHOD to_utf8.
 
-    CONSTANTS lc_alphabet TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`.
-    DATA lt_part TYPE string_table.
-    DATA lv_utf8 TYPE xstring.
-    DATA lv_byte TYPE x LENGTH 1.
-    DATA lv_off TYPE i.
-    DATA lv_rest TYPE i.
-    DATA lv_value TYPE i.
-    DATA lv_triple TYPE i.
-    DATA lv_part TYPE string.
     DATA lo_conv TYPE REF TO object.
     DATA lv_class TYPE c LENGTH 30.
 
-    " UTF-8 through whichever converter the release has - by name, as the
-    " modern one is missing on 7.02 and the classic one is not released in
-    " ABAP Cloud
     TRY.
         lv_class = `CL_ABAP_CONV_CODEPAGE`.
         CALL METHOD (lv_class)=>create_out
@@ -2062,7 +2071,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           EXPORTING
             source = val
           RECEIVING
-            result = lv_utf8.
+            result = result.
       CATCH cx_root.
         TRY.
             lv_class = `CL_ABAP_CONV_OUT_CE`.
@@ -2075,12 +2084,26 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
               EXPORTING
                 data   = val
               IMPORTING
-                buffer = lv_utf8.
+                buffer = result.
           CATCH cx_root.
-            RETURN.
+            CLEAR result.
         ENDTRY.
     ENDTRY.
 
+  ENDMETHOD.
+
+  METHOD to_base64.
+
+    CONSTANTS lc_alphabet TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`.
+    DATA lt_part TYPE string_table.
+    DATA lv_byte TYPE x LENGTH 1.
+    DATA lv_off TYPE i.
+    DATA lv_rest TYPE i.
+    DATA lv_value TYPE i.
+    DATA lv_triple TYPE i.
+    DATA lv_part TYPE string.
+
+    DATA(lv_utf8) = to_utf8( val ).
     DATA(lv_len) = xstrlen( lv_utf8 ).
     WHILE lv_off < lv_len.
       lv_rest = lv_len - lv_off.
@@ -2228,7 +2251,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           ls_step-note = |continues step { ls_step-follows } (browser back or a second window)|.
         ENDIF.
       ELSEIF ls_node-id_prev IS NOT INITIAL.
-        ls_step-note = `the steps before it expired`.
+        ls_step-note = COND #( WHEN pruned = abap_true THEN `the steps before it are gone (pruned or expired)`
+                               ELSE `the steps before it expired` ).
       ELSE.
         ls_step-note = `app start`.
       ENDIF.
@@ -2237,10 +2261,33 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD trim_steps.
+
+    DATA(lv_over) = lines( cs_steps-t_step ) - c_max_steps.
+    IF lv_over <= 0.
+      RETURN.
+    ENDIF.
+    cs_steps-check_capped = abap_true.
+
+    DELETE cs_steps-t_step TO lv_over.
+    LOOP AT cs_steps-t_step ASSIGNING FIELD-SYMBOL(<step>).
+      <step>-step = sy-tabix.
+      IF <step>-follows > lv_over.
+        <step>-follows = <step>-follows - lv_over.
+        IF <step>-follows <> <step>-step - 1.
+          <step>-note = |continues step { <step>-follows } (browser back or a second window)|.
+        ENDIF.
+      ELSEIF <step>-follows > 0.
+        <step>-follows = 0.
+        <step>-note = |continues a step before the newest { c_max_steps }|.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
   METHOD fill_steps.
 
     TYPES ty_id TYPE c LENGTH 32.
-    TYPES ty_r_id TYPE RANGE OF ty_id.
     TYPES:
       BEGIN OF ty_s_row,
         id   TYPE c LENGTH 32,
@@ -2253,7 +2300,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       END OF ty_s_seen.
     DATA lt_data TYPE HASHED TABLE OF ty_s_row WITH UNIQUE KEY id.
     DATA lt_seen TYPE HASHED TABLE OF ty_s_seen WITH UNIQUE KEY object value.
-    DATA lt_range TYPE ty_r_id.
+    DATA lt_id TYPE ty_t_id.
     DATA lt_prev TYPE ty_t_value.
     DATA lv_prev_id TYPE string.
     DATA lv_prev_messages TYPE string.
@@ -2266,19 +2313,17 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
     LOOP AT cs_steps-t_step INTO DATA(ls_step).
-      lv_done = lv_done + 1.
-      APPEND VALUE #( sign   = `I`
-                      option = `EQ`
-                      low    = ls_step-id ) TO lt_range.
-      IF lines( lt_range ) < 50 AND lv_done < lines( cs_steps-t_step ).
-        CONTINUE.
-      ENDIF.
+      APPEND ls_step-id TO lt_id.
+    ENDLOOP.
+    " a step's id is never empty - each batch is the next lines of steps
+    DATA(lt_ranges) = id_ranges( lt_id ).
+    LOOP AT lt_ranges INTO DATA(lt_range).
+      lv_done = lv_from + lines( lt_range ) - 1.
 
       CLEAR lt_data.
       SELECT id, data FROM (lv_tab)
         WHERE id IN @lt_range
         INTO CORRESPONDING FIELDS OF TABLE @lt_data.
-      CLEAR lt_range.
 
       " the steps of this batch in their order - each compared with the
       " step it continues, which is the one before it unless the user went
@@ -2530,8 +2575,6 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   METHOD fill_monitor.
 
-    TYPES ty_id TYPE c LENGTH 32.
-    TYPES ty_r_id TYPE RANGE OF ty_id.
     TYPES:
       BEGIN OF ty_s_log,
         draft_id      TYPE c LENGTH 32,
@@ -2544,23 +2587,18 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         error_head    TYPE c LENGTH 200,
       END OF ty_s_log.
     DATA lt_log TYPE STANDARD TABLE OF ty_s_log WITH EMPTY KEY.
-    DATA lt_range TYPE ty_r_id.
-    DATA lv_done TYPE i.
+    DATA lt_id TYPE ty_t_id.
 
     LOOP AT ct_step INTO DATA(ls_step).
-      lv_done = lv_done + 1.
-      APPEND VALUE #( sign   = `I`
-                      option = `EQ`
-                      low    = ls_step-id ) TO lt_range.
-      IF lines( lt_range ) < 50 AND lv_done < lines( ct_step ).
-        CONTINUE.
-      ENDIF.
+      APPEND ls_step-id TO lt_id.
+    ENDLOOP.
+    DATA(lt_ranges) = id_ranges( lt_id ).
+    LOOP AT lt_ranges INTO DATA(lt_range).
       SELECT draft_id, draft_id_prev, event, check_error, check_slow, ms_total, error_class, error_head
         FROM z2ui5_t_25
         WHERE draft_id IN @lt_range
            OR draft_id_prev IN @lt_range
         APPENDING CORRESPONDING FIELDS OF TABLE @lt_log.
-      CLEAR lt_range.
     ENDLOOP.
 
     LOOP AT lt_log INTO DATA(ls_log).
@@ -2831,8 +2869,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ELSE.
           ls_open-name = lv_tag.
         ENDIF.
-        ls_open-href = attribute( attributes = lv_attributes
-                                  name       = `href` ).
+        ls_open-href = xml_attribute( xml  = lv_attributes
+                                      name = `href` ).
         IF ls_open-href IS NOT INITIAL.
           IF substring( val = ls_open-href
                         len = 1 ) = `#`.
@@ -2856,8 +2894,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
           ls_open-kind = `V`.
         ELSEIF <parent>-kind = `S` AND <parent>-name = `asx:heap`.
           ls_open-kind = `E`.
-          DATA(lv_id) = attribute( attributes = lv_attributes
-                                   name       = `id` ).
+          DATA(lv_id) = xml_attribute( xml  = lv_attributes
+                                       name = `id` ).
           DATA(lv_label) = ls_open-name.
           IF lv_label CS `:`.
             lv_label = substring_after( val = lv_label
@@ -3109,6 +3147,43 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD id_ranges.
+
+    DATA lt_range TYPE ty_r_draft_id.
+
+    LOOP AT it_id INTO DATA(lv_id).
+      IF lv_id IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      APPEND VALUE #( sign   = `I`
+                      option = `EQ`
+                      low    = lv_id ) TO lt_range.
+      IF lines( lt_range ) >= 50.
+        APPEND lt_range TO result.
+        CLEAR lt_range.
+      ENDIF.
+    ENDLOOP.
+    IF lt_range IS NOT INITIAL.
+      APPEND lt_range TO result.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD read_page.
+
+    DATA lv_tab TYPE string.
+    " named like no column - the 7.02 downport drops the @
+    DATA lv_after TYPE c LENGTH 32.
+    lv_after = after.
+    lv_tab = z2ui5_cl_cockpit_inst=>obj_name( z2ui5_cl_cockpit_draft=>c_table ).
+    SELECT id, id_prev, timestampl, data FROM (lv_tab)
+      WHERE id > @lv_after
+      ORDER BY id
+      INTO CORRESPONDING FIELDS OF TABLE @result
+      UP TO 200 ROWS.
+
+  ENDMETHOD.
+
   METHOD get_app_of_draft.
 
     TRY.
@@ -3142,14 +3217,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDIF.
     " the pseudonym of today - the one the Errors tab shows for today's
     " occurrences, so a session can be matched with an error
-    DATA(lv_key) = z2ui5_cl_cockpit_setup=>user_key( uname = uname
-                                                     day   = z2ui5_cl_cockpit_setup=>day_minus( 0 ) ).
-    IF strlen( lv_key ) >= 8.
-      result = |pseudonym { substring( val = lv_key
-                                       len = 8 ) }|.
-    ELSE.
-      result = `not recorded`.
-    ENDIF.
+    result = z2ui5_cl_cockpit_setup=>pseudonym_text(
+                 z2ui5_cl_cockpit_setup=>user_key( uname = uname
+                                                   day   = z2ui5_cl_cockpit_setup=>day_minus( 0 ) ) ).
 
   ENDMETHOD.
 
@@ -3165,19 +3235,21 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD attribute.
+  METHOD xml_attribute.
 
-    DATA(lv_off) = find( val = attributes
-                         sub = | { name }="| ).
+    DATA(lv_key) = | { name }="|.
+    DATA(lv_off) = find( val = xml
+                         sub = lv_key ).
     IF lv_off < 0.
       RETURN.
     ENDIF.
-    result = substring( val = attributes
-                        off = lv_off + strlen( name ) + 3 ).
+    result = substring( val = xml
+                        off = lv_off + strlen( lv_key ) ).
     IF result CS `"`.
       result = substring_before( val = result
                                  sub = `"` ).
     ENDIF.
+    result = decode( result ).
 
   ENDMETHOD.
 

@@ -18,6 +18,8 @@ CLASS ltcl_privacy DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS hash_mode_ignores_case FOR TESTING.
     METHODS buckets FOR TESTING.
     METHODS alert_settings FOR TESTING.
+    METHODS settings_bounds FOR TESTING.
+    METHODS sample_share_divides_100 FOR TESTING.
     METHODS ts_minus_seconds FOR TESTING.
     METHODS assert_minus
       IMPORTING
@@ -177,6 +179,52 @@ CLASS ltcl_privacy IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD settings_bounds.
+
+    " a day setting no date can hold and a size no INT4 byte count can hold
+    " are cut - the housekeeping and the hints compute with them
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    ls_set-retention_days     = 99999.
+    ls_set-agg_retention_days = 0.
+    ls_set-wire_days          = 2147483647.
+    ls_set-model_warn_kb      = 2147483647.
+
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>c_max_days
+                                        act = ls_set-retention_days ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>get_default( )-agg_retention_days
+                                        act = ls_set-agg_retention_days ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>c_max_days
+                                        act = ls_set-wire_days ).
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_setup=>c_max_kb
+                                        act = ls_set-model_warn_kb ).
+    " and the longest retention is still a date
+    cl_abap_unit_assert=>assert_true( xsdbool( z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days )
+                                               < z2ui5_cl_cockpit_setup=>now( ) ) ).
+
+  ENDMETHOD.
+
+  METHOD sample_share_divides_100.
+
+    " each recorded sample counts 100 / pct times, in whole numbers - a
+    " share that does not divide 100 is rounded down to one that does
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    ls_set-sample_pct = 60.
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 50
+                                        act = ls_set-sample_pct ).
+    ls_set-sample_pct = 3.
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = ls_set-sample_pct ).
+    ls_set-sample_pct = 25.
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 25
+                                        act = ls_set-sample_pct ).
+
+  ENDMETHOD.
+
   METHOD ts_minus_seconds.
 
     " within the day, across midnight, across a month and a year, whole days
@@ -210,9 +258,10 @@ CLASS ltcl_privacy IMPLEMENTATION.
 ENDCLASS.
 
 
-"! The daily salt rotation, against Z2UI5_T_26: test days in the year
-"! 2099, nothing committed - teardown deletes the test rows and rolls back,
-"! which also brings back the salt of today that the rotation deletes.
+"! The daily salt rotation and the claim of the daily purge, against
+"! Z2UI5_T_26: test days in the year 2099, nothing committed - teardown
+"! deletes the test rows and rolls back, which also brings back the salt of
+"! today that the rotation deletes and the day of the last purge.
 CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
 
   PRIVATE SECTION.
@@ -221,6 +270,8 @@ CLASS ltcl_salt DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT
     METHODS teardown.
 
     METHODS salt_rotates_daily FOR TESTING.
+    METHODS no_salt_for_a_past_day FOR TESTING.
+    METHODS purge_claimed_once FOR TESTING.
 
     METHODS salt_exists
       IMPORTING
@@ -275,6 +326,41 @@ CLASS ltcl_salt IMPLEMENTATION.
                                          act = lv_day2 ).
     cl_abap_unit_assert=>assert_true( salt_exists( `20990102` ) ).
     cl_abap_unit_assert=>assert_false( salt_exists( `20990101` ) ).
+
+  ENDMETHOD.
+
+  METHOD no_salt_for_a_past_day.
+
+    " a roundtrip of yesterday recorded today: its salt is gone on purpose -
+    " no pseudonym rather than a new salt that deletes today's
+    cl_abap_unit_assert=>assert_initial( z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                                                           day   = `20000101` ) ).
+    cl_abap_unit_assert=>assert_false( salt_exists( `20000101` ) ).
+
+    " a later day's salt survives the creation of an earlier one
+    DATA(lv_later) = z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                                       day   = `20990102` ).
+    CLEAR z2ui5_cl_cockpit_setup=>gv_salt_day.
+    CLEAR z2ui5_cl_cockpit_setup=>gv_salt.
+    z2ui5_cl_cockpit_setup=>user_key( uname = `ALICE`
+                                      day   = `20990101` ).
+    cl_abap_unit_assert=>assert_true( salt_exists( `20990102` ) ).
+    cl_abap_unit_assert=>assert_true( salt_exists( `20990101` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 64
+                                        act = strlen( lv_later ) ).
+
+  ENDMETHOD.
+
+  METHOD purge_claimed_once.
+
+    " one work process per day purges: the claim moves LAST_PURGE forward
+    " only - an earlier day, or the same day again, is no claim
+    cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_setup=>claim_purge( `20990101` ) ).
+    cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_setup=>claim_purge( `20990101` ) ).
+    cl_abap_unit_assert=>assert_false( z2ui5_cl_cockpit_setup=>claim_purge( `20981231` ) ).
+    cl_abap_unit_assert=>assert_true( z2ui5_cl_cockpit_setup=>claim_purge( `20990102` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `20990102`
+                                        act = z2ui5_cl_cockpit_setup=>get( )-last_purge ).
 
   ENDMETHOD.
 
