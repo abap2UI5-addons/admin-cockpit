@@ -2203,6 +2203,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_app.
 
+    " the roundtrips without an app have no drafts, variants or sessions of
+    " their own to show
+    DATA(lv_app_known) = COND string( WHEN detail_app = z2ui5_cl_cockpit_stats=>c_no_app
+                                      THEN `false` ELSE `true` ).
+
     DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
@@ -2298,15 +2303,18 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `text`    v = `Business objects`
             )->a( n = `icon`    v = `sap-icon://customer-and-supplier`
             )->a( n = `tooltip` v = `The business objects this app works with, from its drafts - types only, no values`
+            )->a( n = `visible` v = lv_app_known
             )->a( n = `press`   v = client->_event( `APP_OBJECTS` )
         )->tag( `Button`
             )->a( n = `text`    v = `Process variants`
             )->a( n = `icon`    v = `sap-icon://process`
             )->a( n = `tooltip` v = `The ways users go through this app, from the recorder - counted, failures marked`
+            )->a( n = `visible` v = lv_app_known
             )->a( n = `press`   v = client->_event( `APP_VARIANTS` )
         )->tag( `Button`
             )->a( n = `text`    v = `Sessions of this app`
             )->a( n = `icon`    v = `sap-icon://history`
+            )->a( n = `visible` v = lv_app_known
             )->a( n = `enabled` v = client->_bind( s_head-can_change )
             )->a( n = `press`   v = client->_event( `APP_SESSIONS` )
         )->tag( `Button`
@@ -3733,6 +3741,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     DATA lv_flows TYPE string.
     DATA lv_newest TYPE string.
+    DATA lv_app TYPE string.
 
     TRY.
         CASE client->get_event( ).
@@ -3744,7 +3753,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             detail_app = client->get_event_arg( ).
             CLEAR s_app_objects.
             CLEAR app_objects_shown.
-            t_events = z2ui5_cl_cockpit_stats=>get_app_events( app  = detail_app
+            " the label of the roundtrips without an app stands for the
+            " empty app in the figures - no app is called like that
+            IF detail_app <> z2ui5_cl_cockpit_stats=>c_no_app.
+              lv_app = detail_app.
+            ENDIF.
+            t_events = z2ui5_cl_cockpit_stats=>get_app_events( app  = lv_app
                                                               days = get_days( ) ).
             popup_app( ).
 
@@ -4015,6 +4029,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `APP_OBJECTS`.
+            IF detail_app = z2ui5_cl_cockpit_stats=>c_no_app.
+              client->message_toast_display( `No app was resolved for these roundtrips - nothing to read.` ).
+              RETURN.
+            ENDIF.
             s_app_objects = z2ui5_cl_cockpit_session=>get_app_objects( detail_app ).
             app_objects_shown = abap_true.
             app_objects_text = COND #(
@@ -4036,6 +4054,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `APP_VARIANTS`.
+            IF detail_app = z2ui5_cl_cockpit_stats=>c_no_app.
+              client->message_toast_display( `No app was resolved for these roundtrips - nothing to read.` ).
+              RETURN.
+            ENDIF.
             variants_app = detail_app.
             popup_variants( ).
 
@@ -4055,6 +4077,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             messages_filter( ).
 
           WHEN `APP_SESSIONS`.
+            IF detail_app = z2ui5_cl_cockpit_stats=>c_no_app.
+              client->message_toast_display( `No app was resolved for these roundtrips - nothing to read.` ).
+              RETURN.
+            ENDIF.
             IF check_change( ) = abap_true.
               client->popup_destroy( ).
               tab = `DRAFTS`.
