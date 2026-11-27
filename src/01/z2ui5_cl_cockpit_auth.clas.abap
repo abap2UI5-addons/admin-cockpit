@@ -42,6 +42,9 @@ CLASS z2ui5_cl_cockpit_auth DEFINITION PUBLIC FINAL CREATE PUBLIC.
         analysis TYPE string VALUE `ERROR_ANALYSIS`,
       END OF cs_log.
 
+    " what get_custom_class( ) answers when the lookup failed - no class name
+    CONSTANTS c_lookup_failed TYPE string VALUE `(lookup of the customer class failed)`.
+
     TYPES:
       BEGIN OF ty_s_log,
         time   TYPE string,
@@ -83,7 +86,9 @@ CLASS z2ui5_cl_cockpit_auth DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
-    "! The customer class implementing z2ui5_if_cockpit_auth, if any.
+    "! The customer class implementing z2ui5_if_cockpit_auth, if any -
+    "! c_lookup_failed when the implementers cannot be read: access is then
+    "! denied to everybody, and nobody can claim the cockpit.
     CLASS-METHODS get_custom_class
       RETURNING
         VALUE(result) TYPE string.
@@ -139,7 +144,8 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
     DATA lo_auth TYPE REF TO z2ui5_if_cockpit_auth.
     DATA(lv_class) = get_custom_class( ).
-    IF lv_class IS NOT INITIAL.
+    " a lookup that failed leaves lo_auth unbound - decide( ) denies
+    IF lv_class IS NOT INITIAL AND lv_class <> c_lookup_failed.
       TRY.
           CREATE OBJECT lo_auth TYPE (lv_class).
         CATCH cx_root.
@@ -206,7 +212,10 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
 
     CASE get_mode( ).
       WHEN cs_mode-custom.
-        result = |restricted by { get_custom_class( ) }|.
+        result = COND #( WHEN get_custom_class( ) = c_lookup_failed
+                         THEN `closed - the lookup of a customer class (z2ui5_if_cockpit_auth) failed, ` &&
+                              `nobody gets in until it works again`
+                         ELSE |restricted by { get_custom_class( ) }| ).
       WHEN cs_mode-admins.
         result = |restricted to { lines( z2ui5_cl_cockpit_setup=>get_admins( ) ) } administrator(s)|.
       WHEN OTHERS.
@@ -222,7 +231,16 @@ CLASS z2ui5_cl_cockpit_auth IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lt_classes) = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( `IF_COCKPIT_AUTH` ) ).
+    " a lookup that fails is no "none": the cockpit would fall back to the
+    " claim and make the next user its administrator - it closes instead,
+    " and asks again on the next call
+    TRY.
+        DATA(lt_classes) = z2ui5_cl_cockpit_inst=>read_implementers(
+                               z2ui5_cl_cockpit_inst=>obj_name( `IF_COCKPIT_AUTH` ) ).
+      CATCH cx_root.
+        result = c_lookup_failed.
+        RETURN.
+    ENDTRY.
     DATA(lv_default) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_AUTH` ).
     DELETE lt_classes WHERE table_line = lv_default.
     gv_custom_class = VALUE #( lt_classes[ 1 ] OPTIONAL ).

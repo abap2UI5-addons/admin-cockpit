@@ -334,7 +334,9 @@ top of `main( )`:
 
    `action` is `DISPLAY` (open the cockpit) or `CHANGE` (delete drafts, purge
    logs, change settings and administrators, reproduce errors). A class that
-   cannot be created denies.
+   cannot be created denies, and so does a cockpit that cannot look up the
+   implementers of the interface (the framework's class lookup failed): it
+   lets nobody in and offers no claim until the lookup works again.
 2. **Otherwise the administrator list** on the Settings tab (`Z2UI5_T_21`).
    Only the users on it get in; everybody else sees "No authorization".
 3. **As long as that list is empty, the cockpit shows only the claim

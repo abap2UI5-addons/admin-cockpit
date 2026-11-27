@@ -161,6 +161,16 @@ CLASS z2ui5_cl_cockpit_inst DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE z2ui5_cl_cockpit_setup=>ty_t_names.
 
+    "! The same, raising when the lookup fails - for a caller that must
+    "! tell "none" from "unknown" (an access decision).
+    CLASS-METHODS read_implementers
+      IMPORTING
+        intf          TYPE clike
+      RETURNING
+        VALUE(result) TYPE z2ui5_cl_cockpit_setup=>ty_t_names
+      RAISING
+        cx_static_check.
+
     "! The script-src directive of a CSP meta tag or header value.
     CLASS-METHODS csp_directive
       IMPORTING
@@ -797,6 +807,16 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
 
   METHOD get_implementers.
 
+    TRY.
+        result = read_implementers( intf ).
+      CATCH cx_root.
+        CLEAR result.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD read_implementers.
+
     TYPES:
       BEGIN OF ty_s_class,
         classname   TYPE string,
@@ -805,15 +825,11 @@ CLASS z2ui5_cl_cockpit_inst IMPLEMENTATION.
     DATA lt_classes TYPE STANDARD TABLE OF ty_s_class WITH EMPTY KEY.
 
     DATA(lv_class) = obj_name( `CL_UI5_UTIL_CONTEXT` ).
-    TRY.
-        CALL METHOD (lv_class)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
-          EXPORTING
-            val    = intf
-          RECEIVING
-            result = lt_classes.
-      CATCH cx_root.
-        RETURN.
-    ENDTRY.
+    CALL METHOD (lv_class)=>(`RTTI_GET_CLASSES_IMPL_INTF`)
+      EXPORTING
+        val    = intf
+      RECEIVING
+        result = lt_classes.
 
     LOOP AT lt_classes INTO DATA(ls_class).
       APPEND to_upper( ls_class-classname ) TO result.
