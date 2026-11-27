@@ -522,7 +522,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         cx_static_check.
 
     "! The table row of a recorded roundtrip - ids, app and event taken out
-    "! of the bodies, the user as the privacy setting allows.
+    "! of the bodies (roundtrip_of), the user as the privacy setting allows.
     "! @parameter timestampl | when it ran - now when initial
     CLASS-METHODS row_of
       IMPORTING
@@ -889,8 +889,6 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
   METHOD row_of.
 
-    DATA lv_root TYPE string.
-
     result-id           = cl_system_uuid=>create_uuid_c32_static( ).
     result-timestampl   = timestampl.
     IF result-timestampl IS INITIAL.
@@ -906,32 +904,16 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-uname = sy-uname.
     ENDIF.
 
-    " the request is small: taken apart for the draft it started from and
-    " its event; the request of a first start has no draft
-    TRY.
-        DATA(lt_request) = json_flatten( request ).
-        lv_root = COND #( WHEN line_exists( lt_request[ path = `value/S_FRONT/ID` ] ) THEN `value/` ).
-        " the keys in variables - a template is no key operand on 7.02
-        DATA(lv_id_path) = |{ lv_root }S_FRONT/ID|.
-        DATA(lv_event_path) = |{ lv_root }S_FRONT/EVENT|.
-        result-draft_id_prev = VALUE #( lt_request[ path = lv_id_path ]-value OPTIONAL ).
-        result-event         = VALUE #( lt_request[ path = lv_event_path ]-value OPTIONAL ).
-      CATCH cx_root ##NO_HANDLER.
-        " no JSON - recorded as it came
-    ENDTRY.
-
-    " the response can be large - its id and app stand first in S_FRONT,
-    " before PROTOCOL and the actions, and are found by text
-    DATA(lv_protocol) = find( val = response
-                              sub = `"PROTOCOL":` ).
-    IF lv_protocol > 0.
-      result-draft_id = member_before( json   = response
-                                       name   = `ID`
-                                       before = lv_protocol ).
-      result-app      = to_upper( member_before( json   = response
-                                                 name   = `APP`
-                                                 before = lv_protocol ) ).
-    ENDIF.
+    " the draft it started from and its event out of the request, the
+    " draft it wrote and the app out of the response - as for the statistics
+    DATA(ls_roundtrip) = roundtrip_of( request      = request
+                                       response     = response
+                                       http_status  = http_status
+                                       check_sticky = check_sticky ).
+    result-draft_id_prev = ls_roundtrip-draft_id_prev.
+    result-event         = ls_roundtrip-event.
+    result-draft_id      = ls_roundtrip-draft_id.
+    result-app           = ls_roundtrip-app.
     " a failure names no app - the draft it started from does
     IF result-app IS INITIAL AND result-draft_id_prev IS NOT INITIAL.
       result-app = to_upper( z2ui5_cl_cockpit_session=>get_app_of_draft( result-draft_id_prev ) ).
