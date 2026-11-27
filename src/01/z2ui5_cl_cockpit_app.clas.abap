@@ -135,6 +135,9 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     " s_head-can_change only feeds the view: a bound attribute comes back from
     " the browser, so a display-only user could set it to true there
     DATA change_allowed TYPE abap_bool.
+    " whether the selected occurrence may be reproduced - the copy REPRODUCE
+    " reads, repro_enabled only feeds the view (as change_allowed above)
+    DATA repro_allowed TYPE abap_bool.
     " the app the process variants are of - empty for all apps
     DATA variants_app TYPE string.
     DATA detail_app TYPE string.
@@ -263,8 +266,23 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " undo whatever the browser wrote into the bound copy
+    " decided again on every roundtrip: a right revoked meanwhile (by the
+    " customer class) takes effect now, not at the next start. And the
+    " bound copies are undone - the browser may have written into them
+    change_allowed    = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
     s_head-can_change = change_allowed.
+    IF change_allowed = abap_false.
+      CLEAR repro_allowed.
+      " what only administrators see, loaded while the right was there
+      CLEAR t_wire_message_all.
+      CLEAR s_wire_messages.
+      CLEAR s_wire_inputs.
+      CLEAR wire_messages_shown.
+      CLEAR s_live_sessions.
+      CLEAR s_sessions.
+      CLEAR sessions_shown.
+    ENDIF.
+    repro_enabled = repro_allowed.
 
     IF client->check_on_init( ).
       model_init( ).
@@ -3707,6 +3725,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     s_occ = VALUE #( t_occurrences[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
     error_text = z2ui5_cl_cockpit_stats=>get_error_text( s_occ-id ).
     CLEAR repro_enabled.
+    CLEAR repro_allowed.
     session_enabled = xsdbool( change_allowed = abap_true
                                AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
 
@@ -3729,6 +3748,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                                         check_sticky  = s_occ-check_sticky
                                                         owner         = lv_owner ).
     IF repro_hint IS INITIAL.
+      repro_allowed = abap_true.
       repro_enabled = abap_true.
       repro_hint = |Occurrence of { s_occ-time }: draft { s_occ-draft_id_prev }, event { s_occ-event }| &&
                    |{ COND #( WHEN lv_owner = z2ui5_cl_cockpit_repro=>cs_owner-unknown
@@ -3777,12 +3797,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             occurrence_select( client->get_event_arg( ) ).
 
           WHEN `REPRODUCE`.
-            IF check_change( ) = abap_true AND repro_enabled = abap_true.
+            IF check_change( ) = abap_true AND repro_allowed = abap_true.
               popup_confirm_reproduce( ).
             ENDIF.
 
           WHEN `REPRODUCE_OK`.
-            IF check_change( ) = abap_true AND repro_enabled = abap_true.
+            IF check_change( ) = abap_true AND repro_allowed = abap_true.
               " the change log first, committed: the replayed app may roll back
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-repro
                                           text   = |{ s_error-app } event { s_occ-event } from draft | &&
