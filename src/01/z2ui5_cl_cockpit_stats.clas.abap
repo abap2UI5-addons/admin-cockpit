@@ -216,10 +216,19 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
         VALUE(result) TYPE ty_t_event.
 
     "! Implementers of z2ui5_if_app without a recorded roundtrip within the
-    "! unused_days setting.
+    "! unused_days setting - none in mode ERRORS (an app without a failure
+    "! is no unused app) and OFF (nothing is recorded); get_unused_title( )
+    "! says so.
     CLASS-METHODS get_unused
       RETURNING
         VALUE(result) TYPE ty_t_unused.
+
+    "! The heading of the unused apps: what get_unused( ) tells in the mode
+    "! recorded with, and since when the cockpit records when that is less
+    "! than the unused_days setting.
+    CLASS-METHODS get_unused_title
+      RETURNING
+        VALUE(result) TYPE string.
 
     CLASS-METHODS get_errors
       IMPORTING
@@ -289,6 +298,12 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CLASS-METHODS check_recent
       RETURNING
         VALUE(result) TYPE abap_bool.
+
+    "! What the recording mode leaves out of the figures - a sentence with a
+    "! leading blank, empty in mode ALL.
+    CLASS-METHODS mode_note
+      RETURNING
+        VALUE(result) TYPE string.
 
     TYPES:
       BEGIN OF ty_s_sum,
@@ -484,7 +499,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
         result-text       = |Recording through the HTTP handler (z2ui5_cl_cockpit_wire=>run): mode | &&
                             |{ z2ui5_cl_cockpit_setup=>get( )-mode }, user tracking | &&
                             |{ z2ui5_cl_cockpit_setup=>get( )-user_tracking }, days in UTC. Phases of a roundtrip | &&
-                            |(load, main, render) need the monitor hook.|.
+                            |(load, main, render) need the monitor hook.{ mode_note( ) }|.
       ENDIF.
       RETURN.
     ENDIF.
@@ -525,8 +540,20 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       result-state      = cs_monitor-active.
       result-strip_type = `Success`.
       result-text       = |Recording: mode { z2ui5_cl_cockpit_setup=>get( )-mode }, | &&
-                          |user tracking { z2ui5_cl_cockpit_setup=>get( )-user_tracking }, days in UTC.|.
+                          |user tracking { z2ui5_cl_cockpit_setup=>get( )-user_tracking }, days in UTC.{ mode_note( ) }|.
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD mode_note.
+
+    result = SWITCH #( z2ui5_cl_cockpit_setup=>get( )-mode
+      WHEN z2ui5_cl_cockpit_setup=>cs_mode-errors
+      THEN ` Only failed roundtrips are recorded: no error rate, no user count, the p95 is that of the failures, ` &&
+           `and no app is called unused.`
+      WHEN z2ui5_cl_cockpit_setup=>cs_mode-sample
+      THEN ` A share of the roundtrips is recorded: counts and sums are estimates, users per day and per app ` &&
+           `count only the users of recorded roundtrips.` ).
 
   ENDMETHOD.
 
@@ -562,7 +589,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                              cnt = ls_sum-cnt ).
     result-p95_ms     = p95( ls_sum ).
 
-    IF z2ui5_cl_cockpit_setup=>get( )-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-none.
+    " mode ERRORS: the users of failed roundtrips only - no count of users
+    IF z2ui5_cl_cockpit_setup=>get( )-user_tracking = z2ui5_cl_cockpit_setup=>cs_users-none
+        OR z2ui5_cl_cockpit_setup=>get( )-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors.
       result-users = `-`.
     ELSE.
       SELECT COUNT( DISTINCT user_key ) FROM z2ui5_t_27
@@ -587,7 +616,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     ENDIF.
 
     DATA(lv_slow) = z2ui5_cl_cockpit_setup=>get( )-slow_ms.
+    " mode ERRORS: the p95 of the failed roundtrips - no verdict on it
     result-p95_state = COND #( WHEN result-roundtrips = 0 THEN `Neutral`
+                               WHEN z2ui5_cl_cockpit_setup=>get( )-mode = z2ui5_cl_cockpit_setup=>cs_mode-errors THEN `Neutral`
                                WHEN result-p95_ms >= lv_slow THEN `Error`
                                WHEN result-p95_ms >= lv_slow / 2 THEN `Critical`
                                ELSE `Good` ).
@@ -767,6 +798,11 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     DATA lt_last TYPE ty_t_last.
 
+    DATA(lv_mode) = z2ui5_cl_cockpit_setup=>get( )-mode.
+    IF lv_mode = z2ui5_cl_cockpit_setup=>cs_mode-errors OR lv_mode = z2ui5_cl_cockpit_setup=>cs_mode-off.
+      RETURN.
+    ENDIF.
+
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( z2ui5_cl_cockpit_setup=>get( )-unused_days ).
 
     SELECT app, MAX( utc_day ) AS utc_day FROM z2ui5_t_22
@@ -776,6 +812,38 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
     result = unused_of( it_impl   = z2ui5_cl_cockpit_inst=>get_implementers( z2ui5_cl_cockpit_inst=>obj_name( `IF_APP` ) )
                         it_last   = lt_last
                         from_day  = lv_from ).
+
+  ENDMETHOD.
+
+  METHOD get_unused_title.
+
+    DATA lv_oldest TYPE c LENGTH 8.
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
+
+    CASE ls_set-mode.
+      WHEN z2ui5_cl_cockpit_setup=>cs_mode-errors.
+        result = `Unused apps - not shown in mode ERRORS: only failed roundtrips are recorded, ` &&
+                 `and an app without a failure is no unused app`.
+        RETURN.
+      WHEN z2ui5_cl_cockpit_setup=>cs_mode-off.
+        result = `Unused apps - not shown while recording is switched off (mode OFF)`.
+        RETURN.
+    ENDCASE.
+
+    result = |Unused apps - implementers of z2ui5_if_app without a roundtrip in { ls_set-unused_days } days|.
+    TRY.
+        SELECT MIN( utc_day ) FROM z2ui5_t_22 INTO @lv_oldest.
+      CATCH cx_root.
+        CLEAR lv_oldest.
+    ENDTRY.
+    IF lv_oldest IS NOT INITIAL AND lv_oldest > z2ui5_cl_cockpit_setup=>day_minus( ls_set-unused_days ).
+      result = |{ result } - recorded only since { z2ui5_cl_cockpit_setup=>day_text( lv_oldest ) }, | &&
+               |"never recorded" means not since then|.
+    ENDIF.
+    IF ls_set-mode = z2ui5_cl_cockpit_setup=>cs_mode-sample.
+      result = |{ result } - mode SAMPLE records { ls_set-sample_pct } % of the roundtrips, an app with few of them | &&
+               |can be listed although it is used|.
+    ENDIF.
 
   ENDMETHOD.
 

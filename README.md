@@ -244,9 +244,13 @@ ABAP only.
 (settings and the daily salt are read once per roll area). Mode `SAMPLE`
 records errors fully and only a share of the rest - decided on the
 milliseconds of the start time - weighted so counts stay estimates of the
-totals; `ERRORS` records failed roundtrips only (no error rate then - the
-Overview shows none, and the error-rate alert and hint are not evaluated); `OFF` stops
-recording without uninstalling. The own tables purge themselves once per day
+totals - but the users per day and per app count only the users of the
+recorded roundtrips, and an app with few roundtrips can show up as unused;
+`ERRORS` records failed roundtrips only (no error rate, no user count, no
+unused apps then - the Overview shows none, the p95 is that of the failures,
+and the error-rate and p95 alerts and the hint are not evaluated); `OFF` stops
+recording without uninstalling. The line above the figures says what the
+mode leaves out. The own tables purge themselves once per day
 on the first recorded roundtrip that is not sticky: that roundtrip claims the
 UTC day (`LAST_PURGE` moves forward in one conditional `UPDATE`, committed on
 its own), so exactly one work process purges and no other waits for it.

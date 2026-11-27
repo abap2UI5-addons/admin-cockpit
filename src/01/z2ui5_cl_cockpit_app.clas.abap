@@ -4161,8 +4161,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       WHEN `APPS`.
         t_apps   = z2ui5_cl_cockpit_stats=>get_apps( lv_days ).
         t_unused = z2ui5_cl_cockpit_stats=>get_unused( ).
-        unused_title = |Unused apps - implementers of z2ui5_if_app without a roundtrip in | &&
-                       |{ z2ui5_cl_cockpit_setup=>get( )-unused_days } days|.
+        unused_title = z2ui5_cl_cockpit_stats=>get_unused_title( ).
       WHEN `ERRORS`.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
         " the texts users saw - administrators only, they hold business data
