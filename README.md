@@ -518,6 +518,14 @@ search in the drafts (`DRAFTS_SEARCH`) and every failure analysis
 (`ERROR_ANALYSIS`). Agree it with your works council like the rest of the
 monitoring (see [Privacy](#privacy-and-the-works-council)).
 
+Passwords stay hidden here too: a field named like a password (`PASSW...`,
+`KENNWORT`, `PWD`, `SECRET`, case ignored), and a field the recorder saw bound
+to an `Input` of type `Password` in the session, shows `***` in the step
+viewer, the field history, the export and the search - which does not find
+its value either. The cockpit's own sessions are not listed nor searched:
+its drafts hold copies of what it showed. Closing a session forgets it - its
+steps and recordings are not kept in the cockpit's state.
+
 ## Recorder - replay what the user saw
 
 The drafts show what an app *held* after each step. What the user *saw* and
@@ -681,9 +689,11 @@ short and agree it with your works council like the rest of the monitoring.
 What is typed into a password field is not stored: the value of every member
 bound to an `Input` of type `Password` in the view of a response, and of every
 member named like a password (`PASSW...`, `KENNWORT`, `PWD`, `SECRET`, case
-ignored), is replaced by `***` in both bodies before they are written. A field
-of another kind is masked only when its name says so - name secret fields
-accordingly. The cockpit's own roundtrips are not recorded: its screens show the
+ignored), is replaced by `***` in both bodies before they are written. The
+password input is in the view of an earlier response - the one of the screen
+the user typed on - so a request is masked with the names of that one too, and
+of the responses after it that rendered no view. A field of another kind is
+masked only when its name says so - name secret fields accordingly. The cockpit's own roundtrips are not recorded: its screens show the
 recordings, sessions and figures of other users.
 
 ## Agents

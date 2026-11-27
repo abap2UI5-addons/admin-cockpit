@@ -47,6 +47,7 @@ CLASS ltcl_session DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
   PRIVATE SECTION.
 
     METHODS flatten_app_only FOR TESTING.
+    METHODS flatten_masks_secrets FOR TESTING.
     METHODS ms_as_text FOR TESTING.
     METHODS signs_of_trouble FOR TESTING.
     METHODS story_told FOR TESTING.
@@ -233,6 +234,46 @@ CLASS ltcl_session IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = `(missing)`
                                         act = value_of( it_value = lt_value
                                                         path     = `TY_T_ATTRI[1]-NAME` ) ).
+
+  ENDMETHOD.
+
+  METHOD flatten_masks_secrets.
+
+    " named like a password, bound to a password input (MV_PIN), and empty
+    DATA(lv_xml) = `<?xml version="1.0" encoding="utf-16"?>` &&
+                   `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">` &&
+                   `<asx:values><DATA href="#o1"/></asx:values>` &&
+                   `<asx:heap xmlns:cls="http://www.sap.com/abapxml/classes/global">` &&
+                   `<cls:ZCL_LOGIN id="o1"><local.ZCL_LOGIN>` &&
+                   `<MV_USER>ALICE</MV_USER><MV_PIN>4711</MV_PIN><MS_LOGIN><PASSWORD>se&amp;cret</PASSWORD>` &&
+                   `<NEW_PWD/></MS_LOGIN><MT_SECRET><item>s1</item></MT_SECRET>` &&
+                   `</local.ZCL_LOGIN></cls:ZCL_LOGIN>` &&
+                   `</asx:heap></asx:abap>`.
+
+    DATA(lt_value) = z2ui5_cl_cockpit_session=>flatten( xml       = lv_xml
+                                                        it_secret = VALUE #( ( `MV_PIN` ) ) ).
+
+    cl_abap_unit_assert=>assert_equals( exp = `ALICE`
+                                        act = value_of( it_value = lt_value
+                                                        path     = `ZCL_LOGIN-MV_USER` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `***`
+                                        act = value_of( it_value = lt_value
+                                                        path     = `ZCL_LOGIN-MV_PIN` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `***`
+                                        act = value_of( it_value = lt_value
+                                                        path     = `ZCL_LOGIN-MS_LOGIN-PASSWORD` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = ``
+                                        act = value_of( it_value = lt_value
+                                                        path     = `ZCL_LOGIN-MS_LOGIN-NEW_PWD` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `***`
+                                        act = value_of( it_value = lt_value
+                                                        path     = `ZCL_LOGIN-MT_SECRET[1]` ) ).
+
+    " without the names of the password inputs only the names give it away
+    lt_value = z2ui5_cl_cockpit_session=>flatten( lv_xml ).
+    cl_abap_unit_assert=>assert_equals( exp = `4711`
+                                        act = value_of( it_value = lt_value
+                                                        path     = `ZCL_LOGIN-MV_PIN` ) ).
 
   ENDMETHOD.
 

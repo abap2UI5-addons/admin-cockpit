@@ -269,6 +269,9 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         t_step       TYPE ty_t_step,
         " the business objects of the session, in the order they appear
         t_business   TYPE ty_t_business,
+        " the members bound to a password input in a recorded view of the
+        " session, upper case - their values are shown as *** (flatten)
+        t_secret     TYPE string_table,
       END OF ty_s_steps.
 
     TYPES:
@@ -408,6 +411,8 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! @parameter check_all     | also the objects of the framework itself
     "! @parameter check_changes | only the fields that changed
     "! @parameter search        | only the fields whose path or value contains it
+    "! @parameter it_secret     | members shown as *** besides those named like a
+    "!                            password - get_steps( )-t_secret
     CLASS-METHODS get_view
       IMPORTING
         id            TYPE clike
@@ -415,6 +420,7 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_all     TYPE abap_bool DEFAULT abap_false
         check_changes TYPE abap_bool DEFAULT abap_false
         search        TYPE clike OPTIONAL
+        it_secret     TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_s_view.
 
@@ -436,11 +442,13 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! @parameter it_step   | the steps of the session, as get_steps returns them
     "! @parameter path      | the field, as flatten names it
     "! @parameter check_all | also the objects of the framework itself
+    "! @parameter it_secret | members shown as *** - get_steps( )-t_secret
     CLASS-METHODS get_history
       IMPORTING
         it_step       TYPE ty_t_step
         path          TYPE string
         check_all     TYPE abap_bool DEFAULT abap_false
+        it_secret     TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_t_history.
 
@@ -641,11 +649,16 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! The fields of a serialized draft (asXML of CALL TRANSFORMATION id):
     "! every leaf of the object graph as path and value, a reference as an
     "! arrow to the class it points to. Without check_all only the objects
-    "! that are not the framework's and the data they reference.
+    "! that are not the framework's and the data they reference. The value of
+    "! a member named like a password (z2ui5_cl_cockpit_wire=&gt;check_secret)
+    "! or listed in it_secret is *** - a field bound to a password input is
+    "! an attribute of the app, in every draft.
+    "! @parameter it_secret | more members to mask, upper case
     CLASS-METHODS flatten
       IMPORTING
         xml           TYPE string
         check_all     TYPE abap_bool DEFAULT abap_false
+        it_secret     TYPE string_table OPTIONAL
       RETURNING
         VALUE(result) TYPE ty_t_value.
 
@@ -790,9 +803,13 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! What the recorder has for the steps: per step what the user pressed
     "! and typed - read against the screen the step continues - and what the
     "! response showed.
+    "! @parameter et_secret | the members bound to a password input in the
+    "!                       recorded views, upper case
     CLASS-METHODS fill_wire
+      EXPORTING
+        et_secret TYPE string_table
       CHANGING
-        ct_step TYPE ty_t_step.
+        ct_step   TYPE ty_t_step.
 
     "! The user's part of a roundtrip as one line: the control pressed and
     "! the fields typed, named after the controls of the screen.
@@ -857,6 +874,15 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         val           TYPE string
       RETURNING
         VALUE(result) TYPE string.
+
+    "! Whether the field of a path is secret: its last member named like a
+    "! password, or one of it_secret.
+    CLASS-METHODS check_secret
+      IMPORTING
+        path          TYPE string
+        it_secret     TYPE string_table
+      RETURNING
+        VALUE(result) TYPE abap_bool.
 
 ENDCLASS.
 
@@ -1071,7 +1097,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         " the monitor's log is an extra - the steps stand without it
     ENDTRY.
     TRY.
-        fill_wire( CHANGING ct_step = result-t_step ).
+        fill_wire( IMPORTING et_secret = result-t_secret
+                   CHANGING  ct_step   = result-t_step ).
       CATCH cx_root ##NO_HANDLER.
         " so are the recordings
     ENDTRY.
@@ -1118,10 +1145,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     result-app = app_of( lv_new ).
     DATA(lt_new) = flatten( xml       = lv_new
-                            check_all = check_all ).
+                            check_all = check_all
+                            it_secret = it_secret ).
     IF id_prev IS NOT INITIAL.
       lt_old = flatten( xml       = lv_old
-                        check_all = check_all ).
+                        check_all = check_all
+                        it_secret = it_secret ).
     ENDIF.
     DATA(lt_field) = diff( it_new      = lt_new
                            it_old      = lt_old
@@ -1198,7 +1227,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
       TRY.
           DATA(lv_xml) = read_data( ls_step-id ).
           IF lv_prev IS NOT INITIAL.
-            lt_old = flatten( read_data( lv_prev ) ).
+            lt_old = flatten( xml       = read_data( lv_prev )
+                              it_secret = ls_steps-t_secret ).
           ENDIF.
         CATCH cx_root INTO DATA(lx).
           APPEND |   not readable: { lx->get_text( ) }| TO lt_lines.
@@ -1209,7 +1239,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lt_field) = diff( it_new      = flatten( lv_xml )
+      DATA(lt_field) = diff( it_new      = flatten( xml       = lv_xml
+                                                 it_secret = ls_steps-t_secret )
                              it_old      = lt_old
                              check_first = xsdbool( lv_prev IS INITIAL ) ).
       DATA(lv_changes) = 0.
@@ -1258,7 +1289,8 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
                                              value = `(not there)`
                                              state = `None` ).
       LOOP AT flatten( xml       = lv_xml
-                       check_all = check_all ) INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
+                       check_all = check_all
+                       it_secret = it_secret ) INTO DATA(ls_value) WHERE path = path. "#EC CI_SORTSEQ
         ls_history-value = ls_value-value.
         EXIT.
       ENDLOOP.
@@ -2641,6 +2673,7 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     DATA lv_request TYPE string.
     DATA lv_response TYPE string.
 
+    CLEAR et_secret.
     LOOP AT ct_step INTO DATA(ls_step).
       APPEND ls_step-id TO lt_id.
     ENDLOOP.
@@ -2695,6 +2728,12 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         ENDLOOP.
         LOOP AT z2ui5_cl_cockpit_wire=>views_of( lv_response ) INTO DATA(ls_view) WHERE n = `MAIN`. "#EC CI_SORTSEQ
           lv_screen = ls_view-v.
+        ENDLOOP.
+        LOOP AT z2ui5_cl_cockpit_wire=>secret_names_of( lv_response ) INTO DATA(lv_secret).
+          lv_secret = to_upper( lv_secret ).
+          IF NOT line_exists( et_secret[ table_line = lv_secret ] ).
+            APPEND lv_secret TO et_secret.
+          ENDIF.
         ENDLOOP.
       ENDIF.
       INSERT VALUE #( step = <step>-step
@@ -2997,6 +3036,9 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
         READ TABLE lt_entry INTO ls_entry WITH TABLE KEY id = ls_leaf-href.
         ls_leaf-value = COND #( WHEN sy-subrc = 0 THEN |-> { ls_entry-label }|
                                 ELSE |-> #{ ls_leaf-href }| ).
+      ELSEIF ls_leaf-value IS NOT INITIAL AND check_secret( path      = ls_leaf-path
+                                                            it_secret = it_secret ) = abap_true.
+        ls_leaf-value = `***`.
       ENDIF.
       APPEND VALUE #( path  = ls_leaf-path
                       value = ls_leaf-value ) TO result.
@@ -3260,6 +3302,32 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     result = xsdbool( label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_UI5_*` )
                       OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_SRT_*` )
                       OR label CP z2ui5_cl_cockpit_inst=>obj_name( `CL_AJSON*` ) ).
+
+  ENDMETHOD.
+
+  METHOD check_secret.
+
+    DATA(lv_name) = path.
+    DATA(lv_dash) = find( val = lv_name
+                          sub = `-`
+                          occ = -1 ).
+    IF lv_dash >= 0.
+      lv_name = substring( val = lv_name
+                           off = lv_dash + 1 ).
+    ENDIF.
+    " a row of a table of values: T_PWD[2]
+    DATA(lv_bracket) = find( val = lv_name
+                             sub = `[` ).
+    IF lv_bracket > 0.
+      lv_name = substring( val = lv_name
+                           len = lv_bracket ).
+    ENDIF.
+    IF z2ui5_cl_cockpit_wire=>check_secret( lv_name ) = abap_true.
+      result = abap_true.
+      RETURN.
+    ENDIF.
+    lv_name = to_upper( lv_name ).
+    result = xsdbool( line_exists( it_secret[ table_line = lv_name ] ) ).
 
   ENDMETHOD.
 

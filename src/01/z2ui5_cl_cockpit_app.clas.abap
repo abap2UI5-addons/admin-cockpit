@@ -139,6 +139,8 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA detail_app TYPE string.
     DATA s_occ      TYPE z2ui5_cl_cockpit_stats=>ty_s_occurrence.
     DATA s_session  TYPE z2ui5_cl_cockpit_session=>ty_s_session.
+    " the members of the open session bound to a password input - masked
+    DATA t_secret   TYPE string_table.
     DATA step_index TYPE i.
     " the step every other one is compared with, 0 for the step it continues
     DATA step_base  TYPE i.
@@ -3375,6 +3377,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                 ENDIF.
 
                 t_steps = ls_steps-t_step.
+                t_secret = ls_steps-t_secret.
                 s_session = VALUE #( s_sessions-t_session[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
                 IF s_session IS INITIAL.
                   s_session = VALUE #( id    = id
@@ -3525,7 +3528,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                                 check_all     = step_all
                                                 check_changes = xsdbool( step_changes = abap_true
                                                                          AND lv_prev IS NOT INITIAL )
-                                                search        = step_search ).
+                                                search        = step_search
+                                                it_secret     = t_secret ).
 
     step_text = |Step { step_index } of { lines( t_steps ) } - { ls_step-time } UTC|.
     step_can_back = xsdbool( step_index > 1 ).
@@ -4041,7 +4045,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   DATA(lv_path) = client->get_event_arg( ).
                   t_history = z2ui5_cl_cockpit_session=>get_history( it_step   = t_steps
                                                                      path      = lv_path
-                                                                     check_all = step_all ).
+                                                                     check_all = step_all
+                                                                     it_secret = t_secret ).
                   DATA(lv_changes) = 0.
                   LOOP AT t_history TRANSPORTING NO FIELDS WHERE change IS NOT INITIAL. "#EC CI_SORTSEQ
                     lv_changes = lv_changes + 1.

@@ -457,6 +457,22 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING
         VALUE(result) TYPE string.
 
+    "! Whether a member is named like a password (c_secret_names, case
+    "! ignored) - its value is never stored, and never shown.
+    CLASS-METHODS check_secret
+      IMPORTING
+        name          TYPE clike
+      RETURNING
+        VALUE(result) TYPE abap_bool.
+
+    "! The model members bound to a password input of a view the response
+    "! displays - Input type="Password" - by their last name.
+    CLASS-METHODS secret_names_of
+      IMPORTING
+        response      TYPE string
+      RETURNING
+        VALUE(result) TYPE string_table.
+
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -477,15 +493,35 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     " (case ignored)
     CONSTANTS c_secret_names TYPE string VALUE `[A-Z0-9_]*(PASSW|KENNWORT|PWD|SECRET)[A-Z0-9_]*`.
 
+    TYPES ty_t_row TYPE STANDARD TABLE OF z2ui5_t_28 WITH EMPTY KEY.
+
     CLASS-DATA gt_buffer TYPE STANDARD TABLE OF ty_s_pending WITH EMPTY KEY.
 
-    "! The model members bound to a password input of a view the response
-    "! displays - Input type="Password" - by their last name.
-    CLASS-METHODS secret_names_of
+    "! The secret members of the screen a request comes from. Its password
+    "! inputs are in the view of an earlier response - the one that wrote
+    "! the draft the request starts from (secret_names_of), or, when that
+    "! one displayed no view, the members it masked itself, carried forward.
+    "! @parameter draft_id_prev | the draft the request starts from - the key
+    "!                            of that recording (row_of)
+    "! @parameter it_before     | rows of the same write, not in the table yet
+    CLASS-METHODS secret_names_before
       IMPORTING
-        response      TYPE string
+        draft_id_prev TYPE clike
+        it_before     TYPE ty_t_row OPTIONAL
       RETURNING
         VALUE(result) TYPE string_table.
+
+    "! The key of a recording: the draft it wrote, so the next roundtrip of
+    "! the session finds it by key (secret_names_before) - a UUID when it
+    "! wrote none or the draft has a recording already.
+    CLASS-METHODS id_of
+      IMPORTING
+        draft_id      TYPE clike
+        it_before     TYPE ty_t_row OPTIONAL
+      RETURNING
+        VALUE(result) TYPE z2ui5_t_28-id
+      RAISING
+        cx_static_check.
 
     "! A body with the values of secret members replaced by "***": every
     "! member named like a password (c_secret_names) and every member of
@@ -547,6 +583,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
     "! of the bodies (roundtrip_of), the user as the privacy setting allows,
     "! the values of password fields masked.
     "! @parameter timestampl | when it ran - now when initial
+    "! @parameter it_before  | rows of the same write, not in the table yet
     CLASS-METHODS row_of
       IMPORTING
         request       TYPE string
@@ -555,6 +592,7 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         check_sticky  TYPE abap_bool
         ms_total      TYPE i DEFAULT 0
         timestampl    TYPE timestampl OPTIONAL
+        it_before     TYPE ty_t_row OPTIONAL
       RETURNING
         VALUE(result) TYPE z2ui5_t_28
       RAISING
@@ -858,6 +896,7 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
   METHOD record_bodies.
 
     DATA ls_row TYPE z2ui5_t_28.
+    DATA lt_row TYPE ty_t_row.
 
     TRY.
         DATA(ls_set) = z2ui5_cl_cockpit_setup=>get( ).
@@ -897,12 +936,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                            http_status  = ls_buffered-http_status
                            check_sticky = ls_buffered-check_sticky
                            ms_total     = ls_buffered-ms_total
-                           timestampl   = ls_buffered-timestampl ).
+                           timestampl   = ls_buffered-timestampl
+                           it_before    = lt_row ).
           IF ls_row-app = lv_own.
             CONTINUE.
           ENDIF.
-          INSERT z2ui5_t_28 FROM @ls_row.
+          APPEND ls_row TO lt_row.
         ENDLOOP.
+        " a key taken in the meantime costs that one recording, not all
+        INSERT z2ui5_t_28 FROM TABLE @lt_row ACCEPTING DUPLICATE KEYS.
         COMMIT WORK.
       CATCH cx_root.
         IF check_sticky = abap_false.
@@ -919,7 +961,6 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
 
     DATA lt_secret TYPE string_table.
 
-    result-id           = cl_system_uuid=>create_uuid_c32_static( ).
     result-timestampl   = timestampl.
     IF result-timestampl IS INITIAL.
       result-timestampl = z2ui5_cl_cockpit_setup=>now( ).
@@ -948,9 +989,15 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     IF result-app IS INITIAL AND result-draft_id_prev IS NOT INITIAL.
       result-app = to_upper( z2ui5_cl_cockpit_session=>get_app_of_draft( result-draft_id_prev ) ).
     ENDIF.
+    result-id = id_of( draft_id  = result-draft_id
+                       it_before = it_before ).
 
-    " what was typed into a password field is never stored
+    " what was typed into a password field is never stored. The field is in
+    " the view of the screen the user typed on - an earlier response: abap2UI5
+    " sends a view only when the app renders one, so this response may have none
     lt_secret = secret_names_of( response ).
+    APPEND LINES OF secret_names_before( draft_id_prev = result-draft_id_prev
+                                         it_before     = it_before ) TO lt_secret.
     result-req_body = masked( body    = request
                               it_name = lt_secret ).
     result-res_body = masked( body    = response
@@ -963,6 +1010,71 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-res_body = substring( val = result-res_body
                                    len = c_max_body ).
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD check_secret.
+
+    FIND FIRST OCCURRENCE OF REGEX c_secret_names IN name IGNORING CASE.
+    result = xsdbool( sy-subrc = 0 ).
+
+  ENDMETHOD.
+
+  METHOD id_of.
+
+    DATA lv_taken TYPE z2ui5_t_28-id.
+
+    IF draft_id IS NOT INITIAL AND strlen( draft_id ) <= 32.
+      result = draft_id.
+      IF NOT line_exists( it_before[ id = result ] ).    "#EC CI_SORTSEQ
+        SELECT SINGLE id FROM z2ui5_t_28
+          WHERE id = @result
+          INTO @lv_taken.
+        IF sy-subrc <> 0.
+          RETURN.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    result = cl_system_uuid=>create_uuid_c32_static( ).
+
+  ENDMETHOD.
+
+  METHOD secret_names_before.
+
+    DATA lv_id TYPE z2ui5_t_28-id.
+    DATA ls_before TYPE z2ui5_t_28.
+    DATA lt_match TYPE match_result_tab.
+
+    IF draft_id_prev IS INITIAL OR strlen( draft_id_prev ) > 32.
+      RETURN.
+    ENDIF.
+    lv_id = draft_id_prev.
+    ls_before = VALUE #( it_before[ id = lv_id ] OPTIONAL ). "#EC CI_SORTSEQ
+    IF ls_before IS INITIAL.
+      SELECT SINGLE req_body, res_body FROM z2ui5_t_28
+        WHERE id = @lv_id
+        INTO CORRESPONDING FIELDS OF @ls_before.
+      IF sy-subrc <> 0.
+        RETURN.
+      ENDIF.
+    ENDIF.
+
+    result = secret_names_of( ls_before-res_body ).
+    " "NAME":"***" - masked there, so secret here too: a response without a
+    " view still sends the model, and the request carries what was typed
+    FIND ALL OCCURRENCES OF REGEX `"[A-Za-z0-9_]+":"\*\*\*"` IN ls_before-req_body RESULTS lt_match.
+    LOOP AT lt_match INTO DATA(ls_match).
+      APPEND substring( val = ls_before-req_body
+                        off = ls_match-offset + 1
+                        len = ls_match-length - 8 ) TO result.
+    ENDLOOP.
+    FIND ALL OCCURRENCES OF REGEX `"[A-Za-z0-9_]+":"\*\*\*"` IN ls_before-res_body RESULTS lt_match.
+    LOOP AT lt_match INTO ls_match.
+      APPEND substring( val = ls_before-res_body
+                        off = ls_match-offset + 1
+                        len = ls_match-length - 8 ) TO result.
+    ENDLOOP.
+    " a name twice costs one more search in masked( ), nothing else
 
   ENDMETHOD.
 
