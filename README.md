@@ -379,7 +379,8 @@ view XML the roundtrip displayed.
 
 **It re-runs the app logic for real.** Whatever the event writes, posts or
 sends happens again - as the administrator, with the administrator's
-authorizations, and committed if the app commits. The cockpit therefore asks
+authorizations, and committed if the app commits (when the event raises
+again, what it wrote and did not commit is rolled back). The cockpit therefore asks
 first, offers it to administrators only (`CHANGE`) and writes every replay to
 the change log before it starts. Limits, all shown in the dialog:
 

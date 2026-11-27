@@ -71,7 +71,8 @@ CLASS z2ui5_cl_cockpit_repro DEFINITION PUBLIC FINAL CREATE PUBLIC.
         VALUE(result) TYPE string.
 
     "! Resume the draft and fire the event - the app logic runs again.
-    "! Never raises; the result says what happened.
+    "! Never raises; the result says what happened. A replay that raises is
+    "! rolled back - call it with a LUW that holds nothing else.
     CLASS-METHODS run
       IMPORTING
         draft_id_prev TYPE clike
@@ -166,6 +167,14 @@ CLASS z2ui5_cl_cockpit_repro IMPLEMENTATION.
         result-summary    = |Replayed: event { lv_event } ran without an exception this time. The cause may depend | &&
                             |on values typed in that roundtrip, on the data at that time or on the original user.|.
       CATCH cx_root INTO DATA(lx_click).
+        " what the app wrote before it raised is undone, as abap2UI5 does
+        " for a failed roundtrip - the cockpit's own draft save would commit
+        " it otherwise. The LUW holds nothing else: the change log of the
+        " reproduction is committed before the run.
+        TRY.
+            ROLLBACK WORK.                               "#EC CI_ROLLBACK
+          CATCH cx_root ##NO_HANDLER.
+        ENDTRY.
         result-check_error = abap_true.
         result-strip_type  = `Error`.
         result-summary     = |Reproduced: event { lv_event } ends in an exception again.|.
