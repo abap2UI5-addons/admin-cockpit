@@ -481,7 +481,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->tag( `ProgressIndicator`
                         )->a( n = `percentValue` v = `{BAR}`
                         )->a( n = `displayValue` v = `{BAR_TEXT}`
-                        )->a( n = `state`        v = `{STATE}`
+                        )->a( n = `state`        v = `{= ${STATE} || 'None' }`
                         )->a( n = `showValue`    v = `true`
                     )->tag( `Text`
                         )->a( n = `text` v = `{USERS}`
@@ -1711,7 +1711,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                     )->tag( `ProgressIndicator`
                         )->a( n = `percentValue` v = `{BAR}`
                         )->a( n = `displayValue` v = `{CALLS}`
-                        )->a( n = `state`        v = `{STATE}`
+                        )->a( n = `state`        v = `{= ${STATE} || 'None' }`
                         )->a( n = `showValue`    v = `true`
                     )->tag( `Text`
                         )->a( n = `text` v = `{POLICY}`

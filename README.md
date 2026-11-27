@@ -809,10 +809,6 @@ copied in as one more package, `npm run downport && npm run auto_transpile`,
 then the generated tests - each one printed, exit code 1 on any failure or
 when none ran. The first run takes a few minutes.
 
-**Temporary state:** until `@abap2ui5/linter` releases its list with the
-monitor interface (abap2UI5/linter#140, merged), `abap2ui5lint.jsonc` waives
-`non-released-api` for the monitor class.
-
 ## Contributing
 
 Issues and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md)
