@@ -44,6 +44,7 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA t_unused      TYPE z2ui5_cl_cockpit_stats=>ty_t_unused.
     DATA unused_title  TYPE string.
     DATA t_errors      TYPE z2ui5_cl_cockpit_stats=>ty_t_error.
+    DATA errors_title  TYPE string.
     DATA t_hints       TYPE z2ui5_cl_cockpit_stats=>ty_t_hint.
     DATA t_slow        TYPE z2ui5_cl_cockpit_stats=>ty_t_slow.
     DATA s_live        TYPE z2ui5_cl_cockpit_stats=>ty_s_live.
@@ -134,6 +135,9 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     " s_head-can_change only feeds the view: a bound attribute comes back from
     " the browser, so a display-only user could set it to true there
     DATA change_allowed TYPE abap_bool.
+    " whether the selected occurrence may be reproduced - the copy REPRODUCE
+    " reads, repro_enabled only feeds the view (as change_allowed above)
+    DATA repro_allowed TYPE abap_bool.
     " the app the process variants are of - empty for all apps
     DATA variants_app TYPE string.
     DATA detail_app TYPE string.
@@ -262,8 +266,23 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " undo whatever the browser wrote into the bound copy
+    " decided again on every roundtrip: a right revoked meanwhile (by the
+    " customer class) takes effect now, not at the next start. And the
+    " bound copies are undone - the browser may have written into them
+    change_allowed    = z2ui5_cl_cockpit_auth=>check( z2ui5_if_cockpit_auth=>cs_action-change ).
     s_head-can_change = change_allowed.
+    IF change_allowed = abap_false.
+      CLEAR repro_allowed.
+      " what only administrators see, loaded while the right was there
+      CLEAR t_wire_message_all.
+      CLEAR s_wire_messages.
+      CLEAR s_wire_inputs.
+      CLEAR wire_messages_shown.
+      CLEAR s_live_sessions.
+      CLEAR s_sessions.
+      CLEAR sessions_shown.
+    ENDIF.
+    repro_enabled = repro_allowed.
 
     IF client->check_on_init( ).
       model_init( ).
@@ -716,7 +735,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
 
     errors->ele( `Table`
-        )->a( n = `headerText`       v = `Errors grouped by app, event, exception class and first line - select one for the details`
+        )->a( n = `headerText`       v = client->_bind( errors_title )
         )->a( n = `items`            v = client->_bind( t_errors )
         )->a( n = `visible`          v = client->_bind( s_monitor-check_data )
         )->a( n = `growing`          v = `true`
@@ -2202,6 +2221,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
   METHOD popup_app.
 
+    " the roundtrips without an app have no drafts, variants or sessions of
+    " their own to show
+    DATA(lv_app_known) = COND string( WHEN detail_app = z2ui5_cl_cockpit_stats=>c_no_app
+                                      THEN `false` ELSE `true` ).
+
     DATA(popup) = z2ui5_cl_ui5_view_builder=>factory(
         )->ele( n = `FragmentDefinition` ns = `core`
             )->a( n = `xmlns`      v = `sap.m`
@@ -2297,15 +2321,18 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->a( n = `text`    v = `Business objects`
             )->a( n = `icon`    v = `sap-icon://customer-and-supplier`
             )->a( n = `tooltip` v = `The business objects this app works with, from its drafts - types only, no values`
+            )->a( n = `visible` v = lv_app_known
             )->a( n = `press`   v = client->_event( `APP_OBJECTS` )
         )->tag( `Button`
             )->a( n = `text`    v = `Process variants`
             )->a( n = `icon`    v = `sap-icon://process`
             )->a( n = `tooltip` v = `The ways users go through this app, from the recorder - counted, failures marked`
+            )->a( n = `visible` v = lv_app_known
             )->a( n = `press`   v = client->_event( `APP_VARIANTS` )
         )->tag( `Button`
             )->a( n = `text`    v = `Sessions of this app`
             )->a( n = `icon`    v = `sap-icon://history`
+            )->a( n = `visible` v = lv_app_known
             )->a( n = `enabled` v = client->_bind( s_head-can_change )
             )->a( n = `press`   v = client->_event( `APP_SESSIONS` )
         )->tag( `Button`
@@ -3363,10 +3390,19 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                   sessions_text = |The draft table could not be read: { s_sessions-error }|.
                   RETURN.
                 ENDIF.
-                sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }| &&
+                IF session_search IS INITIAL.
+                  sessions_text = |Sessions - { lines( s_sessions-t_session ) } shown of { s_sessions-sessions }|.
+                ELSE.
+                  " a search reads the app of each session from its draft - so
+                  " it looks at the newest sessions only, and says so
+                  sessions_text = |Sessions - { lines( s_sessions-t_session ) } matching "{ session_search }" | &&
+                                  |in the newest { s_sessions-searched } of { s_sessions-sessions }|.
+                ENDIF.
+                sessions_text = sessions_text &&
                     |{ COND #( WHEN session_errors = abap_true THEN ` with a failed roundtrip` ) }, newest | &&
-                    |activity first{ COND #( WHEN session_search IS NOT INITIAL
-                                             THEN |, matching "{ session_search }"| ) }| &&
+                    |activity first| &&
+                    |{ COND #( WHEN session_search IS NOT INITIAL AND s_sessions-check_more = abap_true
+                               THEN ` - older sessions were not searched` ) }| &&
                     |{ COND #( WHEN s_sessions-check_capped = abap_true
                                THEN | - read from the newest { z2ui5_cl_cockpit_session=>c_max_nodes } drafts| ) }|.
 
@@ -3689,6 +3725,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
     s_occ = VALUE #( t_occurrences[ id = id ] OPTIONAL ). "#EC CI_SORTSEQ
     error_text = z2ui5_cl_cockpit_stats=>get_error_text( s_occ-id ).
     CLEAR repro_enabled.
+    CLEAR repro_allowed.
     session_enabled = xsdbool( change_allowed = abap_true
                                AND ( s_occ-draft_id IS NOT INITIAL OR s_occ-draft_id_prev IS NOT INITIAL ) ).
 
@@ -3711,6 +3748,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
                                                         check_sticky  = s_occ-check_sticky
                                                         owner         = lv_owner ).
     IF repro_hint IS INITIAL.
+      repro_allowed = abap_true.
       repro_enabled = abap_true.
       repro_hint = |Occurrence of { s_occ-time }: draft { s_occ-draft_id_prev }, event { s_occ-event }| &&
                    |{ COND #( WHEN lv_owner = z2ui5_cl_cockpit_repro=>cs_owner-unknown
@@ -3723,6 +3761,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
 
     DATA lv_flows TYPE string.
     DATA lv_newest TYPE string.
+    DATA lv_app TYPE string.
 
     TRY.
         CASE client->get_event( ).
@@ -3734,7 +3773,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             detail_app = client->get_event_arg( ).
             CLEAR s_app_objects.
             CLEAR app_objects_shown.
-            t_events = z2ui5_cl_cockpit_stats=>get_app_events( app  = detail_app
+            " the label of the roundtrips without an app stands for the
+            " empty app in the figures - no app is called like that
+            IF detail_app <> z2ui5_cl_cockpit_stats=>c_no_app.
+              lv_app = detail_app.
+            ENDIF.
+            t_events = z2ui5_cl_cockpit_stats=>get_app_events( app  = lv_app
                                                               days = get_days( ) ).
             popup_app( ).
 
@@ -3753,12 +3797,12 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             occurrence_select( client->get_event_arg( ) ).
 
           WHEN `REPRODUCE`.
-            IF check_change( ) = abap_true AND repro_enabled = abap_true.
+            IF check_change( ) = abap_true AND repro_allowed = abap_true.
               popup_confirm_reproduce( ).
             ENDIF.
 
           WHEN `REPRODUCE_OK`.
-            IF check_change( ) = abap_true AND repro_enabled = abap_true.
+            IF check_change( ) = abap_true AND repro_allowed = abap_true.
               " the change log first, committed: the replayed app may roll back
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-repro
                                           text   = |{ s_error-app } event { s_occ-event } from draft | &&
@@ -4005,6 +4049,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `APP_OBJECTS`.
+            IF detail_app = z2ui5_cl_cockpit_stats=>c_no_app.
+              client->message_toast_display( `No app was resolved for these roundtrips - nothing to read.` ).
+              RETURN.
+            ENDIF.
             s_app_objects = z2ui5_cl_cockpit_session=>get_app_objects( detail_app ).
             app_objects_shown = abap_true.
             app_objects_text = COND #(
@@ -4026,6 +4074,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             ENDIF.
 
           WHEN `APP_VARIANTS`.
+            IF detail_app = z2ui5_cl_cockpit_stats=>c_no_app.
+              client->message_toast_display( `No app was resolved for these roundtrips - nothing to read.` ).
+              RETURN.
+            ENDIF.
             variants_app = detail_app.
             popup_variants( ).
 
@@ -4045,6 +4097,10 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             messages_filter( ).
 
           WHEN `APP_SESSIONS`.
+            IF detail_app = z2ui5_cl_cockpit_stats=>c_no_app.
+              client->message_toast_display( `No app was resolved for these roundtrips - nothing to read.` ).
+              RETURN.
+            ENDIF.
             IF check_change( ) = abap_true.
               client->popup_destroy( ).
               tab = `DRAFTS`.
@@ -4164,6 +4220,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         unused_title = z2ui5_cl_cockpit_stats=>get_unused_title( ).
       WHEN `ERRORS`.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
+        errors_title = `Errors grouped by app, event, exception class and first line - select one for the details`.
+        IF lines( t_errors ) >= z2ui5_cl_cockpit_stats=>c_max_error_groups.
+          errors_title = |{ errors_title } - the first { z2ui5_cl_cockpit_stats=>c_max_error_groups } groups only, | &&
+                         |choose a shorter period|.
+        ENDIF.
         " the texts users saw - administrators only, they hold business data
         wire_messages_shown = change_allowed.
         CLEAR t_wire_message_all.

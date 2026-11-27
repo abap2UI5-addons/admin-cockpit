@@ -26,6 +26,12 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
     CONSTANTS c_monitor_intf  TYPE string VALUE `IF_UI5_MONITOR`.
     CONSTANTS c_monitor_class TYPE string VALUE `CL_COCKPIT_MONITOR`.
 
+    "! The most error groups get_errors( ) returns - a list that long is cut.
+    CONSTANTS c_max_error_groups TYPE i VALUE 5000.
+    "! The app of the roundtrips whose app could not be resolved, as the Apps
+    "! tab and the alert window name it - it is no app name.
+    CONSTANTS c_no_app TYPE string VALUE `(no app resolved)`.
+
     TYPES:
       BEGIN OF ty_s_monitor,
         state        TYPE string,
@@ -367,14 +373,17 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
     TYPES ty_t_db_sum TYPE STANDARD TABLE OF ty_s_db_sum WITH EMPTY KEY.
 
     TYPES:
-      BEGIN OF ty_s_err_log,
-        timestampl  TYPE timestampl,
+      "! One error group as the database counts it.
+      BEGIN OF ty_s_err_group,
         app         TYPE c LENGTH 30,
         event       TYPE c LENGTH 40,
         error_class TYPE c LENGTH 30,
         error_head  TYPE c LENGTH 200,
-      END OF ty_s_err_log.
-    TYPES ty_t_err_log TYPE STANDARD TABLE OF ty_s_err_log WITH EMPTY KEY.
+        cnt         TYPE i,
+        first_ts    TYPE timestampl,
+        last_ts     TYPE timestampl,
+      END OF ty_s_err_group.
+    TYPES ty_t_err_group TYPE STANDARD TABLE OF ty_s_err_group WITH EMPTY KEY.
 
     TYPES:
       BEGIN OF ty_s_last,
@@ -385,14 +394,33 @@ CLASS z2ui5_cl_cockpit_stats DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     TYPES ty_t_sum_app TYPE SORTED TABLE OF ty_s_sum WITH UNIQUE KEY app.
 
-    "! Error log rows (newest first) grouped by app, event, exception class
-    "! and first line - the group key is G1, G2, ... in order of the newest
-    "! occurrence, the result sorted by count.
-    CLASS-METHODS group_errors
+    "! The error groups the database counted, as the Errors tab shows them -
+    "! the group key is G1, G2, ... in order of the newest occurrence, the
+    "! result sorted by count.
+    CLASS-METHODS errors_of
       IMPORTING
-        it_log        TYPE ty_t_err_log
+        it_group      TYPE ty_t_err_group
       RETURNING
         VALUE(result) TYPE ty_t_error.
+
+    "! The phase that took longest in a slow roundtrip - unknown when the
+    "! roundtrip came with no phases (recorded by the HTTP handler alone).
+    CLASS-METHODS phase_of
+      IMPORTING
+        ms_load       TYPE i
+        ms_main       TYPE i
+        ms_render     TYPE i
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! The figures of get_window( ) from the sums of whole UTC hours - the
+    "! rows before the hour of from_ts left out, across midnight too.
+    CLASS-METHODS window_of
+      IMPORTING
+        it_rows       TYPE ty_t_db_sum
+        from_ts       TYPE timestampl
+      RETURNING
+        VALUE(result) TYPE ty_t_window.
 
     "! The app classes without a recorded day on or after from_day.
     CLASS-METHODS unused_of
@@ -725,7 +753,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
     LOOP AT lt_sum INTO DATA(ls_sum).
       DATA(ls_app) = VALUE ty_s_app( app          = COND #( WHEN ls_sum-app IS INITIAL
-                                                            THEN `(no app resolved)` ELSE ls_sum-app )
+                                                            THEN c_no_app ELSE ls_sum-app )
                                      sessions     = to_i( ls_sum-cnt_start )
                                      roundtrips   = to_i( ls_sum-cnt )
                                      avg_ms       = avg( sum = ls_sum-ms_sum
@@ -865,53 +893,44 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
 
   METHOD get_errors.
 
-    DATA lt_log TYPE ty_t_err_log.
+    DATA lt_group TYPE ty_t_err_group.
 
     DATA(lv_from) = z2ui5_cl_cockpit_setup=>day_minus( days - 1 ).
 
-    SELECT timestampl, app, event, error_class, error_head FROM z2ui5_t_25
+    " counted in the database: a flood of one error neither pushes the other
+    " groups out of a row limit nor caps its own count and first occurrence
+    SELECT app, event, error_class, error_head,
+           COUNT( * ) AS cnt, MIN( timestampl ) AS first_ts, MAX( timestampl ) AS last_ts
+      FROM z2ui5_t_25
       WHERE utc_day >= @lv_from
         AND check_error = @abap_true
-      ORDER BY timestampl DESCENDING
-      INTO CORRESPONDING FIELDS OF TABLE @lt_log
-      UP TO 5000 ROWS.
+      GROUP BY app, event, error_class, error_head
+      INTO CORRESPONDING FIELDS OF TABLE @lt_group
+      UP TO @c_max_error_groups ROWS.
 
-    result = group_errors( lt_log ).
+    result = errors_of( lt_group ).
 
   ENDMETHOD.
 
-  METHOD group_errors.
+  METHOD errors_of.
 
-    DATA lt_first TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
-    DATA lt_last TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
+    DATA lv_key TYPE i.
 
-    LOOP AT it_log INTO DATA(ls_log).
-      READ TABLE result ASSIGNING FIELD-SYMBOL(<error>)
-           WITH KEY app         = ls_log-app
-                    event       = ls_log-event
-                    error_class = ls_log-error_class
-                    error_head  = ls_log-error_head.     "#EC CI_SORTSEQ
-      DATA(lv_index) = sy-tabix.
-      IF sy-subrc <> 0.
-        APPEND VALUE #( key         = |G{ lines( result ) + 1 }|
-                        app         = ls_log-app
-                        event       = ls_log-event
-                        error_class = ls_log-error_class
-                        error_head  = ls_log-error_head ) TO result ASSIGNING <error>.
-        lv_index = lines( result ).
-        " the rows come newest first: the first row of a group is its last
-        " occurrence, every later one moves the first occurrence back
-        APPEND ls_log-timestampl TO lt_last.
-        APPEND ls_log-timestampl TO lt_first.
-      ENDIF.
-      <error>-count = <error>-count + 1.
-      lt_first[ lv_index ] = ls_log-timestampl.
-    ENDLOOP.
+    DATA(lt_group) = it_group.
+    " the keys in order of the newest occurrence, the same group of the same
+    " period keeps its key between two reads
+    SORT lt_group BY last_ts DESCENDING app event error_class error_head.
 
-    LOOP AT result ASSIGNING <error>.
-      lv_index = sy-tabix.
-      <error>-first_seen = z2ui5_cl_cockpit_setup=>ts_text( lt_first[ lv_index ] ).
-      <error>-last_seen  = z2ui5_cl_cockpit_setup=>ts_text( lt_last[ lv_index ] ).
+    LOOP AT lt_group INTO DATA(ls_group).
+      lv_key = lv_key + 1.
+      APPEND VALUE #( key         = |G{ lv_key }|
+                      app         = ls_group-app
+                      event       = ls_group-event
+                      error_class = ls_group-error_class
+                      error_head  = ls_group-error_head
+                      count       = ls_group-cnt
+                      first_seen  = z2ui5_cl_cockpit_setup=>ts_text( ls_group-first_ts )
+                      last_seen   = z2ui5_cl_cockpit_setup=>ts_text( ls_group-last_ts ) ) TO result.
     ENDLOOP.
 
     SORT result STABLE BY count DESCENDING.
@@ -1047,18 +1066,29 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                                        kb_res    = ls_log-bytes_response DIV 1024
                                        kb_model  = ls_log-bytes_model DIV 1024
                                        error     = COND #( WHEN ls_log-check_error = abap_true THEN `error` ) ).
-      IF ls_log-ms_main >= ls_log-ms_load AND ls_log-ms_main >= ls_log-ms_render.
-        ls_slow-phase = `main - the app's own code`.
-      ELSEIF ls_log-ms_load >= ls_log-ms_render.
-        ls_slow-phase = `load - draft read and deserialize`.
-      ELSE.
-        ls_slow-phase = `render - serialize and draft save`.
-      ENDIF.
+      ls_slow-phase = phase_of( ms_load   = ls_log-ms_load
+                                ms_main   = ls_log-ms_main
+                                ms_render = ls_log-ms_render ).
       IF ls_log-ms_total > 0.
         ls_slow-main_share = ls_log-ms_main * 100 / ls_log-ms_total.
       ENDIF.
       APPEND ls_slow TO result.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD phase_of.
+
+    IF ms_load <= 0 AND ms_main <= 0 AND ms_render <= 0.
+      " the ICF handler line records the total only - no phase to blame
+      result = `unknown - recorded by the HTTP handler, the phases need the monitor hook`.
+    ELSEIF ms_main >= ms_load AND ms_main >= ms_render.
+      result = `main - the app's own code`.
+    ELSEIF ms_load >= ms_render.
+      result = `load - draft read and deserialize`.
+    ELSE.
+      result = `render - serialize and draft save`.
+    ENDIF.
 
   ENDMETHOD.
 
@@ -1263,12 +1293,9 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
   METHOD get_window.
 
     DATA lt_rows TYPE ty_t_db_sum.
-    DATA ls_all TYPE ty_s_sum.
-    DATA lt_sum TYPE ty_t_sum_app.
 
     DATA(lv_from_ts) = z2ui5_cl_cockpit_setup=>now_minus_seconds( hours * 3600 ).
     DATA(lv_from_day) = z2ui5_cl_cockpit_setup=>day_of( lv_from_ts ).
-    DATA(lv_from_key) = |{ lv_from_day }{ z2ui5_cl_cockpit_setup=>hour_of( lv_from_ts ) }|.
 
     " one day or two (the window may span midnight UTC) - the hours are
     " filtered here, a key over day and hour does not exist in the table
@@ -1282,7 +1309,21 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
       GROUP BY utc_day, utc_hour, app
       INTO CORRESPONDING FIELDS OF TABLE @lt_rows.
 
-    LOOP AT lt_rows INTO DATA(ls_row).
+    result = window_of( it_rows = lt_rows
+                        from_ts = lv_from_ts ).
+
+  ENDMETHOD.
+
+  METHOD window_of.
+
+    DATA ls_all TYPE ty_s_sum.
+    DATA lt_sum TYPE ty_t_sum_app.
+
+    " day and hour as one key - the window of the first hours of a UTC day
+    " starts on the day before
+    DATA(lv_from_key) = |{ z2ui5_cl_cockpit_setup=>day_of( from_ts ) }{ z2ui5_cl_cockpit_setup=>hour_of( from_ts ) }|.
+
+    LOOP AT it_rows INTO DATA(ls_row).
       IF |{ ls_row-utc_day }{ ls_row-utc_hour }| < lv_from_key.
         CONTINUE.
       ENDIF.
@@ -1296,7 +1337,7 @@ CLASS z2ui5_cl_cockpit_stats IMPLEMENTATION.
                     errors     = to_i( ls_all-cnt_err )
                     p95_ms     = p95( ls_all ) ) TO result.
     LOOP AT lt_sum INTO DATA(ls_sum).
-      APPEND VALUE #( app        = COND #( WHEN ls_sum-app IS INITIAL THEN `(no app resolved)` ELSE ls_sum-app )
+      APPEND VALUE #( app        = COND #( WHEN ls_sum-app IS INITIAL THEN c_no_app ELSE ls_sum-app )
                       roundtrips = to_i( ls_sum-cnt )
                       errors     = to_i( ls_sum-cnt_err )
                       p95_ms     = p95( ls_sum ) ) TO result.

@@ -107,6 +107,10 @@ CLASS z2ui5_cl_cockpit_session DEFINITION PUBLIC FINAL CREATE PUBLIC.
         error          TYPE string,
         sessions       TYPE i,
         check_capped   TYPE abap_bool,
+        " how many sessions were read (and searched), newest first
+        searched       TYPE i,
+        " sessions older than the ones read were left out - not searched
+        check_more     TYPE abap_bool,
         t_session      TYPE ty_t_session,
       END OF ty_s_list.
 
@@ -982,11 +986,16 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
     ENDLOOP.
 
     " the failed roundtrips the monitor logged since the oldest draft, each
-    " counted for the session of the draft it started from
+    " counted for the session of the draft it started from. The cockpit's
+    " own are left out: its sessions are never listed, so the count without
+    " a session read (the Overview) must not hold them either
+    DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
+    DATA(lv_own_app) = CONV z2ui5_t_25-app( lv_own ).
     TRY.
         SELECT draft_id_prev FROM z2ui5_t_25
           WHERE check_error = @abap_true
             AND timestampl >= @lv_oldest
+            AND app <> @lv_own_app
           INTO TABLE @lt_failed.
       CATCH cx_root ##NO_HANDLER.
         " no monitor log - no error counts
@@ -1040,15 +1049,16 @@ CLASS z2ui5_cl_cockpit_session IMPLEMENTATION.
 
     " the framework keeps only the newest drafts of a session by default
     DATA(lv_pruned) = xsdbool( z2ui5_cl_cockpit_inst=>get_draft_keep( ) > 0 ).
-    DATA(lv_own) = z2ui5_cl_cockpit_inst=>obj_name( `CL_COCKPIT_APP` ).
     " the app of a session is in its newest draft - read for as many
-    " sessions as are listed, and a few more when a filter skips some
-    DATA(lv_reads) = 0.
+    " sessions as are listed, and a few more when a filter skips some. A
+    " search therefore looks at the newest sessions only: searched and
+    " check_more say how far it got
     LOOP AT lt_sorted INTO DATA(ls_agg).
-      IF lines( result-t_session ) >= max_sessions OR lv_reads >= max_sessions * 3.
+      IF lines( result-t_session ) >= max_sessions OR result-searched >= max_sessions * 3.
+        result-check_more = abap_true.
         EXIT.
       ENDIF.
-      lv_reads = lv_reads + 1.
+      result-searched = result-searched + 1.
 
       DATA(ls_session) = VALUE ty_s_session( id       = ls_agg-root
                                              user     = user_text( ls_agg-uname )
