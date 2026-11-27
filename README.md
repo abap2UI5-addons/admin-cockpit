@@ -812,7 +812,10 @@ framework computes - 4 hours by default, or what your user exit sets) through
 the framework's own draft store, and purges the cockpit's rows past their
 retention. For a job, call `z2ui5_cl_cockpit_job=>run( )` - it also evaluates
 the [alerts](#alerts), so schedule it every 15 minutes when you want to be
-notified:
+notified. Its three parts - the own tables, the drafts, the alerts - fail
+on their own: a purge that fails (a lock timeout, a half-imported table) is
+rolled back and named in the job's message, and the drafts and the alerts
+still run:
 
 - **Standard ABAP** - a two-line report, scheduled in SM36:
 

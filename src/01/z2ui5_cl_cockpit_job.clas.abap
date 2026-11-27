@@ -61,17 +61,27 @@ CLASS z2ui5_cl_cockpit_job IMPLEMENTATION.
 
   METHOD run.
 
-    result = purge_own( ).
-    COMMIT WORK.
+    " each part on its own: a purge that fails (a lock timeout on a big
+    " DELETE, a half-imported table) must not stop the drafts and the
+    " alerting of every later run
+    DATA(lv_purged) = ``.
+    TRY.
+        result = purge_own( ).
+        COMMIT WORK.
+        lv_purged = |{ result-log_deleted } log rows, { result-agg_deleted } aggregate rows, | &&
+                    |{ result-usr_deleted } user rows, { result-act_deleted } activity rows, | &&
+                    |{ result-wir_deleted } recorded roundtrips past retention|.
+      CATCH cx_root INTO DATA(lx_purge).
+        ROLLBACK WORK.                                   "#EC CI_ROLLBACK
+        CLEAR result.
+        lv_purged = |own tables not purged: { lx_purge->get_text( ) }|.
+    ENDTRY.
 
     TRY.
         result-drafts_deleted = z2ui5_cl_cockpit_draft=>delete_expired( ).
-        result-message = |{ result-drafts_deleted } expired drafts deleted, | &&
-                         |{ result-log_deleted } log rows, { result-agg_deleted } aggregate rows, | &&
-                         |{ result-usr_deleted } user rows, { result-act_deleted } activity rows, | &&
-                         |{ result-wir_deleted } recorded roundtrips past retention|.
+        result-message = |{ result-drafts_deleted } expired drafts deleted, { lv_purged }|.
       CATCH cx_root INTO DATA(lx).
-        result-message = |Drafts not deleted: { lx->get_text( ) }|.
+        result-message = |Drafts not deleted: { lx->get_text( ) }; { lv_purged }|.
     ENDTRY.
 
     TRY.
