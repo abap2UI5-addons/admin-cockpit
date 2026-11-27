@@ -3817,9 +3817,29 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
               ENDIF.
               DATA(lv_removed) = client->get_event_arg( ).
               z2ui5_cl_cockpit_setup=>remove_admin( lv_removed ).
+              " counted once more after the DELETE (it sees its own work)...
+              IF z2ui5_cl_cockpit_setup=>get_admins( ) IS INITIAL.
+                ROLLBACK WORK.                           "#EC CI_ROLLBACK
+                client->message_box_display( text = `The last administrator cannot be removed - the next ` &&
+                                                    `user to open the cockpit could claim it.`
+                                             type = `warning` ).
+                load_tab( ).
+                RETURN.
+              ENDIF.
               z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-remove
                                           text   = |{ lv_removed } removed| ).
               COMMIT WORK.
+              " ... and after the COMMIT: two administrators removing each
+              " other at the same moment each still saw the other one - the
+              " one who commits last finds nobody left and stays
+              IF z2ui5_cl_cockpit_setup=>get_admins( ) IS INITIAL.
+                z2ui5_cl_cockpit_setup=>add_admin( sy-uname ).
+                z2ui5_cl_cockpit_auth=>log( action = z2ui5_cl_cockpit_auth=>cs_log-add
+                                            text   = |{ sy-uname } kept as the last administrator| ).
+                COMMIT WORK.
+                client->message_box_display( text = |No administrator was left - { sy-uname } stays one.|
+                                             type = `warning` ).
+              ENDIF.
               load_head( ).
               load_tab( ).
             ENDIF.
