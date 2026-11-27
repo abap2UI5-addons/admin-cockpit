@@ -107,13 +107,20 @@ sticky LUW, buffer otherwise, pseudonym unless `NAME`) and adds its own:
   an **allowlist** of UI5 libraries are kept - `sap.m`, `sap.f`,
   `sap.ui.core`, `sap.ui.core.mvc`, `sap.ui.layout`, `sap.ui.layout.form`,
   `sap.ui.table`, `sap.ui.unified`, `sap.uxap`, `sap.tnt`,
-  `sap.suite.ui.microchart`. Every other element is left out with all it
-  contains: XHTML, SVG, `z2ui5.cc`, the addons' custom controls
+  `sap.suite.ui.microchart`. Of `sap.ui.core` and `sap.ui.core.mvc`, which
+  also hold what loads code, only the controls of a second allowlist stay
+  (`Icon`, `Item`, `ListItem`, `SeparatorItem`, `HTML`, `CustomData`,
+  `Title`, `InvisibleText`, `VariantLayoutData`; aggregations always - no
+  `Fragment`, `ComponentContainer`, `ExtensionPoint` or nested view), and
+  every `core:require` attribute goes. Every other element is left out with
+  all it contains: XHTML, SVG, `z2ui5.cc`, the addons' custom controls
   (`z2ui5_cci.cc`, ...), any third-party library, an undeclared prefix, a
   default namespace outside the list, and a prefix declared anywhere with a
-  URI outside it. Never turn the list into a denylist, and add a library
-  only when none of its controls loads scripts or renders HTML of its own.
-  Keep all three when touching `screen_of`.
+  URI outside it. A popup on top keeps its own namespace declarations, on
+  the element it is shown in - never merged into the main view's. Never turn
+  the lists into denylists, and add a library or control only when it loads
+  no script and renders no HTML of its own. Keep all of this when touching
+  `screen_of`.
 - Recordings are read by administrators only, inside a logged session.
 
 ## Framework internals only by name

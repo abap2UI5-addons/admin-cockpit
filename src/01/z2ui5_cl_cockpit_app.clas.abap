@@ -3037,7 +3037,8 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         z2ui5_cl_cockpit_wire=>popup_parts( EXPORTING popup   = ls_screen-popup
                                             IMPORTING content = lv_popup
                                                       buttons = lv_buttons ).
-        lv_xml = |{ lv_xml }<ckm:Panel headerText="{ z2ui5_cl_cockpit_wire=>xml_escape(
+        " the popup's namespaces on the panel around it, as content_defused checked them
+        lv_xml = |{ lv_xml }<ckm:Panel{ ls_screen-popup_xmlns } headerText="{ z2ui5_cl_cockpit_wire=>xml_escape(
                                                          |Popup on top: { ls_screen-popup_title }| ) }"| &&
                  | class="sapUiSmallMargin"><ckm:content>{ lv_popup }|.
         IF lv_buttons IS NOT INITIAL.

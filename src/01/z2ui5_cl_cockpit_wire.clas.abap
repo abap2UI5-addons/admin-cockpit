@@ -96,9 +96,12 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
         title     TYPE string,
         xmlns     TYPE string,
         content   TYPE string,
-        " the popup the step's response opened, as a second content
+        " the popup the step's response opened, as a second content - with
+        " the namespaces of its own view, declared on the element it is shown
+        " in: content_defused checked it against those
         popup     TYPE string,
         popup_title TYPE string,
+        popup_xmlns TYPE string,
         " the control of the event passed in is marked - class ckPressed
         marked    TYPE abap_bool,
       END OF ty_s_screen.
@@ -553,11 +556,26 @@ CLASS z2ui5_cl_cockpit_wire DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
     "! xml without the elements of every prefix not kept, each with all it
     "! contains - an element of the default namespace has the prefix ``.
-    "! @parameter it_keep | the prefixes kept, each with its colon - m:
+    "! @parameter it_keep   | the prefixes kept, each with its colon - m:
+    "! @parameter it_strict | kept prefixes of which only the controls in
+    "!                       it_allow stay, and every aggregation (a name
+    "!                       starting in lower case)
+    "! @parameter it_allow  | the controls kept of a strict prefix - core:Icon
     CLASS-METHODS elements_dropped
       IMPORTING
         xml           TYPE string
         it_keep       TYPE string_table
+        it_strict     TYPE string_table OPTIONAL
+        it_allow      TYPE string_table OPTIONAL
+      RETURNING
+        VALUE(result) TYPE string.
+
+    "! xml without every attribute of that name - with the blank before it.
+    "! @parameter name | the attribute with its prefix - core:require
+    CLASS-METHODS attribute_dropped
+      IMPORTING
+        xml           TYPE string
+        name          TYPE string
       RETURNING
         VALUE(result) TYPE string.
 
@@ -1828,6 +1846,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
     DATA lt_html TYPE string_table.
     DATA lt_keep TYPE string_table.
     DATA lt_lib TYPE string_table.
+    DATA lt_strict TYPE string_table.
+    DATA lt_allow TYPE string_table.
+    DATA lt_control TYPE string_table.
     DATA lt_ok TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lt_bad TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA lv_prefix TYPE string.
@@ -1951,6 +1972,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         IF lv_uri = `sap.ui.core`.
           INSERT lv_prefix INTO TABLE lt_html.
         ENDIF.
+        IF lv_uri = `sap.ui.core` OR lv_uri = `sap.ui.core.mvc`.
+          INSERT lv_prefix INTO TABLE lt_strict.
+        ENDIF.
       ELSE.
         INSERT lv_prefix INTO TABLE lt_bad.
       ENDIF.
@@ -1961,8 +1985,34 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         INSERT lv_prefix INTO TABLE lt_keep.
       ENDIF.
     ENDLOOP.
-    result = elements_dropped( xml     = result
-                               it_keep = lt_keep ).
+
+    " sap.ui.core and sap.ui.core.mvc also hold what loads and runs code - a
+    " Fragment, a ComponentContainer, an ExtensionPoint, a nested view by
+    " viewName: of them only the controls that show what they are told stay
+    lt_control = VALUE #( ( `Icon` )
+                          ( `Item` )
+                          ( `ListItem` )
+                          ( `SeparatorItem` )
+                          ( `HTML` )
+                          ( `CustomData` )
+                          ( `Title` )
+                          ( `InvisibleText` )
+                          ( `VariantLayoutData` ) ).
+    LOOP AT lt_html INTO lv_prefix.
+      LOOP AT lt_control INTO DATA(lv_control).
+        APPEND |{ lv_prefix }{ lv_control }| TO lt_allow.
+      ENDLOOP.
+    ENDLOOP.
+    result = elements_dropped( xml       = result
+                               it_keep   = lt_keep
+                               it_strict = lt_strict
+                               it_allow  = lt_allow ).
+
+    " core:require loads modules - wherever it stands
+    LOOP AT lt_html INTO lv_prefix WHERE table_line IS NOT INITIAL.
+      result = attribute_dropped( xml  = result
+                                  name = |{ lv_prefix }require| ).
+    ENDLOOP.
 
     " every HTML control: its own sanitizeContent goes, true comes in
     LOOP AT lt_html INTO lv_prefix.
@@ -2025,6 +2075,73 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
         lv_pos = lv_after + 1.
       ENDDO.
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD attribute_dropped.
+
+    DATA lv_pos TYPE i.
+    DATA lv_ws TYPE string.
+
+    result = xml.
+    lv_ws = | \t\n\r|.
+    DO.
+      DATA(lv_at) = find( val = result
+                          sub = name
+                          off = lv_pos ).
+      IF lv_at < 0.
+        EXIT.
+      ENDIF.
+      lv_pos = lv_at + 1.
+      IF lv_at = 0.
+        CONTINUE.
+      ENDIF.
+      IF find( val = lv_ws
+               sub = substring( val = result
+                                off = lv_at - 1
+                                len = 1 ) ) < 0.
+        CONTINUE.
+      ENDIF.
+      " the =, blanks allowed around it, and the quoted value
+      DATA(lv_end) = lv_at + strlen( name ).
+      WHILE lv_end < strlen( result ) AND find( val = lv_ws
+                                                sub = substring( val = result
+                                                                 off = lv_end
+                                                                 len = 1 ) ) >= 0.
+        lv_end = lv_end + 1.
+      ENDWHILE.
+      IF lv_end >= strlen( result ) OR substring( val = result
+                                                  off = lv_end
+                                                  len = 1 ) <> `=`.
+        CONTINUE.
+      ENDIF.
+      lv_end = lv_end + 1.
+      WHILE lv_end < strlen( result ) AND find( val = lv_ws
+                                                sub = substring( val = result
+                                                                 off = lv_end
+                                                                 len = 1 ) ) >= 0.
+        lv_end = lv_end + 1.
+      ENDWHILE.
+      IF lv_end >= strlen( result ).
+        EXIT.
+      ENDIF.
+      DATA(lv_delim) = substring( val = result
+                                  off = lv_end
+                                  len = 1 ).
+      IF lv_delim <> `"` AND lv_delim <> `'`.
+        CONTINUE.
+      ENDIF.
+      DATA(lv_close) = find( val = result
+                             sub = lv_delim
+                             off = lv_end + 1 ).
+      IF lv_close < 0.
+        EXIT.
+      ENDIF.
+      result = substring( val = result
+                          len = lv_at - 1 ) && substring( val = result
+                                                          off = lv_close + 1 ).
+      lv_pos = lv_at - 1.
+    ENDDO.
 
   ENDMETHOD.
 
@@ -2181,7 +2298,19 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
                                len = lv_colon + 1 ).
       ENDIF.
       IF line_exists( it_keep[ table_line = lv_prefix ] ).            "#EC CI_SORTSEQ
-        CONTINUE.
+        IF NOT line_exists( it_strict[ table_line = lv_prefix ] ).    "#EC CI_SORTSEQ
+          CONTINUE.
+        ENDIF.
+        " an aggregation, or a control of the strict prefix that is allowed
+        DATA(lv_local) = substring( val = lv_name
+                                    off = strlen( lv_prefix ) ).
+        IF lv_local IS NOT INITIAL.
+          IF substring( val = lv_local
+                        len = 1 ) CA `abcdefghijklmnopqrstuvwxyz`
+              OR line_exists( it_allow[ table_line = lv_name ] ).      "#EC CI_SORTSEQ
+            CONTINUE.
+          ENDIF.
+        ENDIF.
       ENDIF.
 
       " left out with all it contains
@@ -2315,16 +2444,9 @@ CLASS z2ui5_cl_cockpit_wire IMPLEMENTATION.
       result-marked      = ls_popup-marked.
       result-popup       = ls_popup-content.
       result-popup_title = ls_popup-title.
-      " a prefix declared twice on one element breaks the XML
-      SPLIT ls_popup-xmlns AT ` xmlns` INTO TABLE DATA(lt_ns).
-      LOOP AT lt_ns INTO DATA(lv_ns) WHERE table_line IS NOT INITIAL.
-        DATA(lv_declared) = | xmlns{ substring_before( val = lv_ns
-                                                       sub = `=` ) }=|.
-        IF find( val = result-xmlns
-                 sub = lv_declared ) < 0.
-          result-xmlns = |{ result-xmlns } xmlns{ lv_ns }|.
-        ENDIF.
-      ENDLOOP.
+      " not merged into the main view's: a prefix both declare would resolve
+      " the popup's elements against the main view's uri
+      result-popup_xmlns = ls_popup-xmlns.
     ENDIF.
 
   ENDMETHOD.

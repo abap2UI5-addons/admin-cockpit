@@ -273,6 +273,22 @@ CLASS ltcl_wire IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = `<m:Text text="kept"/>`
                                         act = ls_screen-content ).
 
+    " sap.ui.core and sap.ui.core.mvc: only the controls that show what they
+    " are told - no fragment, component or nested view, no core:require
+    lv_xml = `<mvc:View xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:core="sap.ui.core">` &&
+             `<VBox core:require="{H:'x/Handler'}" id="b"><core:Icon src="a"/>` &&
+             `<core:Fragment fragmentName="x.y" type="JS"/><core:ComponentContainer name="x.comp"/>` &&
+             `<mvc:XMLView viewName="x.V"><Text text="in"/></mvc:XMLView>` &&
+             `<core:Item key="k"><core:customData><core:CustomData key="c"/></core:customData></core:Item>` &&
+             `<Text text='core:require' core:require = 'x'/></VBox></mvc:View>`.
+    ls_screen = z2ui5_cl_cockpit_wire=>screen_of( xml      = lv_xml
+                                                 it_model = VALUE #( ) ).
+    cl_abap_unit_assert=>assert_equals(
+        exp = `<VBox id="b"><core:Icon src="a"/>` &&
+              `<core:Item key="k"><core:customData><core:CustomData key="c"/></core:customData></core:Item>` &&
+              `<Text text='core:require'/></VBox>`
+        act = ls_screen-content ).
+
   ENDMETHOD.
 
   METHOD roundtrip_from_bodies.

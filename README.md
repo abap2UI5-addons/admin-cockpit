@@ -606,7 +606,10 @@ What it gives you, in the session viewer:
   runs by itself: an HTML control shows its content sanitized, and only the
   controls of the standard UI5 libraries (`sap.m`, `sap.f`, `sap.ui.core`,
   `sap.ui.layout` and its forms, `sap.ui.table`, `sap.ui.unified`,
-  `sap.uxap`, `sap.tnt`, `sap.suite.ui.microchart`) are shown - XHTML/SVG
+  `sap.uxap`, `sap.tnt`, `sap.suite.ui.microchart`) are shown - of
+  `sap.ui.core` only the controls that show what they are told (`Icon`,
+  `Item`, `HTML`, `CustomData`, ...; no fragment, component or nested view),
+  no `core:require` - XHTML/SVG
   elements, abap2UI5's helper controls (`z2ui5.cc`: storage, history,
   timer, websocket, ...), custom controls of addons or third parties are
   left out. The control
