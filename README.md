@@ -259,7 +259,7 @@ that sorts before `Z2UI5_CL_COCKPIT_MONITOR`, the cockpit says so; call
 | Setting | Default | |
 |---|---|---|
 | Mode | `ALL` | `ALL`, `SAMPLE`, `ERRORS`, `OFF` |
-| Sample share | 10 % | `SAMPLE` only |
+| Sample share | 10 % | `SAMPLE` only; 1, 2, 4, 5, 10, 20, 25, 50 or 100 - another value is rounded down to one of them, so each sample counts a whole number of times |
 | Slow roundtrip from | 2000 ms | lands in the raw log with its phases |
 | Retention log, users, activity | 30 days | |
 | Retention aggregates | 400 days | |

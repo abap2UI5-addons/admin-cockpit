@@ -1877,7 +1877,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
             )->end(
 
             )->tag( `Label`
-                )->a( n = `text` v = `Sample share (%)`
+                )->a( n = `text` v = `Sample share (%: 1, 2, 4, 5, 10, 20, 25, 50, 100)`
             )->tag( `Input`
                 )->a( n = `value`   v = client->_bind( s_set-sample_pct )
                 )->a( n = `type`    v = `Number`

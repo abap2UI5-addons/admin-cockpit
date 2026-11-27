@@ -31,7 +31,8 @@ CLASS z2ui5_cl_cockpit_setup DEFINITION PUBLIC FINAL CREATE PUBLIC.
       BEGIN OF ty_s_settings,
         " what the monitor records: ALL, ERRORS, SAMPLE or OFF
         mode               TYPE string,
-        " SAMPLE: the share of successful roundtrips that is recorded, 1-100
+        " SAMPLE: the share of successful roundtrips that is recorded, in
+        " percent - a divisor of 100: 1, 2, 4, 5, 10, 20, 25, 50 or 100
         sample_pct         TYPE i,
         " a roundtrip at or above this many milliseconds is slow and lands
         " in the raw log with its phase breakdown
@@ -605,6 +606,12 @@ CLASS z2ui5_cl_cockpit_setup IMPLEMENTATION.
     IF cs_set-sample_pct < 1 OR cs_set-sample_pct > 100.
       cs_set-sample_pct = ls_def-sample_pct.
     ENDIF.
+    " a recorded sample counts 100 / pct times - in whole numbers, so only a
+    " divisor of 100 keeps the counts unbiased: 60 % counted each roundtrip
+    " once. Any other share is rounded down to one (1 at the least)
+    WHILE 100 MOD cs_set-sample_pct <> 0.
+      cs_set-sample_pct = cs_set-sample_pct - 1.
+    ENDWHILE.
     IF cs_set-slow_ms <= 0.
       cs_set-slow_ms = ls_def-slow_ms.
     ENDIF.

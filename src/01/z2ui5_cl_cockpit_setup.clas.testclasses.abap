@@ -19,6 +19,7 @@ CLASS ltcl_privacy DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHO
     METHODS buckets FOR TESTING.
     METHODS alert_settings FOR TESTING.
     METHODS settings_bounds FOR TESTING.
+    METHODS sample_share_divides_100 FOR TESTING.
     METHODS ts_minus_seconds FOR TESTING.
     METHODS assert_minus
       IMPORTING
@@ -201,6 +202,26 @@ CLASS ltcl_privacy IMPLEMENTATION.
     " and the longest retention is still a date
     cl_abap_unit_assert=>assert_true( xsdbool( z2ui5_cl_cockpit_setup=>now_minus_days( ls_set-wire_days )
                                                < z2ui5_cl_cockpit_setup=>now( ) ) ).
+
+  ENDMETHOD.
+
+  METHOD sample_share_divides_100.
+
+    " each recorded sample counts 100 / pct times, in whole numbers - a
+    " share that does not divide 100 is rounded down to one that does
+    DATA(ls_set) = z2ui5_cl_cockpit_setup=>get_default( ).
+    ls_set-sample_pct = 60.
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 50
+                                        act = ls_set-sample_pct ).
+    ls_set-sample_pct = 3.
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = ls_set-sample_pct ).
+    ls_set-sample_pct = 25.
+    z2ui5_cl_cockpit_setup=>check_settings( CHANGING cs_set = ls_set ).
+    cl_abap_unit_assert=>assert_equals( exp = 25
+                                        act = ls_set-sample_pct ).
 
   ENDMETHOD.
 
