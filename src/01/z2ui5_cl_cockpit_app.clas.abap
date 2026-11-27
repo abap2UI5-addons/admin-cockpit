@@ -44,6 +44,7 @@ CLASS z2ui5_cl_cockpit_app DEFINITION PUBLIC FINAL CREATE PUBLIC.
     DATA t_unused      TYPE z2ui5_cl_cockpit_stats=>ty_t_unused.
     DATA unused_title  TYPE string.
     DATA t_errors      TYPE z2ui5_cl_cockpit_stats=>ty_t_error.
+    DATA errors_title  TYPE string.
     DATA t_hints       TYPE z2ui5_cl_cockpit_stats=>ty_t_hint.
     DATA t_slow        TYPE z2ui5_cl_cockpit_stats=>ty_t_slow.
     DATA s_live        TYPE z2ui5_cl_cockpit_stats=>ty_s_live.
@@ -716,7 +717,7 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         )->a( n = `class`    v = `sapUiSmallMarginBottom` ).
 
     errors->ele( `Table`
-        )->a( n = `headerText`       v = `Errors grouped by app, event, exception class and first line - select one for the details`
+        )->a( n = `headerText`       v = client->_bind( errors_title )
         )->a( n = `items`            v = client->_bind( t_errors )
         )->a( n = `visible`          v = client->_bind( s_monitor-check_data )
         )->a( n = `growing`          v = `true`
@@ -4164,6 +4165,11 @@ CLASS z2ui5_cl_cockpit_app IMPLEMENTATION.
         unused_title = z2ui5_cl_cockpit_stats=>get_unused_title( ).
       WHEN `ERRORS`.
         t_errors = z2ui5_cl_cockpit_stats=>get_errors( lv_days ).
+        errors_title = `Errors grouped by app, event, exception class and first line - select one for the details`.
+        IF lines( t_errors ) >= z2ui5_cl_cockpit_stats=>c_max_error_groups.
+          errors_title = |{ errors_title } - the first { z2ui5_cl_cockpit_stats=>c_max_error_groups } groups only, | &&
+                         |choose a shorter period|.
+        ENDIF.
         " the texts users saw - administrators only, they hold business data
         wire_messages_shown = change_allowed.
         CLEAR t_wire_message_all.

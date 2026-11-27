@@ -1,5 +1,6 @@
 CLASS ltcl_stats DEFINITION DEFERRED.
-CLASS z2ui5_cl_cockpit_stats DEFINITION LOCAL FRIENDS ltcl_stats.
+CLASS ltcl_stats_db DEFINITION DEFERRED.
+CLASS z2ui5_cl_cockpit_stats DEFINITION LOCAL FRIENDS ltcl_stats ltcl_stats_db.
 
 "! The pure logic of the statistics: the p95 from the latency histogram,
 "! the runtime hint rules, the grouping of errors and the unused apps. No
@@ -24,6 +25,10 @@ CLASS ltcl_stats DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT
     METHODS hints_draft_backlog FOR TESTING.
     METHODS errors_grouped FOR TESTING.
     METHODS errors_tie_keeps_newest_first FOR TESTING.
+    METHODS phase_dominant FOR TESTING.
+    METHODS phase_unknown_without_hook FOR TESTING.
+    METHODS window_across_midnight FOR TESTING.
+    METHODS window_no_app_named FOR TESTING.
     METHODS unused_apps FOR TESTING.
 
     METHODS hint_exists
@@ -282,26 +287,25 @@ CLASS ltcl_stats IMPLEMENTATION.
 
   METHOD errors_grouped.
 
-    DATA lt_log TYPE z2ui5_cl_cockpit_stats=>ty_t_err_log.
+    DATA lt_group TYPE z2ui5_cl_cockpit_stats=>ty_t_err_group.
 
-    " newest first, as the SELECT delivers them
-    lt_log = VALUE #( ( timestampl  = '20990101120000'
-                        app         = c_app
-                        event       = `SAVE`
-                        error_class = `CX_SY_ZERODIVIDE`
-                        error_head  = `Division by zero` )
-                      ( timestampl  = '20990101110000'
-                        app         = c_app
-                        event       = `SAVE`
-                        error_class = `CX_SY_ITAB_LINE_NOT_FOUND`
-                        error_head  = `Line not found` )
-                      ( timestampl  = '20990101100000'
-                        app         = c_app
-                        event       = `SAVE`
-                        error_class = `CX_SY_ZERODIVIDE`
-                        error_head  = `Division by zero` ) ).
+    " as the database counts them - in no particular order
+    lt_group = VALUE #( ( app         = c_app
+                          event       = `SAVE`
+                          error_class = `CX_SY_ITAB_LINE_NOT_FOUND`
+                          error_head  = `Line not found`
+                          cnt         = 1
+                          first_ts    = '20990101110000'
+                          last_ts     = '20990101110000' )
+                        ( app         = c_app
+                          event       = `SAVE`
+                          error_class = `CX_SY_ZERODIVIDE`
+                          error_head  = `Division by zero`
+                          cnt         = 2
+                          first_ts    = '20990101100000'
+                          last_ts     = '20990101120000' ) ).
 
-    DATA(lt_error) = z2ui5_cl_cockpit_stats=>group_errors( lt_log ).
+    DATA(lt_error) = z2ui5_cl_cockpit_stats=>errors_of( lt_group ).
 
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = lines( lt_error ) ).
@@ -328,25 +332,113 @@ CLASS ltcl_stats IMPLEMENTATION.
 
   METHOD errors_tie_keeps_newest_first.
 
-    DATA lt_log TYPE z2ui5_cl_cockpit_stats=>ty_t_err_log.
+    DATA lt_group TYPE z2ui5_cl_cockpit_stats=>ty_t_err_group.
 
-    lt_log = VALUE #( ( timestampl  = '20990101120000'
-                        app         = c_app
-                        event       = `B`
-                        error_class = `CX_B`
-                        error_head  = `b` )
-                      ( timestampl  = '20990101110000'
-                        app         = c_app
-                        event       = `A`
-                        error_class = `CX_A`
-                        error_head  = `a` ) ).
+    lt_group = VALUE #( ( app         = c_app
+                          event       = `A`
+                          error_class = `CX_A`
+                          error_head  = `a`
+                          cnt         = 1
+                          first_ts    = '20990101110000'
+                          last_ts     = '20990101110000' )
+                        ( app         = c_app
+                          event       = `B`
+                          error_class = `CX_B`
+                          error_head  = `b`
+                          cnt         = 1
+                          first_ts    = '20990101120000'
+                          last_ts     = '20990101120000' ) ).
 
-    DATA(lt_error) = z2ui5_cl_cockpit_stats=>group_errors( lt_log ).
+    DATA(lt_error) = z2ui5_cl_cockpit_stats=>errors_of( lt_group ).
 
     cl_abap_unit_assert=>assert_equals( exp = `B`
                                         act = lt_error[ 1 ]-event ).
     cl_abap_unit_assert=>assert_equals( exp = `A`
                                         act = lt_error[ 2 ]-event ).
+
+  ENDMETHOD.
+
+  METHOD phase_dominant.
+
+    cl_abap_unit_assert=>assert_equals( exp = `main - the app's own code`
+                                        act = z2ui5_cl_cockpit_stats=>phase_of( ms_load   = 10
+                                                                                ms_main   = 900
+                                                                                ms_render = 20 ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `load - draft read and deserialize`
+                                        act = z2ui5_cl_cockpit_stats=>phase_of( ms_load   = 900
+                                                                                ms_main   = 10
+                                                                                ms_render = 20 ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `render - serialize and draft save`
+                                        act = z2ui5_cl_cockpit_stats=>phase_of( ms_load   = 10
+                                                                                ms_main   = 10
+                                                                                ms_render = 900 ) ).
+
+  ENDMETHOD.
+
+  METHOD phase_unknown_without_hook.
+
+    " recorded by the HTTP handler: the total only, no phase is blamed
+    DATA(lv_phase) = z2ui5_cl_cockpit_stats=>phase_of( ms_load   = 0
+                                                       ms_main   = 0
+                                                       ms_render = 0 ).
+
+    cl_abap_unit_assert=>assert_char_cp( exp = `unknown*`
+                                         act = lv_phase ).
+
+  ENDMETHOD.
+
+  METHOD window_across_midnight.
+
+    DATA lt_rows TYPE z2ui5_cl_cockpit_stats=>ty_t_db_sum.
+    DATA lv_from TYPE timestampl.
+
+    " the hours 22 and 23 of the day before, 00 and 01 of the day - the
+    " window starts within hour 23 of the day before
+    lt_rows = VALUE #( app = c_app
+                       ( utc_day = `20981231` utc_hour = `22` cnt = 100 cnt_err = 50 )
+                       ( utc_day = `20981231` utc_hour = `23` cnt = 10 cnt_err = 1 )
+                       ( utc_day = `20990101` utc_hour = `00` cnt = 20 cnt_err = 2 )
+                       ( utc_day = `20990101` utc_hour = `01` cnt = 30 cnt_err = 3 ) ).
+
+    lv_from = '20981231233000'.
+    DATA(lt_window) = z2ui5_cl_cockpit_stats=>window_of( it_rows = lt_rows
+                                                         from_ts = lv_from ).
+
+    " the line over all apps first, then the app
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( lt_window ) ).
+    cl_abap_unit_assert=>assert_initial( lt_window[ 1 ]-app ).
+    cl_abap_unit_assert=>assert_equals( exp = 60
+                                        act = lt_window[ 1 ]-roundtrips ).
+    cl_abap_unit_assert=>assert_equals( exp = 6
+                                        act = lt_window[ 1 ]-errors ).
+    cl_abap_unit_assert=>assert_equals( exp = c_app
+                                        act = lt_window[ 2 ]-app ).
+    cl_abap_unit_assert=>assert_equals( exp = 60
+                                        act = lt_window[ 2 ]-roundtrips ).
+
+    " the same rows, the window starting on the day itself
+    lv_from = '20990101010000'.
+    lt_window = z2ui5_cl_cockpit_stats=>window_of( it_rows = lt_rows
+                                                   from_ts = lv_from ).
+    cl_abap_unit_assert=>assert_equals( exp = 30
+                                        act = lt_window[ 1 ]-roundtrips ).
+
+  ENDMETHOD.
+
+  METHOD window_no_app_named.
+
+    DATA lt_rows TYPE z2ui5_cl_cockpit_stats=>ty_t_db_sum.
+    DATA lv_from TYPE timestampl.
+
+    lt_rows = VALUE #( ( utc_day = `20990101` utc_hour = `10` cnt = 5 ) ).
+
+    lv_from = '20990101100000'.
+    DATA(lt_window) = z2ui5_cl_cockpit_stats=>window_of( it_rows = lt_rows
+                                                         from_ts = lv_from ).
+
+    cl_abap_unit_assert=>assert_equals( exp = z2ui5_cl_cockpit_stats=>c_no_app
+                                        act = lt_window[ 2 ]-app ).
 
   ENDMETHOD.
 
@@ -379,6 +471,85 @@ CLASS ltcl_stats IMPLEMENTATION.
   METHOD hint_exists.
 
     result = xsdbool( line_exists( it_hint[ hint = hint ] ) ). "#EC CI_SORTSEQ
+
+  ENDMETHOD.
+
+ENDCLASS.
+
+
+"! The error log read for real: rows of a test app on a day in 2099,
+"! deleted again in teardown and rolled back - nothing is committed.
+CLASS ltcl_stats_db DEFINITION FINAL FOR TESTING RISK LEVEL DANGEROUS DURATION SHORT.
+
+  PRIVATE SECTION.
+
+    CONSTANTS c_app TYPE string VALUE `ZZ_COCKPIT_UNIT_TEST`.
+
+    METHODS teardown.
+
+    METHODS errors_flood_keeps_other_group FOR TESTING.
+
+ENDCLASS.
+
+
+CLASS ltcl_stats_db IMPLEMENTATION.
+
+  METHOD teardown.
+
+    DATA(lv_app) = CONV z2ui5_t_25-app( c_app ).
+    DELETE FROM z2ui5_t_25 WHERE app = @lv_app.
+    ROLLBACK WORK.                                       "#EC CI_ROLLBACK
+
+  ENDMETHOD.
+
+  METHOD errors_flood_keeps_other_group.
+
+    DATA lt_log TYPE STANDARD TABLE OF z2ui5_t_25 WITH EMPTY KEY.
+    DATA lv_ts TYPE timestampl.
+    DATA lv_end TYPE timestampl.
+
+    " one error more often than a row limit of 5000 would read, all of it
+    " newer than the one occurrence of a second error
+    lv_end = '20990101120000'.
+    lv_ts = '20990101100000'.
+    APPEND VALUE #( id          = `ZZCKUTERR0`
+                    timestampl  = lv_ts
+                    utc_day     = `20990101`
+                    app         = c_app
+                    event       = `OTHER`
+                    check_error = abap_true
+                    error_class = `CX_SY_ITAB_LINE_NOT_FOUND`
+                    error_head  = `Line not found` ) TO lt_log.
+    DO 5001 TIMES.
+      lv_ts = z2ui5_cl_cockpit_setup=>ts_minus_seconds( ts      = lv_end
+                                                        seconds = sy-index ).
+      APPEND VALUE #( id          = |ZZCKUTERR{ sy-index }|
+                      timestampl  = lv_ts
+                      utc_day     = `20990101`
+                      app         = c_app
+                      event       = `POLL`
+                      check_error = abap_true
+                      error_class = `CX_SY_ZERODIVIDE`
+                      error_head  = `Division by zero` ) TO lt_log.
+    ENDDO.
+    INSERT z2ui5_t_25 FROM TABLE @lt_log.
+
+    DATA(lt_error) = z2ui5_cl_cockpit_stats=>get_errors( 1 ).
+    DELETE lt_error WHERE app <> c_app.
+
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( lt_error ) ).
+    DATA(ls_flood) = lt_error[ 1 ].
+    cl_abap_unit_assert=>assert_equals( exp = `POLL`
+                                        act = ls_flood-event ).
+    cl_abap_unit_assert=>assert_equals( exp = 5001
+                                        act = ls_flood-count ).
+    cl_abap_unit_assert=>assert_equals( exp = `2099-01-01 10:36:39`
+                                        act = ls_flood-first_seen ).
+    cl_abap_unit_assert=>assert_equals( exp = `OTHER`
+                                        act = lt_error[ 2 ]-event ).
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lt_error[ 2 ]-count ).
 
   ENDMETHOD.
 
