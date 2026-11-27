@@ -236,9 +236,7 @@ npm run check:702                        # downports a scratch copy in build/702
 npm run unit                             # ABAP Unit on the transpiled runtime - README, "Development"
 ```
 
-All must be green before a push. Until the linter releases its list with the
-monitor hook, `abap2ui5lint.jsonc` waives `non-released-api` for the monitor
-class (README, "Development").
+All must be green before a push.
 Local runs can pre-fill `.abaplint-deps/` (git-ignored) - abaplint uses a
 dependency folder that exists instead of cloning.
 
